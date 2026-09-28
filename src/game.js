@@ -2,6 +2,11 @@
 // Игровая логика. Деревья и подлесок — готовые PNG-спрайты из assets/trees/,
 // а не нарисованный кодом узор: код только ставит картинку на карту.
 
+// Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
+// браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
+// картинки из кэша по тому же URL.
+const ASSET_VERSION = 4;
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -48,7 +53,7 @@ const TREE_FILES = [
 ];
 const treeSprites = TREE_FILES.map((file) => {
   const img = new Image();
-  img.src = `assets/trees/${file}`;
+  img.src = `assets/trees/${file}?v=${ASSET_VERSION}`;
   return img;
 });
 
@@ -64,7 +69,7 @@ const GROUND_VARIANT_FILES = [
 ];
 const groundSprites = GROUND_VARIANT_FILES.map((files) => files.map((file) => {
   const img = new Image();
-  img.src = `assets/ground/${file}`;
+  img.src = `assets/ground/${file}?v=${ASSET_VERSION}`;
   return img;
 }));
 
@@ -81,7 +86,7 @@ const CLUTTER_TYPES = {
 const clutterSprites = {};
 for (const kind in CLUTTER_TYPES) {
   const img = new Image();
-  img.src = `assets/clutter/${CLUTTER_TYPES[kind].file}`;
+  img.src = `assets/clutter/${CLUTTER_TYPES[kind].file}?v=${ASSET_VERSION}`;
   clutterSprites[kind] = img;
 }
 
