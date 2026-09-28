@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Survival Game: World</title>
+  <title>Выбор стиля леса</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,14 +11,18 @@
   <canvas id="gameCanvas"></canvas>
 
   <div id="ui-overlay">
-    <div class="zone-badge">
-      <div class="zone-title">🌲 Сосновый Бор</div>
-      <div class="zone-sub">Локация 1 уровня • Зона выживания</div>
+    <!-- Кнопки переключения 5 стилей леса прямо в игре -->
+    <div id="biome-bar">
+      <button class="biome-btn active" data-biome="0">🌲 1. Тайга</button>
+      <button class="biome-btn" data-biome="1">🍃 2. Гибли (Аниме)</button>
+      <button class="biome-btn" data-biome="2">🍂 3. Осень</button>
+      <button class="biome-btn" data-biome="3">🌸 4. Сакура</button>
+      <button class="biome-btn" data-biome="4">🔥 5. Выжженный</button>
     </div>
-    <div class="hint-bar">Проведите пальцем по экрану для осмотра ландшафта</div>
+
+    <div class="hint-bar">Нажимайте кнопки вверху для смены стиля леса</div>
   </div>
 
-  <!-- Модульная архитектура игры -->
   <script src="src/camera.js"></script>
   <script src="src/world.js"></script>
   <script src="src/main.js"></script>
