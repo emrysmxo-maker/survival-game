@@ -12,26 +12,25 @@ window.addEventListener('DOMContentLoaded', () => {
   const world = new World(40, 40);
   const camera = new Camera();
 
-  // Начальная точка в центре
   const startTarget = world.toScreen(20, 20, { x: 0, y: 0 }, 0, 0);
   camera.x = startTarget.x;
   camera.y = startTarget.y;
   camera.targetX = startTarget.x;
   camera.targetY = startTarget.y;
 
-  // Интерактивные кнопки переключения стилей
+  // Кнопки переключения 5 стилей реалистичных деревьев
   const buttons = document.querySelectorAll('.biome-btn');
   buttons.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       buttons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const biomeId = parseInt(btn.dataset.biome);
-      world.setBiome(biomeId);
+      const styleId = parseInt(btn.dataset.style);
+      world.setTreeStyle(styleId);
     });
   });
 
-  // Управление камерой пальцем (свайп)
+  // Управление камерой пальцем
   let isDragging = false;
   let lastX = 0;
   let lastY = 0;
