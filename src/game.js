@@ -38,13 +38,13 @@ function pseudoRand(s) {
   return x - Math.floor(x);
 }
 
-// 14 видов деревьев и подлеска: готовые картинки вместо процедурного рисования.
+// 12 видов деревьев: готовые картинки вместо процедурного рисования.
 // 0: Сосна, 1: Дуб, 2: Берёза, 3: Клён, 4: Сухостой, 5: Голубая ель, 6: Ива, 7: Осина, 8: Рябина,
-// 9: Сибирский кедр, 10: Лиственница, 11: Липа, 12: Молодой самосев, 13: Папоротник / лесной куст
+// 9: Сибирский кедр, 10: Лиственница, 11: Липа
 const TREE_FILES = [
   '00_pine.png', '01_oak.png', '02_birch.png', '03_maple.png', '04_deadwood.png',
   '05_bluespruce.png', '06_willow.png', '07_aspen.png', '08_rowan.png',
-  '09_cedar.png', '10_larch.png', '11_linden.png', '12_sapling.png', '13_fern.png'
+  '09_cedar.png', '10_larch.png', '11_linden.png'
 ];
 const treeSprites = TREE_FILES.map((file) => {
   const img = new Image();
@@ -67,31 +67,26 @@ function getEcosystemAt(cx, cy) {
     name: '🌲 Кедрово-сосновый бор',
     canopy: [0, 9, 5],      // Сосна, Кедр, Голубая ель
     subcanopy: [2, 7],      // Береза, Осина
-    undergrowth: [12, 13]   // Самосев, Папоротник
   };
   if (n > 0.2) return {
     name: '🌳 Смешанный вековой лес',
     canopy: [1, 10, 0],     // Дуб, Лиственница, Сосна
     subcanopy: [11, 8, 3],  // Липа, Рябина, Клен
-    undergrowth: [12, 13]
   };
   if (n > -0.4) return {
     name: '🪵 Берёзово-осиновая роща',
     canopy: [2, 7],         // Березы, Осины
     subcanopy: [8, 11],     // Рябина, Липа
-    undergrowth: [12, 13]
   };
   if (n > -0.9) return {
     name: '🍁 Осенняя дубрава',
     canopy: [1, 3],         // Дуб, Клен
     subcanopy: [8, 2],      // Рябина, Береза
-    undergrowth: [13]
   };
   return {
     name: '⚡ Выгоревшая гарь',
     canopy: [4, 4, 0],      // Сухостой
-    subcanopy: [4, 12],
-    undergrowth: [12]
+    subcanopy: [4, 0],
   };
 }
 
@@ -105,7 +100,6 @@ function generateChunk(cx, cy) {
     biomeName: eco.name,
     tiles: [],
     trees: [],
-    undergrowth: []
   };
 
   const startX = cx * CHUNK_SIZE;
@@ -155,24 +149,15 @@ function generateChunk(cx, cy) {
         isGiant: true
       });
 
-      // 2. СРЕДНИЙ ЯРУС И ПОДЛЕСОК ВОКРУГ ВЕЛИКАНА (Кластеры в радиусе 1.8 - 2.8)
+      // 2. СРЕДНИЙ ЯРУС ВОКРУГ ВЕЛИКАНА (Кластеры в радиусе 1.8 - 2.8)
       const satelliteCount = 1 + Math.floor(pseudoRand(seed++) * 3);
       for (let sIdx = 0; sIdx < satelliteCount; sIdx++) {
         const ang = pseudoRand(seed++) * Math.PI * 2;
         const dist = 1.8 + pseudoRand(seed++) * 1.6;
         const sx = gx + Math.cos(ang) * dist;
         const sy = gy + Math.sin(ang) * dist;
-
-        const isYoung = pseudoRand(seed++) > 0.45;
-        const subType = isYoung
-          ? eco.undergrowth[Math.floor(pseudoRand(seed++) * eco.undergrowth.length)]
-          : eco.subcanopy[Math.floor(pseudoRand(seed++) * eco.subcanopy.length)];
-
-        if (subType === 12 || subType === 13) {
-          chunk.undergrowth.push({ x: sx, y: sy, type: subType, scale: 0.65 + pseudoRand(seed++) * 0.3 });
-        } else {
-          chunk.trees.push({ x: sx, y: sy, type: subType, scale: 0.75 + pseudoRand(seed++) * 0.2 });
-        }
+        const subType = eco.subcanopy[Math.floor(pseudoRand(seed++) * eco.subcanopy.length)];
+        chunk.trees.push({ x: sx, y: sy, type: subType, scale: 0.75 + pseudoRand(seed++) * 0.2 });
       }
     }
   }
@@ -201,13 +186,11 @@ function updateWorldChunks() {
   document.getElementById('info-biome').textContent = curEco.name;
   document.getElementById('info-coords').textContent = `X: ${Math.round(player.x)}, Y: ${Math.round(player.y)}`;
 
-  let totalTrees = 0, totalUnder = 0;
+  let totalTrees = 0;
   loadedChunks.forEach(c => {
     totalTrees += c.trees.length;
-    totalUnder += c.undergrowth.length;
   });
   document.getElementById('info-trees').textContent = totalTrees;
-  document.getElementById('info-undergrowth').textContent = totalUnder;
 }
 
 // 3. СЕНСОРНОЕ УПРАВЛЕНИЕ ТОЧКОЙ
@@ -325,14 +308,9 @@ function render() {
       }
     }
 
-    // Подлесок
-    for (const u of chunk.undergrowth) {
-      renderQueue.push({ isPlayer: false, isUnder: true, obj: u, depth: u.x + u.y });
-    }
-
     // Деревья
     for (const t of chunk.trees) {
-      renderQueue.push({ isPlayer: false, isUnder: false, obj: t, depth: t.x + t.y });
+      renderQueue.push({ isPlayer: false, obj: t, depth: t.x + t.y });
     }
   }
 
@@ -373,7 +351,7 @@ function render() {
       const dh = 150 * scale;
 
       ctx.beginPath();
-      ctx.ellipse(pos.x + 3, pos.y + 3, (item.isUnder ? 14 : 26) * scale, (item.isUnder ? 7 : 13) * scale, 0, 0, Math.PI * 2);
+      ctx.ellipse(pos.x + 3, pos.y + 3, 26 * scale, 13 * scale, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
       ctx.fill();
 
