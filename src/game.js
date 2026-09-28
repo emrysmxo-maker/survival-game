@@ -53,7 +53,7 @@ const treeSprites = TREE_FILES.map((file) => {
 });
 
 // Текстуры земли (вместо плоской заливки) — по одной картинке на тип грунта.
-const GROUND_FILES = ['tile_grass.png', 'tile_light.png', 'tile_path.png', 'tile_dark.png'];
+const GROUND_FILES = ['tile_grass.png', 'tile_light.png', 'tile_path.png', 'tile_dark.png', 'tile_ash.png'];
 const groundSprites = GROUND_FILES.map((file) => {
   const img = new Image();
   img.src = `assets/ground/${file}`;
@@ -112,6 +112,7 @@ function getEcosystemAt(cx, cy) {
     name: '⚡ Выгоревшая гарь',
     canopy: [4, 4, 0],      // Сухостой
     subcanopy: [4, 0],
+    ground: [4, 4, 2, 4],  // Пепел вместо травы, тропа остаётся тропой
   };
 }
 
@@ -132,7 +133,10 @@ function generateChunk(cx, cy) {
   const startY = cy * CHUNK_SIZE;
   let seed = Math.abs(cx * 73856093 ^ cy * 19349663);
 
-  // Земля
+  // Земля. eco.ground переопределяет, какая текстура соответствует каждому
+  // базовому типу почвы (0 трава, 1 светлая, 2 тропа, 3 тёмная) — например,
+  // в выгоревшей гари трава и тёмная земля заменяются на пепел.
+  const groundMap = eco.ground || [0, 1, 2, 3];
   for (let x = 0; x < CHUNK_SIZE; x++) {
     chunk.tiles[x] = [];
     for (let y = 0; y < CHUNK_SIZE; y++) {
@@ -147,7 +151,7 @@ function generateChunk(cx, cy) {
         if (n > 0.35) tileType = 1;
         else if (n < -0.3) tileType = 3;
       }
-      chunk.tiles[x][y] = tileType;
+      chunk.tiles[x][y] = groundMap[tileType];
     }
   }
 
