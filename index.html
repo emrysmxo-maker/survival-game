@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Survival Game: 10 Realistic Trees</title>
+  <title>Survival Game: Infinite Forest Generation</title>
   <style>
     * {
       box-sizing: border-box;
@@ -16,7 +16,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #080c08;
+      background-color: #070a07;
       touch-action: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
@@ -33,51 +33,60 @@
       height: 100%;
       pointer-events: none;
     }
-    #biome-bar {
+    /* Информационная панель генерации мира */
+    #debug-panel {
       position: absolute;
-      top: 10px;
-      left: 8px;
-      right: 8px;
-      display: flex;
-      gap: 7px;
-      overflow-x: auto;
-      padding: 6px;
-      pointer-events: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
+      top: 12px;
+      left: 12px;
+      background: rgba(12, 18, 12, 0.9);
+      border: 1px solid #324630;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #e0e0e0;
+      font-size: 12px;
+      line-height: 1.5;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
     }
-    #biome-bar::-webkit-scrollbar { display: none; }
-    .biome-btn {
-      flex: 0 0 auto;
-      background: rgba(16, 22, 16, 0.92);
-      border: 1.5px solid #364932;
-      border-radius: 20px;
-      padding: 8px 14px;
-      color: #cbd8c8;
-      font-size: 12.5px;
+    .badge {
+      color: #2ecc71;
       font-weight: bold;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-      cursor: pointer;
     }
-    .biome-btn.active {
-      background: #27ae60;
-      border-color: #2ecc71;
-      color: #fff;
-      box-shadow: 0 4px 14px rgba(46, 204, 113, 0.5);
-      transform: scale(1.03);
+    .biome-tag {
+      color: #f1c40f;
+      font-weight: bold;
     }
-    .hint-bar {
+    /* Радар мини-карта */
+    #minimap {
       position: absolute;
-      bottom: 16px;
+      top: 12px;
+      right: 12px;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: rgba(14, 20, 14, 0.85);
+      border: 2px solid #3d523a;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #a2b4a0;
+      font-weight: bold;
+    }
+    #joystick-hint {
+      position: absolute;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid #334430;
-      border-radius: 20px;
-      padding: 6px 16px;
-      color: #a4b3a1;
+      color: rgba(255, 255, 255, 0.5);
       font-size: 11px;
-      white-space: nowrap;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 14px;
+      border-radius: 16px;
+      border: 1px solid #2d3b2a;
     }
   </style>
 </head>
@@ -86,21 +95,19 @@
   <canvas id="gameCanvas"></canvas>
 
   <div id="ui-overlay">
-    <!-- 10 видов реалистичных деревьев + режим смешанного леса -->
-    <div id="biome-bar">
-      <button class="biome-btn active" data-style="-1">🌲 Все 10 видов (Смешанный)</button>
-      <button class="biome-btn" data-style="0">🌲 1. Сосна</button>
-      <button class="biome-btn" data-style="1">🌳 2. Дуб</button>
-      <button class="biome-btn" data-style="2">🪵 3. Берёза</button>
-      <button class="biome-btn" data-style="3">🍁 4. Клён</button>
-      <button class="biome-btn" data-style="4">⚡ 5. Сухостой</button>
-      <button class="biome-btn" data-style="5">❄️ 6. Голубая ель</button>
-      <button class="biome-btn" data-style="6">🌿 7. Плакучая ива</button>
-      <button class="biome-btn" data-style="7">🍂 8. Осина</button>
-      <button class="biome-btn" data-style="8">🪵 9. Пень и бревно</button>
-      <button class="biome-btn" data-style="9">🍒 10. Рябина</button>
+    <div id="debug-panel">
+      <div>🌍 Биом: <span id="info-biome" class="biome-tag">Сосновая глушь</span></div>
+      <div>📍 Координаты: <span id="info-coords" class="badge">X: 0, Y: 0</span></div>
+      <div>📦 Активных чанков: <span id="info-chunks" class="badge">9</span></div>
+      <div>🌲 Деревьев в памяти: <span id="info-trees" class="badge">0</span></div>
     </div>
-    <div class="hint-bar">Свайп по экрану для перемещения камеры</div>
+
+    <div id="minimap">
+      <span>РАДАР</span>
+      <span style="font-size: 8px; color: #2ecc71;">ONLINE</span>
+    </div>
+
+    <div id="joystick-hint">Касание в левой нижней зоне для движения точки</div>
   </div>
 
   <script>
@@ -114,18 +121,21 @@
     window.addEventListener('resize', resize);
     resize();
 
+    // 1. ИЗОМЕТРИЧЕСКАЯ ПРОЕКЦИЯ
     const TILE_W = 64;
     const TILE_H = 32;
-    const MAP_SIZE = 36;
 
-    let selectedStyle = -1; // -1: Все 10 видов вместе, 0-9: Конкретный вид
-
-    const camera = {
+    // Персонаж (исследовательская точка с направлением)
+    const player = {
       x: 0,
-      y: (MAP_SIZE) * (TILE_H / 2),
-      targetX: 0,
-      targetY: (MAP_SIZE) * (TILE_H / 2)
+      y: 0,
+      speed: 6.5,
+      angle: 0,
+      radius: 9,
+      isMoving: false
     };
+
+    const camera = { x: 0, y: 0 };
 
     function toScreen(gx, gy) {
       return {
@@ -134,70 +144,39 @@
       };
     }
 
+    // 2. БЕСКОНЕЧНАЯ ЧАНКОВАЯ ГЕНЕРАЦИЯ (Chunk-based generation)
+    // Размер чанка: 12x12 клеток. При движении генерируются чанки вокруг игрока.
+    const CHUNK_SIZE = 12;
+    const CHUNK_RADIUS = 2; // Радиус подгрузки (5x5 = 25 чанков вокруг)
+    const loadedChunks = new Map(); // Кэш чанков в памяти
+
+    // 9 реалистичных видов деревьев (пень убран по вашей просьбе)
+    // 0: Сосна, 1: Дуб, 2: Берёза, 3: Клён, 4: Сухостой, 5: Голубая ель, 6: Ива, 7: Осина, 8: Рябина
+    const treeSprites = [];
+    function initTreeSprites() {
+      for (let s = 0; s < 9; s++) {
+        const c = document.createElement('canvas');
+        c.width = 180;
+        c.height = 250;
+        const sctx = c.getContext('2d');
+        renderTreeTexture(sctx, s);
+        treeSprites[s] = c;
+      }
+    }
+
     function pseudoRand(s) {
       const x = Math.sin(s) * 10000;
       return x - Math.floor(x);
     }
 
-    // Генерация карты ландшафта (земля, тропинка)
-    const grid = [];
-    const trees = [];
-    const tileColors = ['#192416', '#22321e', '#32261b', '#141e12', '#0a0f08'];
-
-    for (let x = 0; x < MAP_SIZE; x++) {
-      grid[x] = [];
-      for (let y = 0; y < MAP_SIZE; y++) {
-        const isBorder = (x < 3 || x >= MAP_SIZE - 3 || y < 3 || y >= MAP_SIZE - 3);
-        const pathDist = Math.abs(y - (Math.sin(x * 0.25) * 4 + MAP_SIZE / 2));
-
-        if (isBorder) {
-          grid[x][y] = 4;
-          trees.push({
-            x: x + 0.5,
-            y: y + 0.5,
-            scale: 1.15,
-            type: Math.floor(Math.random() * 10)
-          });
-        } else if (pathDist < 1.3) {
-          grid[x][y] = 2; // Тропа
-        } else {
-          const noise = Math.sin(x * 0.4) * Math.cos(y * 0.4);
-          if (noise > 0.35) grid[x][y] = 1;
-          else if (noise < -0.3) grid[x][y] = 3;
-          else grid[x][y] = 0;
-
-          if (noise > 0.42 && Math.random() < 0.65) {
-            trees.push({
-              x: x + 0.3 + Math.random() * 0.4,
-              y: y + 0.3 + Math.random() * 0.4,
-              scale: 0.85 + Math.random() * 0.35,
-              type: Math.floor(Math.random() * 10)
-            });
-          }
-        }
-      }
-    }
-
-    // 10 РЕАЛИСТИЧНЫХ ТЕКСТУР ДЕРЕВЬЕВ В ВЫСОКОМ РАЗРЕШЕНИИ
-    const treeSprites = [];
-    function initAllTreeSprites() {
-      for (let s = 0; s < 10; s++) {
-        const c = document.createElement('canvas');
-        c.width = 180;
-        c.height = 250;
-        const sctx = c.getContext('2d');
-        renderRealisticTree(sctx, s);
-        treeSprites[s] = c;
-      }
-    }
-
-    function renderRealisticTree(tctx, style) {
+    // Отрисовка текстур 9 видов деревьев
+    function renderTreeTexture(tctx, style) {
       const cx = 90;
       const baseY = 225;
 
       if (style === 0) {
-        // 1. СИБИРСКАЯ СОСНА (Мощный корявый ствол, пучки хвои)
-        tctx.fillStyle = '#24160d';
+        // 1. СОСНА
+        tctx.fillStyle = '#26170d';
         tctx.beginPath();
         tctx.moveTo(cx - 8, baseY);
         tctx.quadraticCurveTo(cx - 4, baseY - 50, cx - 2, baseY - 130);
@@ -206,8 +185,7 @@
         tctx.closePath();
         tctx.fill();
 
-        // Борозды коры
-        tctx.strokeStyle = '#120b06';
+        tctx.strokeStyle = '#140c06';
         tctx.lineWidth = 1.2;
         for (let y = baseY; y > baseY - 110; y -= 7) {
           tctx.beginPath();
@@ -242,7 +220,7 @@
         }
 
       } else if (style === 1) {
-        // 2. ВЕКОВОЙ ДУБ (Узловатый ствол, объемная листва)
+        // 2. ДУБ
         tctx.fillStyle = '#281c12';
         tctx.beginPath();
         tctx.moveTo(cx - 15, baseY);
@@ -282,7 +260,7 @@
         }
 
       } else if (style === 2) {
-        // 3. БЕРЁЗА (Белый ствол, черная береста, плакучие ветви)
+        // 3. БЕРЁЗА
         tctx.fillStyle = '#efefe9';
         tctx.beginPath();
         tctx.moveTo(cx - 5, baseY);
@@ -323,7 +301,7 @@
         }
 
       } else if (style === 3) {
-        // 4. ОСЕННИЙ КЛЁН (Багряно-золотая крона)
+        // 4. КЛЁН
         tctx.fillStyle = '#2b1c14';
         tctx.beginPath();
         tctx.moveTo(cx - 8, baseY);
@@ -352,7 +330,7 @@
         }
 
       } else if (style === 4) {
-        // 5. МЁРТВЫЙ СУХОСТОЙ (Серый треснувший ствол, сломанные сучья)
+        // 5. СУХОСТОЙ
         tctx.fillStyle = '#3a3d3c';
         tctx.beginPath();
         tctx.moveTo(cx - 10, baseY);
@@ -385,7 +363,7 @@
         tctx.stroke();
 
       } else if (style === 5) {
-        // 6. ГОЛУБАЯ ТАЁЖНАЯ ЕЛЬ (Плотный пирамидальный силуэт с серебристо-голубой хвоей)
+        // 6. ГОЛУБАЯ ЕЛЬ
         tctx.fillStyle = '#201611';
         tctx.fillRect(cx - 4, baseY - 15, 8, 18);
 
@@ -409,7 +387,7 @@
         }
 
       } else if (style === 6) {
-        // 7. ПЛАКУЧАЯ ИВА (Изогнутый ствол, длинные свисающие каскады ветвей)
+        // 7. ИВА
         tctx.fillStyle = '#312217';
         tctx.beginPath();
         tctx.moveTo(cx - 8, baseY);
@@ -419,7 +397,6 @@
         tctx.closePath();
         tctx.fill();
 
-        // Свисающие нити листвы до земли
         let s = 707;
         for (let b = 0; b < 28; b++) {
           const bx = cx - 40 + b * 3;
@@ -433,7 +410,6 @@
           tctx.quadraticCurveTo(bx + (b > 14 ? 8 : -8), by + len * 0.5, bx + (b > 14 ? 12 : -12), by + len);
           tctx.stroke();
 
-          // Светлые точки листьев
           tctx.fillStyle = bx > cx ? '#588a44' : '#3d692d';
           for (let l = 0; l < 8; l++) {
             tctx.fillRect(bx + (b > 14 ? l : -l), by + (l * (len / 8)), 2.5, 2.5);
@@ -441,7 +417,7 @@
         }
 
       } else if (style === 7) {
-        // 8. ОСИНА / ТОПОЛЬ (Высокий прямой ствол, мелкая круглая золотисто-зеленая листва)
+        // 8. ОСИНА
         tctx.fillStyle = '#b8b8a8';
         tctx.fillRect(cx - 3.5, baseY - 130, 7, 130);
 
@@ -461,51 +437,7 @@
         }
 
       } else if (style === 8) {
-        // 9. ЗАМШЕЛЫЙ ПЕНЬ И ПОВАЛЕННОЕ БРЕВНО
-        // Толстый пень
-        tctx.fillStyle = '#261b12';
-        tctx.beginPath();
-        tctx.ellipse(cx - 15, baseY - 10, 16, 8, 0, 0, Math.PI * 2);
-        tctx.fill();
-        tctx.fillRect(cx - 31, baseY - 28, 32, 20);
-        tctx.fillStyle = '#463222';
-        tctx.beginPath();
-        tctx.ellipse(cx - 15, baseY - 28, 16, 7, 0, 0, Math.PI * 2);
-        tctx.fill();
-
-        // Годичные кольца на пне
-        tctx.strokeStyle = '#2d1f14';
-        tctx.lineWidth = 1;
-        tctx.beginPath();
-        tctx.ellipse(cx - 15, baseY - 28, 9, 4, 0, 0, Math.PI * 2);
-        tctx.stroke();
-
-        // Поваленное бревно рядом
-        tctx.fillStyle = '#20160e';
-        tctx.beginPath();
-        tctx.moveTo(cx - 5, baseY - 4);
-        tctx.lineTo(cx + 42, baseY - 18);
-        tctx.lineTo(cx + 40, baseY - 26);
-        tctx.lineTo(cx - 7, baseY - 12);
-        tctx.closePath();
-        tctx.fill();
-
-        // Зеленый бархатный мох на бревне и пне
-        tctx.fillStyle = '#3a6627';
-        for (let m = 0; m < 25; m++) {
-          tctx.fillRect(cx - 28 + m * 2, baseY - 20 - (m % 3) * 2, 3, 2.5);
-          tctx.fillRect(cx + m * 1.5, baseY - 16 - (m % 2) * 2, 2.5, 2.5);
-        }
-
-        // Древесные грибы (трутовики)
-        tctx.fillStyle = '#ab8359';
-        tctx.beginPath();
-        tctx.ellipse(cx - 30, baseY - 16, 5, 2.5, 0.2, 0, Math.PI * 2);
-        tctx.ellipse(cx - 28, baseY - 22, 4, 2, 0.3, 0, Math.PI * 2);
-        tctx.fill();
-
-      } else if (style === 9) {
-        // 10. РЯБИНА С ЯГОДАМИ (Перистая листва и алые гроздья ягод)
+        // 9. РЯБИНА С ЯГОДАМИ
         tctx.fillStyle = '#281a12';
         tctx.beginPath();
         tctx.moveTo(cx - 6, baseY);
@@ -516,7 +448,6 @@
         tctx.fill();
 
         let s = 909;
-        // Листва
         for (let i = 0; i < 460; i++) {
           const u = pseudoRand(s++);
           const v = pseudoRand(s++);
@@ -531,7 +462,6 @@
           tctx.fillRect(lx, ly, 3, 2);
         }
 
-        // Гроздья алых ягод рябины
         tctx.fillStyle = '#d63031';
         for (let g = 0; g < 14; g++) {
           const gx = cx - 28 + pseudoRand(s++) * 56;
@@ -545,103 +475,339 @@
       }
     }
 
-    initAllTreeSprites();
+    initTreeSprites();
 
-    // Кнопки фильтра
-    const buttons = document.querySelectorAll('.biome-btn');
-    buttons.forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        buttons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedStyle = parseInt(btn.dataset.style);
-      });
-    });
+    // 3. БИОМЫ И ЕСТЕСТВЕННОЕ РАСПРЕДЕЛЕНИЕ ДЕРЕВЬЕВ
+    // В реальном лесу деревья растут биомами и кластерами:
+    // - Сосновый бор: сосны (0) и голубые ели (5)
+    // - Берёзовая роща: березы (2) и осины (7) растут группами по 3-5 деревьев
+    // - Дубрава: дубы (1) растут с простором, рядом рябина (8) и клен (3)
+    // - Зона выгорания: сухостой (4)
+    function getBiomeAt(chunkX, chunkY) {
+      const bNoise = Math.sin(chunkX * 0.35) + Math.cos(chunkY * 0.35);
+      if (bNoise > 0.8) return { name: '🌲 Сосновая глушь', trees: [0, 0, 5, 0], density: 0.32 };
+      if (bNoise > 0.2) return { name: '🌳 Смешанный бор', trees: [0, 1, 2, 8], density: 0.28 };
+      if (bNoise > -0.4) return { name: '🪵 Берёзовая роща', trees: [2, 2, 7, 8], density: 0.34 };
+      if (bNoise > -0.9) return { name: '🍁 Дубрава и клёны', trees: [1, 3, 3, 8], density: 0.24 };
+      return { name: '⚡ Выгоревшая гарь', trees: [4, 4, 0], density: 0.22 };
+    }
 
-    // Управление камерой пальцем
-    let isDragging = false;
-    let lastX = 0, lastY = 0;
+    // Генерация одного чанка (12x12 клеток)
+    function generateChunk(cx, cy) {
+      const key = `${cx},${cy}`;
+      if (loadedChunks.has(key)) return loadedChunks.get(key);
+
+      const biome = getBiomeAt(cx, cy);
+      const chunk = {
+        cx, cy,
+        biomeName: biome.name,
+        tiles: [],
+        trees: []
+      };
+
+      const startX = cx * CHUNK_SIZE;
+      const startY = cy * CHUNK_SIZE;
+      let seed = Math.abs(cx * 73856093 ^ cy * 19349663);
+
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        chunk.tiles[x] = [];
+        for (let y = 0; y < CHUNK_SIZE; y++) {
+          const worldX = startX + x;
+          const worldY = startY + y;
+
+          // Извилистая тропинка через мир
+          const pathDist = Math.abs(worldY - Math.sin(worldX * 0.15) * 8);
+          let tileType = 0; // трава
+          if (pathDist < 1.2) {
+            tileType = 2; // тропинка
+          } else {
+            const n = Math.sin(worldX * 0.2) * Math.cos(worldY * 0.2);
+            if (n > 0.35) tileType = 1; // поляна
+            else if (n < -0.3) tileType = 3; // мох
+          }
+          chunk.tiles[x][y] = tileType;
+
+          // Генерация деревьев (хаотично, но с расстоянием отталкивания > 1.8 клетки)
+          if (tileType !== 2) { // На тропинках деревья не растут
+            const rnd = pseudoRand(seed++);
+            if (rnd < biome.density) {
+              const treeType = biome.trees[Math.floor(pseudoRand(seed++) * biome.trees.length)];
+              const ox = (pseudoRand(seed++) - 0.5) * 0.6;
+              const oy = (pseudoRand(seed++) - 0.5) * 0.6;
+
+              // Проверка дистанции до соседних деревьев в чанке (чтобы стволы не слипались в одну точку)
+              const tx = worldX + 0.5 + ox;
+              const ty = worldY + 0.5 + oy;
+              let tooClose = false;
+              for (let t of chunk.trees) {
+                if (Math.hypot(t.x - tx, t.y - ty) < 1.7) {
+                  tooClose = true;
+                  break;
+                }
+              }
+
+              if (!tooClose) {
+                chunk.trees.push({
+                  x: tx,
+                  y: ty,
+                  type: treeType,
+                  scale: 0.85 + pseudoRand(seed++) * 0.35
+                });
+              }
+            }
+          }
+        }
+      }
+
+      loadedChunks.set(key, chunk);
+      return chunk;
+    }
+
+    // Подгрузка и выгрузка чанков в радиусе видимости игрока
+    function updateChunksAroundPlayer() {
+      const pChunkX = Math.floor(player.x / CHUNK_SIZE);
+      const pChunkY = Math.floor(player.y / CHUNK_SIZE);
+
+      const activeKeys = new Set();
+      for (let dx = -CHUNK_RADIUS; dx <= CHUNK_RADIUS; dx++) {
+        for (let dy = -CHUNK_RADIUS; dy <= CHUNK_RADIUS; dy++) {
+          const cx = pChunkX + dx;
+          const cy = pChunkY + dy;
+          const key = `${cx},${cy}`;
+          activeKeys.add(key);
+          generateChunk(cx, cy);
+        }
+      }
+
+      // Выгрузка слишком далеких чанков из памяти (дальше 4 чанков) для плавности
+      for (const [key, chunk] of loadedChunks.entries()) {
+        if (Math.abs(chunk.cx - pChunkX) > 4 || Math.abs(chunk.cy - pChunkY) > 4) {
+          loadedChunks.delete(key);
+        }
+      }
+
+      // Обновление интерфейса
+      const curBiome = getBiomeAt(pChunkX, pChunkY);
+      document.getElementById('info-biome').textContent = curBiome.name;
+      document.getElementById('info-coords').textContent = `X: ${Math.round(player.x)}, Y: ${Math.round(player.y)}`;
+      document.getElementById('info-chunks').textContent = loadedChunks.size;
+
+      let totalTrees = 0;
+      loadedChunks.forEach(c => totalTrees += c.trees.length);
+      document.getElementById('info-trees').textContent = totalTrees;
+    }
+
+    // 4. СЕНСОРНОЕ УПРАВЛЕНИЕ ТОЧКОЙ (ДЖОЙСТИК)
+    const joystick = {
+      active: false,
+      touchId: null,
+      startX: 0, startY: 0,
+      currX: 0, currY: 0,
+      maxDist: 50,
+      dx: 0, dy: 0
+    };
 
     window.addEventListener('touchstart', (e) => {
-      if (e.target.closest('#biome-bar')) return;
-      if (e.touches.length === 1) {
-        isDragging = true;
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (!joystick.active) {
+          joystick.active = true;
+          joystick.touchId = t.identifier;
+          joystick.startX = t.clientX;
+          joystick.startY = t.clientY;
+          joystick.currX = t.clientX;
+          joystick.currY = t.clientY;
+          joystick.dx = 0; joystick.dy = 0;
+          document.getElementById('joystick-hint').style.display = 'none';
+        }
       }
     }, { passive: false });
 
     window.addEventListener('touchmove', (e) => {
-      if (isDragging && e.touches.length === 1) {
-        e.preventDefault();
-        const curX = e.touches[0].clientX;
-        const curY = e.touches[0].clientY;
-        camera.targetX -= (curX - lastX);
-        camera.targetY -= (curY - lastY);
-        lastX = curX;
-        lastY = curY;
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joystick.touchId) {
+          const diffX = t.clientX - joystick.startX;
+          const diffY = t.clientY - joystick.startY;
+          const dist = Math.hypot(diffX, diffY);
+
+          if (dist > joystick.maxDist) {
+            joystick.currX = joystick.startX + (diffX / dist) * joystick.maxDist;
+            joystick.currY = joystick.startY + (diffY / dist) * joystick.maxDist;
+          } else {
+            joystick.currX = t.clientX;
+            joystick.currY = t.clientY;
+          }
+
+          joystick.dx = (joystick.currX - joystick.startX) / joystick.maxDist;
+          joystick.dy = (joystick.currY - joystick.startY) / joystick.maxDist;
+        }
       }
     }, { passive: false });
 
-    window.addEventListener('touchend', () => { isDragging = false; });
-    window.addEventListener('touchcancel', () => { isDragging = false; });
+    function stopJoystick(id) {
+      if (joystick.touchId === id) {
+        joystick.active = false;
+        joystick.touchId = null;
+        joystick.dx = 0; joystick.dy = 0;
+      }
+    }
+    window.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) stopJoystick(e.changedTouches[i].identifier);
+    });
+    window.addEventListener('touchcancel', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) stopJoystick(e.changedTouches[i].identifier);
+    });
 
-    // Игровой цикл
-    function loop() {
-      camera.x += (camera.targetX - camera.x) * 0.12;
-      camera.y += (camera.targetY - camera.y) * 0.12;
+    // 5. ИГРОВОЙ ЦИКЛ
+    let lastTime = performance.now();
+    function update(dt) {
+      if (joystick.active && (Math.abs(joystick.dx) > 0.05 || Math.abs(joystick.dy) > 0.05)) {
+        player.isMoving = true;
+        // Преобразование джойстика в изометрическое движение
+        const moveX = joystick.dx + joystick.dy;
+        const moveY = joystick.dy - joystick.dx;
 
+        player.x += moveX * player.speed * dt;
+        player.y += moveY * player.speed * dt;
+        player.angle = Math.atan2(joystick.dy, joystick.dx);
+      } else {
+        player.isMoving = false;
+      }
+
+      // Камера плавно центрируется на точке/персонаже
+      const targetCamX = (player.x - player.y) * (TILE_W / 2);
+      const targetCamY = (player.x + player.y) * (TILE_H / 2);
+      camera.x += (targetCamX - camera.x) * 0.12;
+      camera.y += (targetCamY - camera.y) * 0.12;
+
+      // Обновляем чанки вокруг текущей позиции игрока
+      updateChunksAroundPlayer();
+    }
+
+    // 6. ОТРИСОВКА
+    const tileColors = ['#192416', '#22321e', '#32261b', '#141e12', '#0a0f08'];
+
+    function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Земля
       const halfW = TILE_W / 2;
       const halfH = TILE_H / 2;
-      for (let x = 0; x < MAP_SIZE; x++) {
-        for (let y = 0; y < MAP_SIZE; y++) {
-          const pt = toScreen(x, y);
-          if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
 
-          ctx.beginPath();
-          ctx.moveTo(pt.x, pt.y);
-          ctx.lineTo(pt.x + halfW, pt.y + halfH);
-          ctx.lineTo(pt.x, pt.y + TILE_H);
-          ctx.lineTo(pt.x - halfW, pt.y + halfH);
-          ctx.closePath();
+      // Собираем все видимые деревья и персонажа для правильной Y-сортировки
+      const renderQueue = [];
 
-          ctx.fillStyle = tileColors[grid[x][y]];
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-          ctx.lineWidth = 0.5;
-          ctx.stroke();
+      // 1. Отрисовка земли активных чанков
+      for (const [key, chunk] of loadedChunks.entries()) {
+        const startX = chunk.cx * CHUNK_SIZE;
+        const startY = chunk.cy * CHUNK_SIZE;
+
+        for (let x = 0; x < CHUNK_SIZE; x++) {
+          for (let y = 0; y < CHUNK_SIZE; y++) {
+            const wx = startX + x;
+            const wy = startY + y;
+            const pt = toScreen(wx, wy);
+
+            if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
+
+            ctx.beginPath();
+            ctx.moveTo(pt.x, pt.y);
+            ctx.lineTo(pt.x + halfW, pt.y + halfH);
+            ctx.lineTo(pt.x, pt.y + TILE_H);
+            ctx.lineTo(pt.x - halfW, pt.y + halfH);
+            ctx.closePath();
+
+            ctx.fillStyle = tileColors[chunk.tiles[x][y]];
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+
+        // Добавляем деревья чанка в очередь отрисовки
+        for (let t of chunk.trees) {
+          renderQueue.push({ isPlayer: false, obj: t, depth: t.x + t.y });
         }
       }
 
-      // 2. Деревья
-      trees.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+      // Добавляем точку/персонажа в очередь сортировки по глубине
+      renderQueue.push({ isPlayer: true, obj: player, depth: player.x + player.y });
+      renderQueue.sort((a, b) => a.depth - b.depth);
 
-      for (let i = 0; i < trees.length; i++) {
-        const t = trees[i];
-        const pos = toScreen(t.x, t.y);
-        if (pos.x < -120 || pos.x > canvas.width + 120 || pos.y < -200 || pos.y > canvas.height + 100) continue;
+      // 2. Отрисовка упорядоченных объектов
+      renderQueue.forEach(item => {
+        if (item.isPlayer) {
+          // Отрисовка исследовательской точки / персонажа
+          const pos = toScreen(player.x, player.y);
 
-        // Если выбран режим "Все 10 видов", берем тип дерева из объекта, иначе принудительно выбранный стиль
-        const styleId = (selectedStyle === -1) ? t.type : selectedStyle;
-        const sprite = treeSprites[styleId];
+          // Тень точки
+          ctx.beginPath();
+          ctx.ellipse(pos.x, pos.y + 4, 10, 5, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fill();
 
-        const scale = t.scale || 1.0;
-        const dw = 110 * scale;
-        const dh = 150 * scale;
+          // Яркая точка-маркер
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y - 8, player.radius, 0, Math.PI * 2);
+          ctx.fillStyle = '#2ecc71';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
 
-        // Тень на земле
+          // Указатель направления взгляда
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - 8);
+          ctx.lineTo(pos.x + Math.cos(player.angle) * 16, pos.y - 8 + Math.sin(player.angle) * 16);
+          ctx.stroke();
+
+        } else {
+          // Отрисовка реалистичного дерева
+          const t = item.obj;
+          const pos = toScreen(t.x, t.y);
+
+          if (pos.x < -120 || pos.x > canvas.width + 120 || pos.y < -220 || pos.y > canvas.height + 100) return;
+
+          const sprite = treeSprites[t.type];
+          const scale = t.scale || 1.0;
+          const dw = 110 * scale;
+          const dh = 150 * scale;
+
+          // Мягкая тень дерева
+          ctx.beginPath();
+          ctx.ellipse(pos.x + 4, pos.y + 3, 26 * scale, 13 * scale, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fill();
+
+          ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * 0.92, dw, dh);
+        }
+      });
+
+      // 3. Сенсорный джойстик
+      if (joystick.active) {
         ctx.beginPath();
-        ctx.ellipse(pos.x + 4, pos.y + 3, (styleId === 8 ? 32 : 26) * scale, 13 * scale, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.arc(joystick.startX, joystick.startY, joystick.maxDist, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-        ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * 0.92, dw, dh);
+        ctx.beginPath();
+        ctx.arc(joystick.currX, joystick.currY, 22, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(46, 204, 113, 0.7)';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
 
-      // 3. Виньетка
+      // 4. Мягкая кинематографическая виньетка
       const vignette = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * 0.35,
         canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75
@@ -650,11 +816,17 @@
       vignette.addColorStop(1, 'rgba(4, 7, 4, 0.55)');
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      requestAnimationFrame(loop);
     }
 
-    requestAnimationFrame(loop);
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      update(dt);
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+    requestAnimationFrame(gameLoop);
   </script>
 </body>
 </html>
