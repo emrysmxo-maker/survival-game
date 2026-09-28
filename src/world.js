@@ -133,14 +133,13 @@ function generateChunk(cx, cy) {
     }
   }
 
-  // 3. ЛЕСНОЙ МУСОР: то, что обычно встречается под ногами в реальном лесу —
-  // сломанные стволы, валуны. Редко и не на тропе.
-  const CLUTTER_KINDS = ['rocks', 'broken_trunk'];
-  const CLUTTER_WEIGHTS = [0.65, 0.35];
+  // 3. ЛЕСНОЙ МУСОР: сломанные стволы под ногами. Редко и не на тропе.
+  const CLUTTER_KINDS = ['broken_trunk'];
+  const CLUTTER_WEIGHTS = [1];
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       if (chunk.tiles[x][y].isPath) continue; // Не на тропе
-      if (pseudoRand(seed++) > 0.05) continue; // ~5% клеток
+      if (pseudoRand(seed++) > 0.02) continue; // ~2% клеток
 
       const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
       const wy = startY + y + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
