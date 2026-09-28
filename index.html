@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <!-- Просим браузер вообще не кэшировать саму страницу — при каждом
+       заходе она должна перекачиваться заново. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Survival Game: Natural Forest Ecology</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -25,16 +30,21 @@
     <div id="joystick-hint">Касание в левой нижней зоне для перемещения</div>
   </div>
 
-  <!-- Порядок важен: config -> assets грузит по этим спискам, world/player/
-       input друг от друга не зависят, render использует все предыдущие,
-       main запускает игровой цикл и должен идти последним. -->
-  <script src="src/ground.js?v=16"></script>
-  <script src="src/config.js?v=16"></script>
-  <script src="src/assets.js?v=16"></script>
-  <script src="src/world.js?v=16"></script>
-  <script src="src/player.js?v=16"></script>
-  <script src="src/input.js?v=16"></script>
-  <script src="src/render.js?v=16"></script>
-  <script src="src/main.js?v=16"></script>
+  <script>
+    // Кэш-бастинг больше не завязан на то, что кто-то не забудет вручную
+    // поднять номер версии в этом файле — версия берётся из текущего
+    // времени, поэтому при каждом заходе на страницу все .js-файлы
+    // и картинки (ASSET_VERSION в src/config.js читает это же значение)
+    // гарантированно перекачиваются заново, а не берутся из кэша.
+    window.BUILD_VERSION = Date.now();
+    // Порядок важен: config -> assets грузит по этим спискам, world/player/
+    // input друг от друга не зависят, render использует все предыдущие,
+    // main запускает игровой цикл и должен идти последним.
+    // document.write гарантирует, что скрипты подключатся и выполнятся
+    // строго по порядку, как обычные <script> теги.
+    ['ground', 'config', 'assets', 'world', 'player', 'input', 'render', 'main'].forEach((name) => {
+      document.write(`<script src="src/${name}.js?v=${window.BUILD_VERSION}"><\/script>`);
+    });
+  </script>
 </body>
 </html>
