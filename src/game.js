@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 7;
+const ASSET_VERSION = 8;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -167,9 +167,19 @@ function generateChunk(cx, cy) {
       let tileType = 0;
       if (pathDist < 1.2) tileType = 2; // Тропа
       else {
-        const n = Math.sin(wx * 0.2) * Math.cos(wy * 0.2);
-        if (n > 0.35) tileType = 1;
-        else if (n < -0.3) tileType = 3;
+        // sin(x)*cos(y) даёт математически «клетчатый» узор с прямыми
+        // границами (перемножение двух волн) — вместо этого складываем
+        // несколько волн под разными углами и частотами (как и для шума
+        // экосистемы выше): границы получаются органичными, а не
+        // нарисованными по линейке, и пятна — крупные, в духе настоящих
+        // полян/просек, а не мелкая мозаика через каждые 15 клеток.
+        const n = (
+          Math.sin(wx * 0.06 + wy * 0.035) +
+          Math.sin(wx * 0.035 - wy * 0.07) * 1.3 +
+          Math.sin(wx * 0.12 + wy * 0.09) * 0.5
+        ) / 2.8;
+        if (n > 0.32) tileType = 1;
+        else if (n < -0.28) tileType = 3;
       }
       const groundType = groundMap[tileType];
       chunk.tiles[x][y] = { t: groundType, isPath: tileType === 2 };
