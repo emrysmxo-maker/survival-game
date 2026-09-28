@@ -25,7 +25,6 @@
       width: 100vw;
       height: 100vh;
     }
-    /* Верхняя панель в стиле Last Day on Earth */
     #top-bar {
       position: absolute;
       top: 12px;
@@ -70,7 +69,6 @@
       height: 100%;
       background: linear-gradient(90deg, #d35400, #f39c12);
     }
-    /* Радар / миникарта в правом верхнем углу */
     #radar {
       position: absolute;
       top: 14px;
@@ -89,7 +87,6 @@
       font-size: 11px;
       font-weight: bold;
     }
-    /* Зона управления движением внизу */
     #joystick-hint {
       position: absolute;
       bottom: 20px;
@@ -129,12 +126,11 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // 1. ИЗОМЕТРИЧЕСКАЯ ПРОЕКЦИЯ (наклон камеры как в Last Day on Earth)
+    // 1. ИЗОМЕТРИЧЕСКАЯ ПРОЕКЦИЯ
     const TILE_W = 64;
     const TILE_H = 32;
-    const MAP_SIZE = 36; // Локация 36x36
+    const MAP_SIZE = 36;
 
-    // Преобразование сетки (x, y) в экранные координаты
     function toScreen(x, y) {
       return {
         x: (x - y) * (TILE_W / 2) - camera.x + canvas.width / 2,
@@ -142,37 +138,37 @@
       };
     }
 
+    // Загрузка спрайта дерева №4 (Тёмная таёжная сосна выживания)
+    const treeSprite = new Image();
+    treeSprite.src = 'https://image.pollinations.ai/prompt/dark-anime-pine-tree-survival?nologo=true';
+
     // 2. ГЕНЕРАЦИЯ ЛЕСНОЙ КАРТЫ
-    // Цвета тайлов земли: лесная трава, тёмная хвоя, тропинки
     const groundTiles = [];
     for (let x = 0; x < MAP_SIZE; x++) {
       groundTiles[x] = [];
       for (let y = 0; y < MAP_SIZE; y++) {
         const rand = (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
-        let color = '#24311e'; // Тёмная хвоя
-        if (rand > 0.6) color = '#2c3b24'; // Сочная лесная трава
-        else if (rand > 0.3) color = '#1e2819'; // Мох / грунт
+        let color = '#202a1a';
+        if (rand > 0.6) color = '#263520';
+        else if (rand > 0.3) color = '#1a2215';
         groundTiles[x][y] = color;
       }
     }
 
-    // Объекты леса (густые сосны по краям и поляны внутри)
     const trees = [];
     const rocks = [];
     const bushes = [];
 
-    // Граница карты: глухая стена сосен, не пускающая за край
+    // Границы карты и лесные поляны
     for (let x = 0; x < MAP_SIZE; x++) {
       for (let y = 0; y < MAP_SIZE; y++) {
         const isBorder = (x < 3 || x >= MAP_SIZE - 3 || y < 3 || y >= MAP_SIZE - 3);
         if (isBorder) {
-          // Плотный забор из деревьев по периметру
-          trees.push({ x: x + 0.5, y: y + 0.5, height: 75, r: 24, type: 'pine', solid: true });
+          trees.push({ x: x + 0.5, y: y + 0.5, w: 80, h: 120, solid: true });
         } else {
-          // Внутри леса: группы сосен, валуны, кустарник
           const noise = Math.sin(x * 0.7) * Math.cos(y * 0.7);
-          if (noise > 0.45 && Math.random() < 0.6) {
-            trees.push({ x: x + 0.4 + Math.random() * 0.2, y: y + 0.4 + Math.random() * 0.2, height: 65 + Math.random() * 20, r: 20, type: 'pine' });
+          if (noise > 0.45 && Math.random() < 0.65) {
+            trees.push({ x: x + 0.3 + Math.random() * 0.4, y: y + 0.3 + Math.random() * 0.4, w: 75 + Math.random() * 15, h: 110 + Math.random() * 25 });
           } else if (Math.random() < 0.05) {
             rocks.push({ x: x + 0.5, y: y + 0.5, size: 10 + Math.random() * 6 });
           } else if (Math.random() < 0.08) {
@@ -182,7 +178,7 @@
       }
     }
 
-    // 3. ПЕРСОНАЖ (Человек-выживший)
+    // 3. ПЕРСОНАЖ
     const player = {
       x: MAP_SIZE / 2,
       y: MAP_SIZE / 2,
@@ -195,7 +191,7 @@
 
     const camera = { x: 0, y: 0 };
 
-    // 4. СЕНСОРНОЕ УПРАВЛЕНИЕ ВНИЗУ ЭКРАНА
+    // 4. СЕНСОРНОЕ УПРАВЛЕНИЕ
     const joystick = {
       active: false,
       touchId: null,
@@ -212,7 +208,6 @@
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        // Нижняя или левая область экрана активирует движение
         if ((t.clientY > canvas.height * 0.4 || t.clientX < canvas.width * 0.5) && !joystick.active) {
           joystick.active = true;
           joystick.touchId = t.identifier;
@@ -265,20 +260,18 @@
       for (let i = 0; i < e.changedTouches.length; i++) stopJoystick(e.changedTouches[i].identifier);
     });
 
-    // 5. ИГРОВОЙ ЦИКЛ (ФИЗИКА И ПЕРЕДВИЖЕНИЕ)
+    // 5. ИГРОВОЙ ЦИКЛ
     let lastTime = performance.now();
     function update(dt) {
       if (joystick.active && (Math.abs(joystick.dx) > 0.05 || Math.abs(joystick.dy) > 0.05)) {
         player.isMoving = true;
 
-        // Пересчет вектора движения джойстика под наклон изометрии
         const moveX = joystick.dx + joystick.dy;
         const moveY = joystick.dy - joystick.dx;
 
         player.x += moveX * player.speed * dt;
         player.y += moveY * player.speed * dt;
 
-        // Ограничение по границам леса
         player.x = Math.max(3.2, Math.min(MAP_SIZE - 3.2, player.x));
         player.y = Math.max(3.2, Math.min(MAP_SIZE - 3.2, player.y));
 
@@ -289,34 +282,28 @@
         player.walkCycle = 0;
       }
 
-      // Камера плавно держит человека по центру экрана
       const targetCamX = (player.x - player.y) * (TILE_W / 2);
       const targetCamY = (player.x + player.y) * (TILE_H / 2);
       camera.x += (targetCamX - camera.x) * 0.12;
       camera.y += (targetCamY - camera.y) * 0.12;
     }
 
-    // 6. ОТРИСОВКА В СТИЛЕ LAST DAY ON EARTH
+    // 6. ОТРИСОВКА
     function drawHuman(pos, p) {
-      // Тень человека
       ctx.beginPath();
       ctx.ellipse(pos.x, pos.y + 4, 11, 6, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
       ctx.fill();
 
-      // Ноги (анимация шага при беге)
       const legStep = p.isMoving ? Math.sin(p.walkCycle) * 5 : 0;
-      ctx.fillStyle = '#2c3e50'; // Тёмные брюки
-      // Левая нога
+      ctx.fillStyle = '#2c3e50';
       ctx.beginPath();
       ctx.ellipse(pos.x - 3 + Math.cos(p.angle + Math.PI/2)*legStep, pos.y - 4 + Math.sin(p.angle + Math.PI/2)*legStep, 3, 5, p.angle, 0, Math.PI*2);
       ctx.fill();
-      // Правая нога
       ctx.beginPath();
       ctx.ellipse(pos.x + 3 - Math.cos(p.angle + Math.PI/2)*legStep, pos.y - 4 - Math.sin(p.angle + Math.PI/2)*legStep, 3, 5, p.angle, 0, Math.PI*2);
       ctx.fill();
 
-      // Торс / Куртка выжившего (зеленовато-коричневая, как в LDoE)
       ctx.fillStyle = '#4a5d43';
       ctx.beginPath();
       ctx.ellipse(pos.x, pos.y - 14, 8, 10, p.angle, 0, Math.PI * 2);
@@ -325,17 +312,15 @@
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Голова с волосами
-      ctx.fillStyle = '#e0ac69'; // Кожа
+      ctx.fillStyle = '#e0ac69';
       ctx.beginPath();
       ctx.arc(pos.x, pos.y - 23, 5.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#4a3319'; // Волосы
+      ctx.fillStyle = '#4a3319';
       ctx.beginPath();
       ctx.arc(pos.x - Math.cos(p.angle)*1.5, pos.y - 24 - Math.sin(p.angle)*1.5, 5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Руки выжившего
       const armSwing = p.isMoving ? Math.sin(p.walkCycle) * 4 : 0;
       ctx.fillStyle = '#4a5d43';
       ctx.beginPath();
@@ -343,7 +328,6 @@
       ctx.arc(pos.x - Math.cos(p.angle + Math.PI/2)*7, pos.y - 14 - armSwing, 3, 0, Math.PI*2);
       ctx.fill();
 
-      // Луч взгляда (направление лица)
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -352,33 +336,47 @@
       ctx.stroke();
     }
 
-    function drawPineTree(pos, tree) {
-      // Тень кроны
+    function drawDarkAnimeTree(pos, tree) {
+      // Тень под деревом
       ctx.beginPath();
-      ctx.ellipse(pos.x + 8, pos.y + 4, tree.r * 0.9, tree.r * 0.45, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(5, 12, 5, 0.4)';
+      ctx.ellipse(pos.x + 4, pos.y + 4, tree.w * 0.35, tree.w * 0.18, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(4, 10, 4, 0.5)';
       ctx.fill();
 
-      // Ствол дерева
-      ctx.fillStyle = '#3e2714';
-      ctx.fillRect(pos.x - 3, pos.y - 14, 6, 16);
+      if (treeSprite.complete && treeSprite.naturalWidth !== 0) {
+        // Отрисовка сосны №4
+        ctx.drawImage(treeSprite, pos.x - tree.w / 2, pos.y - tree.h * 0.88, tree.w, tree.h);
+      } else {
+        // Качественный процедурный аниме-стиль пока картинка загружается
+        ctx.fillStyle = '#2b1a0d';
+        ctx.fillRect(pos.x - 3, pos.y - 18, 6, 20);
 
-      // Ярусы хвои (3 яруса треугольников для эффекта объема)
-      const layers = [
-        { h: tree.height * 0.35, w: tree.r * 1.3, y: 12, c: '#153119' },
-        { h: tree.height * 0.38, w: tree.r * 1.0, y: 28, c: '#1c4222' },
-        { h: tree.height * 0.42, w: tree.r * 0.7, y: 44, c: '#23522a' }
-      ];
+        // Объёмные ярусы тёмной сосны
+        const tiers = [
+          { y: 16, w: tree.w * 0.42, h: tree.h * 0.28, c: '#0f2413', hi: '#18381e' },
+          { y: 34, w: tree.w * 0.34, h: tree.h * 0.26, c: '#142f19', hi: '#1e4826' },
+          { y: 52, w: tree.w * 0.24, h: tree.h * 0.24, c: '#183a1f', hi: '#25582f' }
+        ];
 
-      layers.forEach(l => {
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y - l.y - l.h);
-        ctx.lineTo(pos.x + l.w, pos.y - l.y);
-        ctx.lineTo(pos.x - l.w, pos.y - l.y);
-        ctx.closePath();
-        ctx.fillStyle = l.c;
-        ctx.fill();
-      });
+        tiers.forEach(t => {
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - t.y - t.h);
+          ctx.lineTo(pos.x + t.w, pos.y - t.y);
+          ctx.lineTo(pos.x - t.w, pos.y - t.y);
+          ctx.closePath();
+          ctx.fillStyle = t.c;
+          ctx.fill();
+
+          // Освещенная солнцем грань аниме
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - t.y - t.h);
+          ctx.lineTo(pos.x + t.w * 0.5, pos.y - t.y);
+          ctx.lineTo(pos.x, pos.y - t.y);
+          ctx.closePath();
+          ctx.fillStyle = t.hi;
+          ctx.fill();
+        });
+      }
     }
 
     function drawRock(pos, r) {
@@ -387,11 +385,11 @@
       ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
       ctx.fill();
 
-      ctx.fillStyle = '#636e72';
+      ctx.fillStyle = '#515a5a';
       ctx.beginPath();
       ctx.arc(pos.x, pos.y - r.size * 0.4, r.size, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#7f8c8d';
+      ctx.fillStyle = '#6b7979';
       ctx.beginPath();
       ctx.arc(pos.x - 2, pos.y - r.size * 0.6, r.size * 0.65, 0, Math.PI * 2);
       ctx.fill();
@@ -403,7 +401,7 @@
       ctx.ellipse(pos.x, pos.y + 2, b.size * 0.8, b.size * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#2d5a27';
+      ctx.fillStyle = '#1e3f1a';
       ctx.beginPath();
       ctx.arc(pos.x, pos.y - 4, b.size * 0.7, 0, Math.PI * 2);
       ctx.arc(pos.x - 4, pos.y - 2, b.size * 0.5, 0, Math.PI * 2);
@@ -414,7 +412,6 @@
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Отрисовка земли леса
       for (let x = 0; x < MAP_SIZE; x++) {
         for (let y = 0; y < MAP_SIZE; y++) {
           const pt = toScreen(x, y);
@@ -429,13 +426,13 @@
 
           ctx.fillStyle = groundTiles[x][y];
           ctx.fill();
-          ctx.strokeStyle = '#182214';
+          ctx.strokeStyle = '#151d12';
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
 
-      // 2. Сортировка объектов по глубине (Y-sorting)
+      // Y-Сортировка
       const renderList = [
         ...trees.map(t => ({ type: 'tree', obj: t, depth: t.x + t.y })),
         ...rocks.map(r => ({ type: 'rock', obj: r, depth: r.x + r.y })),
@@ -447,16 +444,14 @@
 
       renderList.forEach(item => {
         const pos = toScreen(item.obj.x, item.obj.y);
-        // Не рисуем то, что за пределами видимости экрана
-        if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -150 || pos.y > canvas.height + 100) return;
+        if (pos.x < -120 || pos.x > canvas.width + 120 || pos.y < -180 || pos.y > canvas.height + 120) return;
 
         if (item.type === 'player') drawHuman(pos, player);
-        else if (item.type === 'tree') drawPineTree(pos, item.obj);
+        else if (item.type === 'tree') drawDarkAnimeTree(pos, item.obj);
         else if (item.type === 'rock') drawRock(pos, item.obj);
         else if (item.type === 'bush') drawBush(pos, item.obj);
       });
 
-      // 3. Сенсорный джойстик внизу
       if (joystick.active) {
         ctx.beginPath();
         ctx.arc(joystick.startX, joystick.startY, joystick.maxDist, 0, Math.PI * 2);
