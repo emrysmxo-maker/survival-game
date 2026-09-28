@@ -1,4 +1,4 @@
-// Запуск игры: канвас и игровой цикл (движение, камера, кадр).
+// Игровой цикл и размер экрана.
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -53,6 +53,10 @@ function update(dt) {
   player.x += player.vx * dt;
   player.y += player.vy * dt;
   player.isMoving = player.vx !== 0 || player.vy !== 0;
+
+  if (typeof updateCharacter === 'function') {
+    updateCharacter(dt, player.isMoving, player.angle, Math.hypot(player.vx, player.vy));
+  }
 
   // Камера жёстко привязана к игроку. Раньше она догоняла его с
   // запаздыванием и после остановки ещё около секунды «доплывала»

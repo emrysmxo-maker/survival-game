@@ -1,9 +1,13 @@
-// Отрисовка. Земля каждого чанка «запекается» в картинку один раз (общий
-// код — src/ground.js) и потом просто рисуется drawImage. Запекание идёт
-// в фоновом потоке (src/ground-worker.js): на телефоне один чанк готовится
-// до ~0.2 с, и в основном потоке это было заметным рывком при переходе в
-// новый участок. Если браузер не умеет OffscreenCanvas в потоке —
-// запекаем по одному чанку за кадр прямо в игре.
+// Вся отрисовка: земля, деревья, лесной мусор, персонаж, джойстик и виньетка.
+// Опирается на данные из world.js (чанки), player.js (координаты), input.js
+// (джойстик) и assets.js (картинки).
+
+// Земля каждого чанка «запекается» в картинку один раз (код — src/ground.js)
+// и потом просто рисуется drawImage. Запекание идёт в фоновом потоке
+// (src/ground-worker.js): на телефоне один чанк готовится до ~0.2 с, и в
+// основном потоке это было заметным рывком при переходе в новый участок.
+// Если браузер не умеет OffscreenCanvas в потоке — запекаем по одному чанку
+// за кадр прямо в игре, как раньше.
 
 function groundTexturesReady() {
   return groundImages.every((img) => img.complete && img.naturalWidth);
@@ -122,26 +126,7 @@ function render() {
   renderQueue.forEach(item => {
     if (item.isPlayer) {
       const pos = toScreen(player.x, player.y);
-      ctx.beginPath();
-      ctx.ellipse(pos.x, pos.y + 4, 10, 5, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y - 8, player.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#2ecc71';
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y - 8);
-      ctx.lineTo(pos.x + Math.cos(player.angle) * 16, pos.y - 8 + Math.sin(player.angle) * 16);
-      ctx.stroke();
-
+      drawCharacter(ctx, pos.x, pos.y);
     } else if (item.isClutter) {
       const obj = item.obj;
       const pos = toScreen(obj.x, obj.y);
