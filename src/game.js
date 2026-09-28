@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 12;
+const ASSET_VERSION = 13;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -33,8 +33,8 @@ const camera = { x: 0, y: 0 };
 
 function toScreen(gx, gy) {
   return {
-    x: (gx - gy) * (TILE_W / 2) - camera.x + canvas.width / 2,
-    y: (gx + gy) * (TILE_H / 2) - camera.y + canvas.height / 2
+    x: (gx - gy) * (TILE_W / 2) - Math.round(camera.x) + canvas.width / 2,
+    y: (gx + gy) * (TILE_H / 2) - Math.round(camera.y) + canvas.height / 2
   };
 }
 
@@ -51,6 +51,10 @@ const TREE_FILES = [
   '05_bluespruce.png', '06_willow.png', '07_aspen.png', '08_rowan.png',
   '09_cedar.png', '10_larch.png', '11_linden.png'
 ];
+// Размер дерева на экране при масштабе 1 (около 5–6 ростов человека).
+const TREE_DRAW_W = 165;
+const TREE_DRAW_H = 225;
+const TREE_BASE_FRAC = 0.95;
 const treeSprites = TREE_FILES.map((file) => {
   const img = new Image();
   img.src = `assets/trees/${file}?v=${ASSET_VERSION}`;
@@ -75,19 +79,28 @@ const groundImages = GROUND_TEXTURE_FILES.map((file) => {
 
 // Лесной мусор: поваленные и сломанные деревья, пни, камни, ямы, мох.
 // w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
+// Размеры — в пикселях при масштабе 1, в пропорции к дереву (~225px) и
+// будущему человеку (~40px): пень ниже колена, сломанный ствол в пару
+// ростов человека и заметно ниже живого дерева. Задаётся либо высота
+// (стоячие объекты), либо ширина (лежачие) — вторая сторона берётся из
+// пропорций картинки. Картинки обрезаны по краю объекта, поэтому нижняя
+// кромка картинки = точка касания земли.
+// tilt — максимальный случайный наклон (рад), scale — разброс размера.
 const CLUTTER_TYPES = {
-  fallen_log:   { file: 'fallen_log.png',   w: 130, h: 87,  anchor: 0.55 },
-  broken_trunk: { file: 'broken_trunk.png', w: 70,  h: 121, anchor: 0.9 },
-  stump:        { file: 'stump.png',        w: 75,  h: 89,  anchor: 0.85 },
-  rocks:        { file: 'rocks.png',        w: 90,  h: 83,  anchor: 0.6 },
-  pit:          { file: 'pit.png',          w: 120, h: 86,  anchor: 0.5 },
-  moss_patch:   { file: 'moss_patch.png',   w: 120, h: 86,  anchor: 0.6 }
+  fallen_log:   { files: ['fallen_log.png'], w: 120, scale: [0.8, 1.15] },
+  broken_trunk: { files: ['broken_trunk.png', 'broken_trunk_b.png', 'broken_trunk_c.png'], h: 92, tilt: 0.14, scale: [0.7, 1.1] },
+  stump:        { files: ['stump.png'], h: 50, scale: [0.8, 1.15] },
+  rocks:        { files: ['rocks.png'], w: 76, scale: [0.75, 1.2] },
+  pit:          { files: ['pit.png'], w: 92, scale: [0.85, 1.15] },
+  moss_patch:   { files: ['moss_patch.png'], w: 64, scale: [0.8, 1.15] }
 };
 const clutterSprites = {};
 for (const kind in CLUTTER_TYPES) {
-  const img = new Image();
-  img.src = `assets/clutter/${CLUTTER_TYPES[kind].file}?v=${ASSET_VERSION}`;
-  clutterSprites[kind] = img;
+  clutterSprites[kind] = CLUTTER_TYPES[kind].files.map((file) => {
+    const img = new Image();
+    img.src = `assets/clutter/${file}?v=${ASSET_VERSION}`;
+    return img;
+  });
 }
 
 // 2. РЕАЛИСТИЧНАЯ ЭКОЛОГИЧЕСКАЯ ГЕНЕРАЦИЯ (Многоярусность и дистанции)
@@ -236,10 +249,13 @@ function generateChunk(cx, cy) {
         roll -= CLUTTER_WEIGHTS[i];
       }
 
+      const def = CLUTTER_TYPES[kind];
       chunk.clutter.push({
         x: wx, y: wy, kind,
-        scale: 0.85 + pseudoRand(seed++) * 0.3,
-        flip: pseudoRand(seed++) > 0.5
+        variant: Math.floor(pseudoRand(seed++) * def.files.length),
+        scale: def.scale[0] + pseudoRand(seed++) * (def.scale[1] - def.scale[0]),
+        flip: pseudoRand(seed++) > 0.5,
+        tilt: (pseudoRand(seed++) - 0.5) * 2 * (def.tilt || 0)
       });
     }
   }
@@ -355,8 +371,15 @@ function update(dt) {
 
   const targetCamX = (player.x - player.y) * (TILE_W / 2);
   const targetCamY = (player.x + player.y) * (TILE_H / 2);
+  // Камера и земля, и объекты сдвигаются на одно и то же целое число
+  // пикселей (см. toScreen/drawGround): раньше земля округлялась, а деревья
+  // нет — пока камера «доплывала» к игроку после остановки, объекты на пол-
+  // пикселя ездили относительно земли и всё будто тряслось. Плюс хвост
+  // плавного догона обрезается, чтобы камера не ползла ещё пару секунд.
   camera.x += (targetCamX - camera.x) * 0.12;
   camera.y += (targetCamY - camera.y) * 0.12;
+  if (Math.abs(targetCamX - camera.x) < 0.5) camera.x = targetCamX;
+  if (Math.abs(targetCamY - camera.y) < 0.5) camera.y = targetCamY;
 
   updateWorldChunks();
 }
@@ -517,8 +540,8 @@ function bakeChunkGround(chunk) {
 
 function drawGround() {
   const W = canvas.width, H = canvas.height;
-  const camX = Math.round(camera.x - W / 2);
-  const camY = Math.round(camera.y - H / 2);
+  const camX = Math.round(camera.x) - W / 2;
+  const camY = Math.round(camera.y) - H / 2;
   const pcx = Math.floor(player.x / CHUNK_SIZE);
   const pcy = Math.floor(player.y / CHUNK_SIZE);
 
@@ -595,40 +618,43 @@ function render() {
       if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -120 || pos.y > canvas.height + 100) return;
 
       const def = CLUTTER_TYPES[obj.kind];
-      const sprite = clutterSprites[obj.kind];
+      const sprite = clutterSprites[obj.kind][obj.variant || 0];
+      if (!sprite.complete || !sprite.naturalWidth) return;
       const scale = obj.scale || 1.0;
-      const dw = def.w * scale;
-      const dh = def.h * scale;
+      const ratio = sprite.naturalHeight / sprite.naturalWidth;
+      const dw = def.h ? (def.h * scale) / ratio : def.w * scale;
+      const dh = dw * ratio;
 
-      if (sprite.complete) {
-        if (obj.flip) {
-          ctx.save();
-          ctx.translate(pos.x, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(sprite, -dw / 2, pos.y - dh * def.anchor, dw, dh);
-          ctx.restore();
-        } else {
-          ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * def.anchor, dw, dh);
-        }
-      }
+      // Рисуем относительно точки касания земли (низ картинки): поворот
+      // (наклон сломанного ствола) и отражение идут вокруг неё, так что
+      // объект не отрывается от земли.
+      ctx.save();
+      ctx.translate(pos.x, pos.y);
+      if (obj.tilt) ctx.rotate(obj.tilt);
+      if (obj.flip) ctx.scale(-1, 1);
+      ctx.drawImage(sprite, -dw / 2, -dh, dw, dh);
+      ctx.restore();
 
     } else {
       const obj = item.obj;
       const pos = toScreen(obj.x, obj.y);
-      if (pos.x < -120 || pos.x > canvas.width + 120 || pos.y < -220 || pos.y > canvas.height + 100) return;
+      const scale = obj.scale || 1.0;
+      const dw = TREE_DRAW_W * scale;
+      const dh = TREE_DRAW_H * scale;
+      if (pos.x < -dw || pos.x > canvas.width + dw || pos.y < -20 || pos.y - dh > canvas.height) return;
 
       const sprite = treeSprites[obj.type];
-      const scale = obj.scale || 1.0;
-      const dw = 110 * scale;
-      const dh = 150 * scale;
 
+      // Тень — вокруг основания ствола, чуть вправо-вниз (свет сверху-слева).
       ctx.beginPath();
-      ctx.ellipse(pos.x + 3, pos.y + 3, 26 * scale, 13 * scale, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.ellipse(pos.x + 6 * scale, pos.y + 2, 34 * scale, 13 * scale, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
       ctx.fill();
 
+      // В картинке дерева основание ствола стоит ровно по центру на 95% высоты
+      // (так нарезаны assets/trees) — ставим эту точку в точку дерева на карте.
       if (sprite.complete) {
-        ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * 0.92, dw, dh);
+        ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * TREE_BASE_FRAC, dw, dh);
       }
     }
   });
