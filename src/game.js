@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 6;
+const ASSET_VERSION = 7;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -57,9 +57,22 @@ const treeSprites = TREE_FILES.map((file) => {
   return img;
 });
 
-// Земля больше не мостится картинками-плитками (в изометрической ромбовидной
-// сетке они всегда давали видимый шов/шахматный узор) — см. tileColorsRGB
-// и функцию render() ниже: сплошная заливка с шумом + мягкие пятна.
+// Земля: настоящие бесшовные фототекстуры (Poly Haven, CC0), но НЕ нарезаны
+// по одной картинке на клетку — так в изометрической ромбовидной сетке
+// всегда виден шов (у каждого ромба 4 соседа по диагоналям, а не 4 ровных
+// стороны). Вместо этого текстура рисуется как canvas-паттерн, растянутый
+// матрицей той же изометрической проекции, что и toScreen() — получается
+// один и тот же бесконечно повторяющийся кусок текстуры под всей картой,
+// поэтому шва нет в принципе: соседние клетки — окна в одну и ту же плоскость.
+// 0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел.
+const GROUND_TEXTURE_FILES = ['grass.jpg', 'light.jpg', 'path.jpg', 'dark.jpg', 'ash.jpg'];
+const GROUND_TILES_PER_TEXTURE = 2.6; // сколько игровых клеток занимает одно повторение текстуры
+const groundImages = GROUND_TEXTURE_FILES.map((file) => {
+  const img = new Image();
+  img.src = `assets/ground/${file}?v=${ASSET_VERSION}`;
+  return img;
+});
+const groundPatterns = groundImages.map(() => null);
 
 // Лесной мусор: поваленные и сломанные деревья, пни, камни, ямы, мох.
 // w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
@@ -127,8 +140,7 @@ function generateChunk(cx, cy) {
     biomeName: eco.name,
     tiles: [],
     trees: [],
-    clutter: [],
-    groundBlobs: []
+    clutter: []
   };
 
   const startX = cx * CHUNK_SIZE;
@@ -160,40 +172,8 @@ function generateChunk(cx, cy) {
         else if (n < -0.3) tileType = 3;
       }
       const groundType = groundMap[tileType];
-      // Разброс яркости — ВАЖНО: он должен быть гладкой функцией мировых
-      // координат (несколько наложенных синусоид), а не независимым
-      // случайным числом на клетку. Независимый шум на регулярной сетке
-      // всегда выглядит как шахматка, даже если значения действительно
-      // случайны — глаз ловит границу на каждой клетке. Гладкий шум даёт
-      // плавные псевдо-облака светлых/тёмных пятен без единого шва.
-      const jitter = (
-        Math.sin(wx * 0.13 + wy * 0.07) +
-        Math.sin(wx * 0.05 - wy * 0.11) +
-        Math.sin(wx * 0.21 + wy * 0.19) * 0.5
-      ) / 2.5;
-      chunk.tiles[x][y] = { t: groundType, jitter, isPath: tileType === 2 };
+      chunk.tiles[x][y] = { t: groundType, isPath: tileType === 2 };
     }
-  }
-
-  // Органические пятна мха/палой листвы/пятна света поверх земли — рисуются
-  // мягкими растровыми пятнами (без картинок) в произвольных мировых
-  // координатах, а не по сетке клеток, поэтому не создают ни шва, ни
-  // повторяющегося узора — именно то, что делает землю «настоящим биомом»,
-  // а не мощением из одинаковых плиток.
-  const blobCount = 10 + Math.floor(pseudoRand(seed++) * 6);
-  for (let i = 0; i < blobCount; i++) {
-    const bx = startX + pseudoRand(seed++) * CHUNK_SIZE;
-    const by = startY + pseudoRand(seed++) * CHUNK_SIZE;
-    const localX = Math.floor(bx - startX);
-    const localY = Math.floor(by - startY);
-    const under = chunk.tiles[localX] && chunk.tiles[localX][localY];
-    if (!under || under.isPath) continue;
-    chunk.groundBlobs.push({
-      x: bx, y: by,
-      r: 0.9 + pseudoRand(seed++) * 1.6,
-      tone: pseudoRand(seed++) > 0.5 ? 'light' : 'dark',
-      alpha: 0.10 + pseudoRand(seed++) * 0.16
-    });
   }
 
   // 1. ВЕРХНИЙ ЯРУС (Великаны) — спавнятся с дистанцией отталкивания > 3.0 клеток
@@ -397,18 +377,20 @@ function update(dt) {
 // 4 пепел) с лёгким шумом яркости на клетку — никаких повторяющихся
 // картинок-плиток, поэтому в изометрической ромбовидной сетке в принципе
 // неоткуда взяться видимым швам или «шахматному» узору.
-const tileColorsRGB = [
-  [58, 84, 40],   // трава/мох
-  [96, 132, 58],  // светлая, солнечная трава
-  [124, 96, 62],  // тропа
-  [42, 54, 32],   // тёмная влажная земля
-  [58, 56, 54],   // пепел
-];
-function shade(rgb, amt) {
-  const r = Math.max(0, Math.min(255, Math.round(rgb[0] + amt)));
-  const g = Math.max(0, Math.min(255, Math.round(rgb[1] + amt)));
-  const b = Math.max(0, Math.min(255, Math.round(rgb[2] + amt)));
-  return `rgb(${r},${g},${b})`;
+const GROUND_TEX_PX = 512; // ассеты assets/ground/*.jpg приведены к этому размеру
+const GROUND_OVERSCAN = 1.2; // нахлёст между соседними ромбами, см. комментарий в render()
+const tileFallbackColors = ['#3a5428', '#60843a', '#7c603e', '#2a3620', '#3a3836'];
+
+// Обновляет матрицу паттерна так, чтобы он был «приклеен» к миру (двигался
+// вместе с камерой), а не к экрану — иначе при ходьбе земля будет скользить
+// под ногами игрока, а не оставаться на месте под деревьями.
+function updateGroundPatternTransform(pattern) {
+  const k = GROUND_TEX_PX / GROUND_TILES_PER_TEXTURE;
+  const a = TILE_W / (2 * k);
+  const b = TILE_H / (2 * k);
+  const offsetX = -camera.x + canvas.width / 2;
+  const offsetY = -camera.y + canvas.height / 2;
+  pattern.setTransform(new DOMMatrix([a, b, -a, b, offsetX, offsetY]));
 }
 
 function render() {
@@ -417,6 +399,15 @@ function render() {
   const halfW = TILE_W / 2;
   const halfH = TILE_H / 2;
   const renderQueue = [];
+
+  // Паттерны создаются лениво, как только картинка загрузилась, и каждый
+  // кадр переориентируются под текущее положение камеры.
+  for (let i = 0; i < groundImages.length; i++) {
+    if (!groundPatterns[i] && groundImages[i].complete && groundImages[i].naturalWidth) {
+      groundPatterns[i] = ctx.createPattern(groundImages[i], 'repeat');
+    }
+    if (groundPatterns[i]) updateGroundPatternTransform(groundPatterns[i]);
+  }
 
   for (const [, chunk] of loadedChunks.entries()) {
     const startX = chunk.cx * CHUNK_SIZE;
@@ -431,36 +422,22 @@ function render() {
         if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
 
         const tile = chunk.tiles[x][y];
+        // Каждый ромб красится отдельным ctx.fill(), и Canvas сглаживает
+        // (антиалиасит) края КАЖДОГО из них независимо — на стыке двух
+        // соседних ромбов это даёт тонкую паразитную линию, даже если
+        // текстура под ними абсолютно одна и та же. Лечится небольшим
+        // нахлёстом: полигон рисуется на пару пикселей больше клетки,
+        // соседи перекрывают друг друга и линия пропадает.
+        const cy = pt.y + halfH;
         ctx.beginPath();
-        ctx.moveTo(pt.x, pt.y);
-        ctx.lineTo(pt.x + halfW, pt.y + halfH);
-        ctx.lineTo(pt.x, pt.y + TILE_H);
-        ctx.lineTo(pt.x - halfW, pt.y + halfH);
+        ctx.moveTo(pt.x, cy - halfH - GROUND_OVERSCAN);
+        ctx.lineTo(pt.x + halfW + GROUND_OVERSCAN, cy);
+        ctx.lineTo(pt.x, cy + halfH + GROUND_OVERSCAN);
+        ctx.lineTo(pt.x - halfW - GROUND_OVERSCAN, cy);
         ctx.closePath();
-        ctx.fillStyle = shade(tileColorsRGB[tile.t], tile.jitter * 9);
+        ctx.fillStyle = groundPatterns[tile.t] || tileFallbackColors[tile.t];
         ctx.fill();
       }
-    }
-
-    // Органические пятна мха/листвы/света поверх земли — мягкие растровые
-    // кляксы в произвольных координатах, без привязки к сетке клеток.
-    for (const b of chunk.groundBlobs) {
-      const pt = toScreen(b.x, b.y);
-      if (pt.x < -80 || pt.x > canvas.width + 80 || pt.y < -60 || pt.y > canvas.height + 60) continue;
-      const rx = b.r * (TILE_W / 2);
-      const ry = b.r * (TILE_H / 2);
-      const tone = b.tone === 'light' ? 255 : 0;
-      ctx.save();
-      ctx.translate(pt.x, pt.y);
-      ctx.scale(1, ry / rx);
-      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-      grad.addColorStop(0, `rgba(${tone},${tone},${tone},${b.alpha})`);
-      grad.addColorStop(1, `rgba(${tone},${tone},${tone},0)`);
-      ctx.beginPath();
-      ctx.arc(0, 0, rx, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
-      ctx.fill();
-      ctx.restore();
     }
 
     // Лесной мусор (пни, поваленные стволы, камни, ямы, мох)
