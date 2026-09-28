@@ -3,17 +3,34 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// Логический размер экрана (CSS-пиксели) и плотность пикселей телефона.
+// Холст рисуется в реальном разрешении экрана (до x2), а не в CSS-пикселях:
+// иначе браузер растягивает весь кадр в ~2.6 раза, и когда в конце
+// торможения карта сдвигается на доли пикселя, растянутая картинка
+// каждый кадр пересчитывается по-разному — вся карта мелко «дрожит».
+// Все координаты в игре остаются в CSS-пикселях (view.w/view.h).
+const view = { w: 0, h: 0, dpr: 1 };
+const MAX_DPR = 2;
+
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  const w = window.innerWidth, h = window.innerHeight;
+  if (w === view.w && h === view.h && dpr === view.dpr) return;
+  view.w = w;
+  view.h = h;
+  view.dpr = dpr;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
 }
 window.addEventListener('resize', resize);
 resize();
 
 let lastTime = performance.now();
 // Резкость разгона/торможения игрока (1/с): чем больше, тем быстрее
-// скорость доходит до нужной; 14 — примерно 0.15 с.
-const PLAYER_ACCEL = 14;
+// скорость доходит до нужной; 18 — примерно 0.1 с.
+const PLAYER_ACCEL = 18;
 
 function update(dt) {
   let wantX = 0, wantY = 0;
@@ -29,7 +46,7 @@ function update(dt) {
   player.vy += (wantY - player.vy) * k;
   // Хвост торможения обрезаем: на очень малой скорости игрок сдвигался бы
   // на пиксель раз в несколько кадров — это читается как подёргивание.
-  if (wantX === 0 && wantY === 0 && Math.hypot(player.vx, player.vy) < 0.4) {
+  if (wantX === 0 && wantY === 0 && Math.hypot(player.vx, player.vy) < 0.8) {
     player.vx = 0;
     player.vy = 0;
   }

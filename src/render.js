@@ -51,10 +51,10 @@ function localBake(chunk) {
 }
 
 function drawGround() {
-  const W = canvas.width, H = canvas.height;
-  // Та же дробная камера, что в toScreen() — см. комментарий в player.js.
-  const camX = camera.x - W / 2;
-  const camY = camera.y - H / 2;
+  const W = view.w, H = view.h;
+  // Та же камера, что в toScreen() — см. комментарий в player.js.
+  const camX = renderCam.x - W / 2;
+  const camY = renderCam.y - H / 2;
   const pcx = Math.floor(player.x / CHUNK_SIZE);
   const pcy = Math.floor(player.y / CHUNK_SIZE);
 
@@ -97,7 +97,10 @@ function drawGround() {
 }
 
 function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Рисуем в CSS-пикселях, холст — в пикселях экрана (см. main.js/resize).
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  syncRenderCamera();
+  ctx.clearRect(0, 0, view.w, view.h);
   const renderQueue = [];
   drawGround();
 
@@ -142,7 +145,7 @@ function render() {
     } else if (item.isClutter) {
       const obj = item.obj;
       const pos = toScreen(obj.x, obj.y);
-      if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -120 || pos.y > canvas.height + 100) return;
+      if (pos.x < -100 || pos.x > view.w + 100 || pos.y < -120 || pos.y > view.h + 100) return;
 
       const def = CLUTTER_TYPES[obj.kind];
       const sprite = clutterSprites[obj.kind][obj.variant || 0];
@@ -168,7 +171,7 @@ function render() {
       const scale = obj.scale || 1.0;
       const dw = TREE_DRAW_W * scale;
       const dh = TREE_DRAW_H * scale;
-      if (pos.x < -dw || pos.x > canvas.width + dw || pos.y < -20 || pos.y - dh > canvas.height) return;
+      if (pos.x < -dw || pos.x > view.w + dw || pos.y < -20 || pos.y - dh > view.h) return;
 
       const sprite = obj.broken ? brokenTreeSprites[obj.type] : treeSprites[obj.type];
       const shadow = obj.broken ? 0.45 : 1; // без кроны тень маленькая
@@ -208,11 +211,11 @@ function render() {
 
   // Виньетка
   const vignette = ctx.createRadialGradient(
-    canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * 0.35,
-    canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75
+    view.w / 2, view.h / 2, Math.min(view.w, view.h) * 0.35,
+    view.w / 2, view.h / 2, Math.max(view.w, view.h) * 0.75
   );
   vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
   vignette.addColorStop(1, 'rgba(4, 7, 4, 0.55)');
   ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, view.w, view.h);
 }
