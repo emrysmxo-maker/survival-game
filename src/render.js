@@ -52,8 +52,9 @@ function localBake(chunk) {
 
 function drawGround() {
   const W = canvas.width, H = canvas.height;
-  const camX = Math.round(camera.x) - W / 2;
-  const camY = Math.round(camera.y) - H / 2;
+  // Та же дробная камера, что в toScreen() — см. комментарий в player.js.
+  const camX = camera.x - W / 2;
+  const camY = camera.y - H / 2;
   const pcx = Math.floor(player.x / CHUNK_SIZE);
   const pcy = Math.floor(player.y / CHUNK_SIZE);
 

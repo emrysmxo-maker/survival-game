@@ -17,7 +17,7 @@ const PLAYER_ACCEL = 14;
 
 function update(dt) {
   let wantX = 0, wantY = 0;
-  if (joystick.active && (Math.abs(joystick.dx) > 0.05 || Math.abs(joystick.dy) > 0.05)) {
+  if (joystick.active && (joystick.dx !== 0 || joystick.dy !== 0)) {
     wantX = (joystick.dx + joystick.dy) * player.speed;
     wantY = (joystick.dy - joystick.dx) * player.speed;
     player.angle = Math.atan2(joystick.dy, joystick.dx);

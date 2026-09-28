@@ -1,6 +1,9 @@
 // Сенсорное управление: виртуальный джойстик в левой нижней зоне экрана.
 // render.js рисует его по этим же полям (joystick.startX/currX/...).
 
+// Доля радиуса джойстика у центра, где движение не засчитывается (~10px).
+const JOYSTICK_DEAD_ZONE = 0.2;
+
 const joystick = {
   active: false, touchId: null,
   startX: 0, startY: 0,
@@ -40,8 +43,21 @@ window.addEventListener('touchmove', (e) => {
         joystick.currY = t.clientY;
       }
 
-      joystick.dx = (joystick.currX - joystick.startX) / joystick.maxDist;
-      joystick.dy = (joystick.currY - joystick.startY) / joystick.maxDist;
+      // Мёртвая зона у центра: палец на экране всегда чуть дрожит, и
+      // без неё при остановке игрок мелко ходил туда-сюда — камера
+      // привязана к нему, поэтому тряслась вся карта. Вне зоны скорость
+      // растёт плавно от нуля, без скачка на её границе.
+      const rx = (joystick.currX - joystick.startX) / joystick.maxDist;
+      const ry = (joystick.currY - joystick.startY) / joystick.maxDist;
+      const m = Math.hypot(rx, ry);
+      if (m < JOYSTICK_DEAD_ZONE) {
+        joystick.dx = 0;
+        joystick.dy = 0;
+      } else {
+        const s = (m - JOYSTICK_DEAD_ZONE) / (1 - JOYSTICK_DEAD_ZONE) / m;
+        joystick.dx = rx * s;
+        joystick.dy = ry * s;
+      }
     }
   }
 }, { passive: false });
