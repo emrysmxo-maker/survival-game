@@ -1,0 +1,73 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #080c08;
+  touch-action: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.zone-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(14, 20, 14, 0.88);
+  border: 1px solid #334430;
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: #dcdcdc;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+
+.zone-title {
+  color: #2ecc71;
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zone-sub {
+  color: #889685;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.hint-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid #2b3827;
+  border-radius: 20px;
+  padding: 6px 16px;
+  color: #a4b3a1;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
