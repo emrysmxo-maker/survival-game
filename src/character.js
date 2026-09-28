@@ -1,10 +1,10 @@
 // Survival Game: Character System (3D WebGL / Three.js + Procedural Soldier + GLTF Soldier.glb)
 // Реалистичный персонаж в военной форме (камуфляж, шлем, берцы, разгрузочный жилет).
 // Поворачивается на 360° во все стороны вслед за джойстиком, анимирует бег/ходьбу.
-// Пропорции согласованы с окружением: высота человека ~44px при высоте деревьев ~225px.
+// Размер: ~78px (отлично видна экипировка, пропорционален деревьям ~250px).
 
-const CHARACTER_DRAW_W = 46;
-const CHARACTER_DRAW_H = 46;
+const CHARACTER_DRAW_W = 78;
+const CHARACTER_DRAW_H = 78;
 
 let charCanvas = null;
 let charRenderer = null;
@@ -26,8 +26,8 @@ function init3DCharacter() {
 
   try {
     charCanvas = document.createElement('canvas');
-    charCanvas.width = 256;
-    charCanvas.height = 256;
+    charCanvas.width = 384;
+    charCanvas.height = 384;
 
     charRenderer = new THREE.WebGLRenderer({
       canvas: charCanvas,
@@ -35,7 +35,7 @@ function init3DCharacter() {
       antialias: true,
       preserveDrawingBuffer: true
     });
-    charRenderer.setSize(256, 256);
+    charRenderer.setSize(384, 384);
     charRenderer.setClearColor(0x000000, 0);
 
     charScene = new THREE.Scene();
@@ -104,7 +104,7 @@ function createProceduralSoldier() {
   vest.position.set(0, 0.98, 0);
   group.add(vest);
 
-  // Тактический рюкзак за спиной
+  // Тактический рюкзак за спиной (-Z)
   const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.36, 0.16), matPack);
   backpack.position.set(0, 1.0, -0.19);
   group.add(backpack);
@@ -119,7 +119,7 @@ function createProceduralSoldier() {
   group.add(helmet);
 
   const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, 0.26), matGoggles);
-  goggles.position.set(0, 1.39, 0);
+  goggles.position.set(0, 1.39, 0.02);
   group.add(goggles);
 
   // Ноги (с суставами для ходьбы и бега)
@@ -158,7 +158,7 @@ function createProceduralSoldier() {
   rightArm.add(rightSleeve);
   group.add(rightArm);
 
-  // Автомат на груди / в руках
+  // Автомат на груди / в руках (+Z, смотрит вперёд)
   const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.55), matRifle);
   rifle.position.set(0.08, 0.95, 0.22);
   rifle.rotation.x = -0.3;
@@ -190,6 +190,11 @@ function loadGLTFSoldier() {
       modelUrls[urlIndex],
       (gltf) => {
         gltfSoldier = gltf.scene;
+
+        // В Mixamo Soldier смотрит по умолчанию на -Z.
+        // Поворачиваем на PI, чтобы смотрел на +Z (лицом к камере/вниз),
+        // согласуя с процедурным бойцом.
+        gltfSoldier.rotation.y = Math.PI;
 
         // Настройка размера и материалов под сцену
         const box = new THREE.Box3().setFromObject(gltfSoldier);
@@ -244,7 +249,7 @@ function loadGLTFSoldier() {
 }
 
 // Плавный переход между анимациями
-function fadeToAction(name, duration = 0.2) {
+function fadeToAction(name, duration = 0.15) {
   if (!charActions || !charActions[name] || currentActionName === name) return;
   const prevAction = activeAction;
   activeAction = charActions[name];
@@ -262,27 +267,30 @@ function updateCharacter(dt, isMoving, angle, speed) {
   }
 
   // 1. Поворот на 360 градусов вслед за направлением джойстика
-  // В изометрической камере (вид сверху 3/4) угол джойстика пересчитывается в Y-вращение:
-  const targetYaw = Math.PI / 2 - angle;
+  // В изометрической камере (вид сверху 3/4):
+  // angle: -PI/2 (вверх), PI/2 (вниз), 0 (вправо), PI (влево)
+  // Модель смотрит на +Z (вниз экрана) при rotation.y = 0.
+  // При движении вверх (angle = -PI/2): atan2(cos, sin) = atan2(0, -1) = PI (смотрит вверх).
+  // При движении вниз (angle = PI/2): atan2(cos, sin) = atan2(0, 1) = 0 (смотрит вниз).
+  const targetYaw = Math.atan2(Math.cos(angle), Math.sin(angle));
   let diff = targetYaw - charYaw;
   while (diff < -Math.PI) diff += Math.PI * 2;
   while (diff > Math.PI) diff -= Math.PI * 2;
-  charYaw += diff * Math.min(1, 16 * dt);
+  charYaw += diff * Math.min(1, 24 * dt);
   if (soldierRoot) {
     soldierRoot.rotation.y = charYaw;
   }
 
   // 2. Анимация бега и ходьбы
   if (isMoving) {
-    const runSpeed = Math.max(speed, 4.0);
-    charRunPhase += dt * runSpeed * 2.2;
+    charRunPhase += dt * 16; // Чёткий, энергичный шаг без «катания на коньках»
 
     if (charMixer) {
-      fadeToAction(speed > 4.5 ? 'Run' : 'Walk', 0.15);
+      fadeToAction(speed > 4.5 ? 'Run' : 'Walk', 0.12);
       charMixer.update(dt);
     } else if (proceduralSoldier) {
       // Анимация ног и рук процедурного бойца
-      const swing = Math.sin(charRunPhase) * 0.65;
+      const swing = Math.sin(charRunPhase) * 0.75;
       proceduralSoldier.leftLeg.rotation.x = swing;
       proceduralSoldier.rightLeg.rotation.x = -swing;
       proceduralSoldier.leftArm.rotation.x = -swing * 0.7;
@@ -290,15 +298,16 @@ function updateCharacter(dt, isMoving, angle, speed) {
       proceduralSoldier.group.position.y = Math.abs(Math.sin(charRunPhase * 2)) * 0.04;
     }
   } else {
-    // В покое (Idle)
+    // В покое (Idle): ноги мгновенно упираются в землю, никакого скольжения
+    charRunPhase = 0;
     if (charMixer) {
-      fadeToAction('Idle', 0.2);
+      fadeToAction('Idle', 0.15);
       charMixer.update(dt);
     } else if (proceduralSoldier) {
-      proceduralSoldier.leftLeg.rotation.x *= 0.85;
-      proceduralSoldier.rightLeg.rotation.x *= 0.85;
-      proceduralSoldier.leftArm.rotation.x *= 0.85;
-      proceduralSoldier.rightArm.rotation.x *= 0.85;
+      proceduralSoldier.leftLeg.rotation.x = 0;
+      proceduralSoldier.rightLeg.rotation.x = 0;
+      proceduralSoldier.leftArm.rotation.x = 0;
+      proceduralSoldier.rightArm.rotation.x = 0;
       proceduralSoldier.group.position.y = Math.sin(Date.now() * 0.003) * 0.015;
     }
   }
@@ -314,69 +323,75 @@ function drawCharacter(ctx, screenX, screenY) {
   const dw = CHARACTER_DRAW_W;
   const dh = CHARACTER_DRAW_H;
 
-  // Тень под ногами персонажа (мягкий эллипс, согласованный с тенью деревьев)
+  // Тень под ногами персонажа (согласована с увеличенным размером)
   ctx.beginPath();
-  ctx.ellipse(screenX, screenY + 2, 13, 5.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(screenX, screenY + 3, 20, 8, 0, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.fill();
 
   if (is3DInitialized && charCanvas) {
     // 3D-боец из WebGL-холста (ноги привязаны к точке касания земли)
-    ctx.drawImage(charCanvas, screenX - dw / 2, screenY - dh + 4, dw, dh);
+    ctx.drawImage(charCanvas, screenX - dw / 2, screenY - dh + 6, dw, dh);
   } else {
     // Запасной 2D-рендер бойца в военной форме, если Three.js ещё не загрузился
     drawFallback2DSoldier(ctx, screenX, screenY, player.angle, player.isMoving);
   }
 }
 
-// Запасной 2D-солдат в военной форме (камуфляж, шлем, берцы, поворот)
+// Запасной 2D-солдат в военной форме (камуфляж, шлем, берцы, поворот всего тела)
 function drawFallback2DSoldier(ctx, screenX, screenY, angle, isMoving) {
   ctx.save();
-  ctx.translate(screenX, screenY - 14);
+  ctx.translate(screenX, screenY - 20);
+  // Вращаем всего бойца в сторону движения
+  // По умолчанию фигура нарисована смотрящей вниз (angle = PI/2)
+  ctx.rotate(angle - Math.PI / 2);
 
-  // Анимация шага
-  const step = isMoving ? Math.sin(Date.now() * 0.012) * 4 : 0;
+  // Анимация ног при беге
+  const step = isMoving ? Math.sin(charRunPhase) * 6 : 0;
 
-  // Ноги (берцы)
+  // Берцы (ноги)
   ctx.fillStyle = '#1c1c1c';
-  ctx.fillRect(-6, 4 + step, 4, 10);
-  ctx.fillRect(2, 4 - step, 4, 10);
+  ctx.fillRect(-8, 6 + step, 6, 12);
+  ctx.fillRect(2, 6 - step, 6, 12);
 
   // Камуфляжные штаны
   ctx.fillStyle = '#3e4a2e';
-  ctx.fillRect(-7, -2, 5, 8);
-  ctx.fillRect(2, -2, 5, 8);
+  ctx.fillRect(-9, -2, 7, 10);
+  ctx.fillRect(2, -2, 7, 10);
+
+  // Тактический рюкзак сзади (-Y)
+  ctx.fillStyle = '#2c361e';
+  ctx.fillRect(-7, -18, 14, 6);
 
   // Камуфляжный китель и бронежилет
   ctx.fillStyle = '#485735';
-  ctx.fillRect(-9, -14, 18, 14);
+  ctx.fillRect(-12, -14, 24, 18);
   ctx.fillStyle = '#2d3822';
-  ctx.fillRect(-7, -13, 14, 11);
+  ctx.fillRect(-9, -12, 18, 14);
 
-  // Руки с направлением
+  // Руки и автомат
   ctx.fillStyle = '#485735';
   ctx.beginPath();
-  ctx.arc(-10, -8, 3.5, 0, Math.PI * 2);
-  ctx.arc(10, -8, 3.5, 0, Math.PI * 2);
+  ctx.arc(-13, -4, 4.5, 0, Math.PI * 2);
+  ctx.arc(13, -4, 4.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Военный шлем (поворачивается по углу)
-  ctx.save();
-  ctx.rotate(angle);
+  // Автомат в руках (направлен вперёд +Y)
+  ctx.fillStyle = '#1e2022';
+  ctx.fillRect(4, -8, 5, 20);
+
+  // Голова и военный шлем
   ctx.fillStyle = '#3c482a';
   ctx.beginPath();
-  ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+  ctx.arc(0, -2, 9, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = '#222a18';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Козырёк шлема / направление взгляда
+  // Очки / козырёк шлема спереди (+Y)
   ctx.fillStyle = '#1a1f14';
-  ctx.beginPath();
-  ctx.arc(5, 0, 3, -Math.PI / 2, Math.PI / 2);
-  ctx.fill();
-  ctx.restore();
+  ctx.fillRect(-5, 4, 10, 3);
 
   ctx.restore();
 }
