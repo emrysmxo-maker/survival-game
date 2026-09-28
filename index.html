@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Survival Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #1a1a1a;
+      touch-action: none;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #hud {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      color: #fff;
+      font-size: 14px;
+      pointer-events: none;
+      text-shadow: 1px 1px 2px #000;
+    }
+    .bar-container {
+      width: 160px;
+      height: 14px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid #444;
+      border-radius: 7px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .bar-hp {
+      width: 100%;
+      height: 100%;
+      background: #e74c3c;
+    }
+    #action-btn {
+      position: absolute;
+      right: 25px;
+      bottom: 25px;
+      width: 70px;
+      height: 70px;
+      background: rgba(230, 126, 34, 0.85);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      color: white;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    #action-btn:active {
+      transform: scale(0.92);
+      background: rgba(211, 84, 0, 0.95);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="hud">
+    <div><strong>Выживший</strong> (Уровень 1)</div>
+    <div class="bar-container">
+      <div class="bar-hp"></div>
+    </div>
+  </div>
+
+  <div id="action-btn">УДАР</div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const TILE_W = 64;
+    const TILE_H = 32;
+    const MAP_SIZE = 25;
+
+    const player = {
+      x: 12,
+      y: 12,
+      speed: 4,
+      radius: 12,
+      angle: 0
+    };
+
+    const camera = { x: 0, y: 0 };
+
+    function toScreen(x, y) {
+      return {
+        x: (x - y) * (TILE_W / 2) - camera.x + canvas.width / 2,
+        y: (x + y) * (TILE_H / 2) - camera.y + canvas.height / 2
+      };
+    }
+
+    const joystick = {
+      touchId: null,
+      active: false,
+      baseX: 0,
+      baseY: 0,
+      currentX: 0,
+      currentY: 0,
+      maxRadius: 45,
+      deltaX: 0,
+      deltaY: 0
+    };
+
+    window.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.clientX < canvas.width / 2 && !joystick.active) {
+          joystick.touchId = touch.identifier;
+          joystick.active = true;
+          joystick.baseX = touch.clientX;
+          joystick.baseY = touch.clientY;
+          joystick.currentX = touch.clientX;
+          joystick.currentY = touch.clientY;
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === joystick.touchId) {
+          const dx = touch.clientX - joystick.baseX;
+          const dy = touch.clientY - joystick.baseY;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist > joystick.maxRadius) {
+            joystick.currentX = joystick.baseX + (dx / dist) * joystick.maxRadius;
+            joystick.currentY = joystick.baseY + (dy / dist) * joystick.maxRadius;
+          } else {
+            joystick.currentX = touch.clientX;
+            joystick.currentY = touch.clientY;
+          }
+
+          joystick.deltaX = (joystick.currentX - joystick.baseX) / joystick.maxRadius;
+          joystick.deltaY = (joystick.currentY - joystick.baseY) / joystick.maxRadius;
+        }
+      }
+    }, { passive: false });
+
+    function resetJoystick() {
+      joystick.active = false;
+      joystick.touchId = null;
+      joystick.deltaX = 0;
+      joystick.deltaY = 0;
+    }
+
+    window.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === joystick.touchId) resetJoystick();
+      }
+    });
+    window.addEventListener('touchcancel', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === joystick.touchId) resetJoystick();
+      }
+    });
+
+    let lastTime = performance.now();
+    function update(dt) {
+      if (joystick.active) {
+        const isoX = joystick.deltaX + joystick.deltaY;
+        const isoY = joystick.deltaY - joystick.deltaX;
+
+        player.x += isoX * player.speed * dt;
+        player.y += isoY * player.speed * dt;
+
+        player.x = Math.max(0, Math.min(MAP_SIZE, player.x));
+        player.y = Math.max(0, Math.min(MAP_SIZE, player.y));
+
+        player.angle = Math.atan2(joystick.deltaY, joystick.deltaX);
+      }
+
+      const targetCam = {
+        x: (player.x - player.y) * (TILE_W / 2),
+        y: (player.x + player.y) * (TILE_H / 2)
+      };
+      camera.x += (targetCam.x - camera.x) * 0.1;
+      camera.y += (targetCam.y - camera.y) * 0.1;
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let x = 0; x < MAP_SIZE; x++) {
+        for (let y = 0; y < MAP_SIZE; y++) {
+          const pt = toScreen(x, y);
+
+          if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
+
+          ctx.beginPath();
+          ctx.moveTo(pt.x, pt.y);
+          ctx.lineTo(pt.x + TILE_W / 2, pt.y + TILE_H / 2);
+          ctx.lineTo(pt.x, pt.y + TILE_H);
+          ctx.lineTo(pt.x - TILE_W / 2, pt.y + TILE_H / 2);
+          ctx.closePath();
+
+          ctx.fillStyle = (x + y) % 2 === 0 ? '#38482c' : '#334227';
+          ctx.fill();
+          ctx.strokeStyle = '#27331d';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+
+      const pPos = toScreen(player.x, player.y);
+
+      ctx.beginPath();
+      ctx.ellipse(pPos.x, pPos.y + 12, 12, 6, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(pPos.x, pPos.y, player.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#3498db';
+      ctx.fill();
+      ctx.strokeStyle = '#1d6fa5';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(pPos.x, pPos.y);
+      ctx.lineTo(
+        pPos.x + Math.cos(player.angle) * 18,
+        pPos.y + Math.sin(player.angle) * 18
+      );
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      if (joystick.active) {
+        ctx.beginPath();
+        ctx.arc(joystick.baseX, joystick.baseY, joystick.maxRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(joystick.currentX, joystick.currentY, 22, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fill();
+      }
+    }
+
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      update(dt);
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
