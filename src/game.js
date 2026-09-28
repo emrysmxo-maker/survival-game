@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 13;
+const ASSET_VERSION = 14;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -77,7 +77,7 @@ const groundImages = GROUND_TEXTURE_FILES.map((file) => {
   return img;
 });
 
-// Лесной мусор: поваленные и сломанные деревья, пни, камни, ямы, мох.
+// Лесной мусор: поваленные и сломанные деревья, пни, камни, мох.
 // w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
 // Размеры — в пикселях при масштабе 1, в пропорции к дереву (~225px) и
 // будущему человеку (~40px): пень ниже колена, сломанный ствол в пару
@@ -91,7 +91,6 @@ const CLUTTER_TYPES = {
   broken_trunk: { files: ['broken_trunk.png', 'broken_trunk_b.png', 'broken_trunk_c.png'], h: 92, tilt: 0.14, scale: [0.7, 1.1] },
   stump:        { files: ['stump.png'], h: 50, scale: [0.8, 1.15] },
   rocks:        { files: ['rocks.png'], w: 76, scale: [0.75, 1.2] },
-  pit:          { files: ['pit.png'], w: 92, scale: [0.85, 1.15] },
   moss_patch:   { files: ['moss_patch.png'], w: 64, scale: [0.8, 1.15] }
 };
 const clutterSprites = {};
@@ -225,9 +224,9 @@ function generateChunk(cx, cy) {
   }
 
   // 3. ЛЕСНОЙ МУСОР: то, что обычно встречается под ногами в реальном лесу —
-  // поваленные и сломанные деревья, пни, валуны, ямы, пятна мха. Редко и не на тропе.
-  const CLUTTER_KINDS = ['moss_patch', 'rocks', 'fallen_log', 'stump', 'broken_trunk', 'pit'];
-  const CLUTTER_WEIGHTS = [0.30, 0.25, 0.17, 0.14, 0.09, 0.05];
+  // поваленные и сломанные деревья, пни, валуны, пятна мха. Редко и не на тропе.
+  const CLUTTER_KINDS = ['moss_patch', 'rocks', 'fallen_log', 'stump', 'broken_trunk'];
+  const CLUTTER_WEIGHTS = [0.30, 0.28, 0.18, 0.15, 0.09];
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       if (chunk.tiles[x][y].isPath) continue; // Не на тропе
@@ -575,7 +574,7 @@ function render() {
   drawGround();
 
   for (const [, chunk] of loadedChunks.entries()) {
-    // Лесной мусор (пни, поваленные стволы, камни, ямы, мох)
+    // Лесной мусор (пни, поваленные стволы, камни, мох)
     for (const c of chunk.clutter) {
       renderQueue.push({ isPlayer: false, isClutter: true, obj: c, depth: c.x + c.y });
     }
