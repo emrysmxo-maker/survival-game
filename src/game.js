@@ -52,6 +52,31 @@ const treeSprites = TREE_FILES.map((file) => {
   return img;
 });
 
+// Текстуры земли (вместо плоской заливки) — по одной картинке на тип грунта.
+const GROUND_FILES = ['tile_grass.png', 'tile_light.png', 'tile_path.png', 'tile_dark.png'];
+const groundSprites = GROUND_FILES.map((file) => {
+  const img = new Image();
+  img.src = `assets/ground/${file}`;
+  return img;
+});
+
+// Лесной мусор: поваленные и сломанные деревья, пни, камни, ямы, мох.
+// w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
+const CLUTTER_TYPES = {
+  fallen_log:   { file: 'fallen_log.png',   w: 130, h: 87,  anchor: 0.55 },
+  broken_trunk: { file: 'broken_trunk.png', w: 70,  h: 121, anchor: 0.9 },
+  stump:        { file: 'stump.png',        w: 75,  h: 89,  anchor: 0.85 },
+  rocks:        { file: 'rocks.png',        w: 90,  h: 83,  anchor: 0.6 },
+  pit:          { file: 'pit.png',          w: 120, h: 86,  anchor: 0.5 },
+  moss_patch:   { file: 'moss_patch.png',   w: 120, h: 86,  anchor: 0.6 }
+};
+const clutterSprites = {};
+for (const kind in CLUTTER_TYPES) {
+  const img = new Image();
+  img.src = `assets/clutter/${CLUTTER_TYPES[kind].file}`;
+  clutterSprites[kind] = img;
+}
+
 // 2. РЕАЛИСТИЧНАЯ ЭКОЛОГИЧЕСКАЯ ГЕНЕРАЦИЯ (Многоярусность и дистанции)
 // В реальном лесу есть:
 // - Верхний ярус (Великаны: Сосны, Дубы, Кедры, Лиственницы) — растут просторно (дистанция 3.5 - 6 клеток).
@@ -100,6 +125,7 @@ function generateChunk(cx, cy) {
     biomeName: eco.name,
     tiles: [],
     trees: [],
+    clutter: []
   };
 
   const startX = cx * CHUNK_SIZE;
@@ -159,6 +185,39 @@ function generateChunk(cx, cy) {
         const subType = eco.subcanopy[Math.floor(pseudoRand(seed++) * eco.subcanopy.length)];
         chunk.trees.push({ x: sx, y: sy, type: subType, scale: 0.75 + pseudoRand(seed++) * 0.2 });
       }
+    }
+  }
+
+  // 3. ЛЕСНОЙ МУСОР: то, что обычно встречается под ногами в реальном лесу —
+  // поваленные и сломанные деревья, пни, валуны, ямы, пятна мха. Редко и не на тропе.
+  const CLUTTER_KINDS = ['moss_patch', 'rocks', 'fallen_log', 'stump', 'broken_trunk', 'pit'];
+  const CLUTTER_WEIGHTS = [0.30, 0.25, 0.17, 0.14, 0.09, 0.05];
+  for (let x = 0; x < CHUNK_SIZE; x++) {
+    for (let y = 0; y < CHUNK_SIZE; y++) {
+      if (chunk.tiles[x][y] === 2) continue; // Не на тропе
+      if (pseudoRand(seed++) > 0.07) continue; // ~7% клеток
+
+      const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
+      const wy = startY + y + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
+
+      let tooCloseToGiant = false;
+      for (const t of chunk.trees) {
+        if (t.isGiant && Math.hypot(t.x - wx, t.y - wy) < 1.3) { tooCloseToGiant = true; break; }
+      }
+      if (tooCloseToGiant) continue;
+
+      let roll = pseudoRand(seed++);
+      let kind = CLUTTER_KINDS[CLUTTER_KINDS.length - 1];
+      for (let i = 0; i < CLUTTER_WEIGHTS.length; i++) {
+        if (roll < CLUTTER_WEIGHTS[i]) { kind = CLUTTER_KINDS[i]; break; }
+        roll -= CLUTTER_WEIGHTS[i];
+      }
+
+      chunk.clutter.push({
+        x: wx, y: wy, kind,
+        scale: 0.85 + pseudoRand(seed++) * 0.3,
+        flip: pseudoRand(seed++) > 0.5
+      });
     }
   }
 
@@ -293,24 +352,31 @@ function render() {
 
         if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
 
-        ctx.beginPath();
-        ctx.moveTo(pt.x, pt.y);
-        ctx.lineTo(pt.x + halfW, pt.y + halfH);
-        ctx.lineTo(pt.x, pt.y + TILE_H);
-        ctx.lineTo(pt.x - halfW, pt.y + halfH);
-        ctx.closePath();
-
-        ctx.fillStyle = tileColors[chunk.tiles[x][y]];
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
+        const tileType = chunk.tiles[x][y];
+        const groundImg = groundSprites[tileType];
+        if (groundImg.complete) {
+          ctx.drawImage(groundImg, pt.x - halfW, pt.y, TILE_W, TILE_H);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(pt.x, pt.y);
+          ctx.lineTo(pt.x + halfW, pt.y + halfH);
+          ctx.lineTo(pt.x, pt.y + TILE_H);
+          ctx.lineTo(pt.x - halfW, pt.y + halfH);
+          ctx.closePath();
+          ctx.fillStyle = tileColors[tileType];
+          ctx.fill();
+        }
       }
+    }
+
+    // Лесной мусор (пни, поваленные стволы, камни, ямы, мох)
+    for (const c of chunk.clutter) {
+      renderQueue.push({ isPlayer: false, isClutter: true, obj: c, depth: c.x + c.y });
     }
 
     // Деревья
     for (const t of chunk.trees) {
-      renderQueue.push({ isPlayer: false, obj: t, depth: t.x + t.y });
+      renderQueue.push({ isPlayer: false, isClutter: false, obj: t, depth: t.x + t.y });
     }
   }
 
@@ -339,6 +405,29 @@ function render() {
       ctx.moveTo(pos.x, pos.y - 8);
       ctx.lineTo(pos.x + Math.cos(player.angle) * 16, pos.y - 8 + Math.sin(player.angle) * 16);
       ctx.stroke();
+
+    } else if (item.isClutter) {
+      const obj = item.obj;
+      const pos = toScreen(obj.x, obj.y);
+      if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -120 || pos.y > canvas.height + 100) return;
+
+      const def = CLUTTER_TYPES[obj.kind];
+      const sprite = clutterSprites[obj.kind];
+      const scale = obj.scale || 1.0;
+      const dw = def.w * scale;
+      const dh = def.h * scale;
+
+      if (sprite.complete) {
+        if (obj.flip) {
+          ctx.save();
+          ctx.translate(pos.x, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(sprite, -dw / 2, pos.y - dh * def.anchor, dw, dh);
+          ctx.restore();
+        } else {
+          ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * def.anchor, dw, dh);
+        }
+      }
 
     } else {
       const obj = item.obj;
