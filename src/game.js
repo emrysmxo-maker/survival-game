@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 4;
+const ASSET_VERSION = 5;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
