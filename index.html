@@ -16,30 +16,30 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #1a1a1a;
+      background-color: #151815;
       touch-action: none;
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     canvas {
       display: block;
       width: 100vw;
       height: 100vh;
     }
-    #hud {
+    #hud-left {
       position: absolute;
       top: 15px;
       left: 15px;
       color: #fff;
-      font-size: 14px;
+      font-size: 13px;
       pointer-events: none;
-      text-shadow: 1px 1px 2px #000;
+      text-shadow: 1px 1px 3px #000;
     }
     .bar-container {
-      width: 160px;
-      height: 14px;
+      width: 150px;
+      height: 12px;
       background: rgba(0, 0, 0, 0.6);
-      border: 1px solid #444;
-      border-radius: 7px;
+      border: 1px solid #555;
+      border-radius: 6px;
       overflow: hidden;
       margin-top: 4px;
     }
@@ -48,39 +48,72 @@
       height: 100%;
       background: #e74c3c;
     }
+    #hud-right {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      pointer-events: none;
+    }
+    .res-badge {
+      background: rgba(20, 24, 20, 0.85);
+      border: 1px solid #3e4a3a;
+      border-radius: 12px;
+      padding: 4px 10px;
+      color: #eee;
+      font-size: 12px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
     #action-btn {
       position: absolute;
       right: 25px;
       bottom: 25px;
-      width: 70px;
-      height: 70px;
-      background: rgba(230, 126, 34, 0.85);
-      border: 2px solid #fff;
+      width: 75px;
+      height: 75px;
+      background: radial-gradient(circle, #e67e22, #d35400);
+      border: 3px solid rgba(255, 255, 255, 0.9);
       border-radius: 50%;
       color: white;
-      font-weight: bold;
+      font-weight: 900;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-size: 13px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      font-size: 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+      touch-action: manipulation;
     }
     #action-btn:active {
       transform: scale(0.92);
-      background: rgba(211, 84, 0, 0.95);
+      filter: brightness(1.2);
     }
   </style>
 </head>
 <body>
 
-  <div id="hud">
-    <div><strong>Выживший</strong> (Уровень 1)</div>
+  <div id="hud-left">
+    <div><strong>Выживший</strong></div>
     <div class="bar-container">
-      <div class="bar-hp"></div>
+      <div class="bar-hp" id="hp-bar"></div>
     </div>
   </div>
 
-  <div id="action-btn">УДАР</div>
+  <div id="hud-right">
+    <div class="res-badge">🪵 Дерево: <span id="res-wood">0</span></div>
+    <div class="res-badge">🪨 Камень: <span id="res-stone">0</span></div>
+    <div class="res-badge">📦 Припасы: <span id="res-supplies">0</span></div>
+  </div>
+
+  <div id="action-btn">
+    <span style="font-size: 18px;">⛏️</span>
+    <span>ДОБЫЧА</span>
+  </div>
 
   <canvas id="gameCanvas"></canvas>
 
@@ -97,14 +130,22 @@
 
     const TILE_W = 64;
     const TILE_H = 32;
-    const MAP_SIZE = 25;
+    const MAP_SIZE = 26;
+
+    const inventory = { wood: 0, stone: 0, supplies: 0 };
+    function updateHUD() {
+      document.getElementById('res-wood').textContent = inventory.wood;
+      document.getElementById('res-stone').textContent = inventory.stone;
+      document.getElementById('res-supplies').textContent = inventory.supplies;
+    }
 
     const player = {
-      x: 12,
-      y: 12,
-      speed: 4,
+      x: 13,
+      y: 13,
+      speed: 4.2,
       radius: 12,
-      angle: 0
+      angle: 0,
+      isActing: false
     };
 
     const camera = { x: 0, y: 0 };
@@ -114,6 +155,48 @@
         x: (x - y) * (TILE_W / 2) - camera.x + canvas.width / 2,
         y: (x + y) * (TILE_H / 2) - camera.y + canvas.height / 2
       };
+    }
+
+    const sprites = {
+      tree: new Image(),
+      rock: new Image(),
+      crate: new Image()
+    };
+    sprites.tree.src = 'https://image.pollinations.ai/prompt/isometric%20stylized%20pine%20tree%20game%20sprite%20isolated%20on%20black%20background?width=128&height=128&nologo=true&seed=42';
+    sprites.rock.src = 'https://image.pollinations.ai/prompt/isometric%20stylized%20boulder%20rock%20stone%20game%20sprite%20isolated%20on%20black%20background?width=128&height=128&nologo=true&seed=101';
+    sprites.crate.src = 'https://image.pollinations.ai/prompt/isometric%20wooden%20crate%20supply%20box%20isolated%20on%20black%20background?width=128&height=128&nologo=true&seed=202';
+
+    const entities = [];
+    const resourceTypes = [
+      { type: 'tree', count: 18, name: 'Дерево', res: 'wood', hp: 3 },
+      { type: 'rock', count: 12, name: 'Камень', res: 'stone', hp: 4 },
+      { type: 'crate', count: 6, name: 'Ящик', res: 'supplies', hp: 2 }
+    ];
+
+    resourceTypes.forEach(config => {
+      for (let i = 0; i < config.count; i++) {
+        let rx, ry;
+        do {
+          rx = Math.floor(Math.random() * (MAP_SIZE - 4)) + 2;
+          ry = Math.floor(Math.random() * (MAP_SIZE - 4)) + 2;
+        } while (Math.hypot(rx - player.x, ry - player.y) < 3);
+
+        entities.push({
+          type: config.type,
+          name: config.name,
+          res: config.res,
+          x: rx,
+          y: ry,
+          hp: config.hp,
+          maxHp: config.hp,
+          wobble: 0
+        });
+      }
+    });
+
+    const floatingTexts = [];
+    function spawnFloatingText(text, x, y, color = '#2ecc71') {
+      floatingTexts.push({ text, x, y, life: 1.0, color });
     }
 
     const joystick = {
@@ -184,6 +267,45 @@
       }
     });
 
+    const actionBtn = document.getElementById('action-btn');
+    function performAction() {
+      player.isActing = true;
+      setTimeout(() => player.isActing = false, 180);
+
+      let closestEntity = null;
+      let minDistance = 1.6;
+
+      entities.forEach((ent) => {
+        const dist = Math.hypot(ent.x - player.x, ent.y - player.y);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestEntity = ent;
+        }
+      });
+
+      if (closestEntity) {
+        closestEntity.hp -= 1;
+        closestEntity.wobble = 0.25;
+
+        inventory[closestEntity.res] += 1;
+        updateHUD();
+
+        const sPos = toScreen(closestEntity.x, closestEntity.y);
+        spawnFloatingText(`+1 ${closestEntity.name}`, sPos.x, sPos.y - 20, '#f1c40f');
+
+        if (closestEntity.hp <= 0) {
+          const idx = entities.indexOf(closestEntity);
+          if (idx !== -1) entities.splice(idx, 1);
+        }
+      }
+    }
+
+    actionBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      performAction();
+    }, { passive: false });
+
     let lastTime = performance.now();
     function update(dt) {
       if (joystick.active) {
@@ -193,8 +315,8 @@
         player.x += isoX * player.speed * dt;
         player.y += isoY * player.speed * dt;
 
-        player.x = Math.max(0, Math.min(MAP_SIZE, player.x));
-        player.y = Math.max(0, Math.min(MAP_SIZE, player.y));
+        player.x = Math.max(1, Math.min(MAP_SIZE - 1, player.x));
+        player.y = Math.max(1, Math.min(MAP_SIZE - 1, player.y));
 
         player.angle = Math.atan2(joystick.deltaY, joystick.deltaX);
       }
@@ -205,6 +327,17 @@
       };
       camera.x += (targetCam.x - camera.x) * 0.1;
       camera.y += (targetCam.y - camera.y) * 0.1;
+
+      entities.forEach(ent => {
+        if (ent.wobble > 0) ent.wobble = Math.max(0, ent.wobble - dt * 2);
+      });
+
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.y -= dt * 30;
+        ft.life -= dt * 1.2;
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+      }
     }
 
     function render() {
@@ -213,7 +346,6 @@
       for (let x = 0; x < MAP_SIZE; x++) {
         for (let y = 0; y < MAP_SIZE; y++) {
           const pt = toScreen(x, y);
-
           if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
 
           ctx.beginPath();
@@ -223,51 +355,109 @@
           ctx.lineTo(pt.x - TILE_W / 2, pt.y + TILE_H / 2);
           ctx.closePath();
 
-          ctx.fillStyle = (x + y) % 2 === 0 ? '#38482c' : '#334227';
+          ctx.fillStyle = (x + y) % 2 === 0 ? '#2d3824' : '#27311f';
           ctx.fill();
-          ctx.strokeStyle = '#27331d';
+          ctx.strokeStyle = '#1e2618';
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
 
-      const pPos = toScreen(player.x, player.y);
+      const renderQueue = [
+        ...entities.map(e => ({ isPlayer: false, data: e, depth: e.x + e.y })),
+        { isPlayer: true, data: player, depth: player.x + player.y }
+      ];
+      renderQueue.sort((a, b) => a.depth - b.depth);
 
-      ctx.beginPath();
-      ctx.ellipse(pPos.x, pPos.y + 12, 12, 6, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fill();
+      renderQueue.forEach(item => {
+        if (item.isPlayer) {
+          const pPos = toScreen(player.x, player.y);
 
-      ctx.beginPath();
-      ctx.arc(pPos.x, pPos.y, player.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#3498db';
-      ctx.fill();
-      ctx.strokeStyle = '#1d6fa5';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(pPos.x, pPos.y + 8, 12, 6, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fill();
 
-      ctx.beginPath();
-      ctx.moveTo(pPos.x, pPos.y);
-      ctx.lineTo(
-        pPos.x + Math.cos(player.angle) * 18,
-        pPos.y + Math.sin(player.angle) * 18
-      );
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(pPos.x, pPos.y - (player.isActing ? 4 : 0), player.radius, 0, Math.PI * 2);
+          ctx.fillStyle = '#3498db';
+          ctx.fill();
+          ctx.strokeStyle = '#1f618d';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(pPos.x, pPos.y);
+          ctx.lineTo(
+            pPos.x + Math.cos(player.angle) * 18,
+            pPos.y + Math.sin(player.angle) * 18
+          );
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+        } else {
+          const ent = item.data;
+          const pos = toScreen(ent.x, ent.y);
+          const wobbleOffset = Math.sin(Date.now() * 0.05) * (ent.wobble * 8);
+
+          ctx.beginPath();
+          ctx.ellipse(pos.x, pos.y + 4, 16, 8, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.fill();
+
+          const sprite = sprites[ent.type];
+          if (sprite && sprite.complete && sprite.naturalWidth !== 0) {
+            ctx.drawImage(sprite, pos.x - 32 + wobbleOffset, pos.y - 56, 64, 64);
+          } else {
+            if (ent.type === 'tree') {
+              ctx.fillStyle = '#1e8449';
+              ctx.beginPath();
+              ctx.moveTo(pos.x + wobbleOffset, pos.y - 48);
+              ctx.lineTo(pos.x + 18 + wobbleOffset, pos.y);
+              ctx.lineTo(pos.x - 18 + wobbleOffset, pos.y);
+              ctx.closePath();
+              ctx.fill();
+            } else if (ent.type === 'rock') {
+              ctx.fillStyle = '#7f8c8d';
+              ctx.beginPath();
+              ctx.arc(pos.x + wobbleOffset, pos.y - 10, 14, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (ent.type === 'crate') {
+              ctx.fillStyle = '#d35400';
+              ctx.fillRect(pos.x - 12 + wobbleOffset, pos.y - 20, 24, 20);
+            }
+          }
+
+          if (ent.hp < ent.maxHp) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(pos.x - 14, pos.y - 52, 28, 5);
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(pos.x - 14, pos.y - 52, (ent.hp / ent.maxHp) * 28, 5);
+          }
+        }
+      });
+
+      floatingTexts.forEach(ft => {
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 13px sans-serif';
+        ctx.globalAlpha = Math.max(0, ft.life);
+        ctx.fillText(ft.text, ft.x - 20, ft.y);
+        ctx.globalAlpha = 1.0;
+      });
 
       if (joystick.active) {
         ctx.beginPath();
         ctx.arc(joystick.baseX, joystick.baseY, joystick.maxRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
         ctx.lineWidth = 2;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(joystick.currentX, joystick.currentY, 22, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.arc(joystick.currentX, joystick.currentY, 20, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
         ctx.fill();
       }
     }
