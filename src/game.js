@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 8;
+const ASSET_VERSION = 9;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -66,7 +66,7 @@ const treeSprites = TREE_FILES.map((file) => {
 // поэтому шва нет в принципе: соседние клетки — окна в одну и ту же плоскость.
 // 0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел.
 const GROUND_TEXTURE_FILES = ['grass.jpg', 'light.jpg', 'path.jpg', 'dark.jpg', 'ash.jpg'];
-const GROUND_TILES_PER_TEXTURE = 2.6; // сколько игровых клеток занимает одно повторение текстуры
+const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клеток занимает одно повторение текстуры
 const groundImages = GROUND_TEXTURE_FILES.map((file) => {
   const img = new Image();
   img.src = `assets/ground/${file}?v=${ASSET_VERSION}`;
@@ -387,7 +387,7 @@ function update(dt) {
 // 4 пепел) с лёгким шумом яркости на клетку — никаких повторяющихся
 // картинок-плиток, поэтому в изометрической ромбовидной сетке в принципе
 // неоткуда взяться видимым швам или «шахматному» узору.
-const GROUND_TEX_PX = 512; // ассеты assets/ground/*.jpg приведены к этому размеру
+const GROUND_TEX_PX = 192; // ассеты assets/ground/*.jpg приведены к этому размеру
 const GROUND_OVERSCAN = 1.2; // нахлёст между соседними ромбами, см. комментарий в render()
 const tileFallbackColors = ['#3a5428', '#60843a', '#7c603e', '#2a3620', '#3a3836'];
 
@@ -405,6 +405,8 @@ function updateGroundPatternTransform(pattern) {
 
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   const halfW = TILE_W / 2;
   const halfH = TILE_H / 2;
