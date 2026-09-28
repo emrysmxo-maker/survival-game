@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 11;
+const ASSET_VERSION = 12;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -72,7 +72,6 @@ const groundImages = GROUND_TEXTURE_FILES.map((file) => {
   img.src = `assets/ground/${file}?v=${ASSET_VERSION}`;
   return img;
 });
-const groundPatterns = groundImages.map(() => null);
 
 // Лесной мусор: поваленные и сломанные деревья, пни, камни, ямы, мох.
 // w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
@@ -265,15 +264,23 @@ function updateWorldChunks() {
     }
   }
 
+  // Панель обновляем только когда значения меняются — запись в DOM
+  // каждый кадр на телефоне тоже стоит заметно.
   const curEco = getEcosystemAt(pChunkX, pChunkY);
-  document.getElementById('info-biome').textContent = curEco.name;
-  document.getElementById('info-coords').textContent = `X: ${Math.round(player.x)}, Y: ${Math.round(player.y)}`;
-
   let totalTrees = 0;
   loadedChunks.forEach(c => {
     totalTrees += c.trees.length;
   });
-  document.getElementById('info-trees').textContent = totalTrees;
+  setInfo('info-biome', curEco.name);
+  setInfo('info-coords', `X: ${Math.round(player.x)}, Y: ${Math.round(player.y)}`);
+  setInfo('info-trees', String(totalTrees));
+}
+
+const infoCache = {};
+function setInfo(id, text) {
+  if (infoCache[id] === text) return;
+  infoCache[id] = text;
+  document.getElementById(id).textContent = text;
 }
 
 // 3. СЕНСОРНОЕ УПРАВЛЕНИЕ ТОЧКОЙ
@@ -362,7 +369,7 @@ function update(dt) {
 // поэтому переходы между типами земли и биомами получаются мягким
 // градиентом, без ромбов, зубцов и «молний».
 const GROUND_TEX_PX = 192; // ассеты assets/ground/*.jpg приведены к этому размеру
-const GROUND_MASK_STEP = 6;
+const GROUND_MASK_STEP = 8;
 const GROUND_LAYER_ORDER = [1, 3, 4, 2]; // светлая, тёмная, пепел, тропа (сверху)
 const GROUND_BASE_COLOR = '#5a6a3a';
 
@@ -396,38 +403,74 @@ function groundWeights(wx, wy, out) {
   out[2] = smoothstep(1.9, 0.7, pathDistAt(wx, wy));
 }
 
-const groundMask = { canvas: document.createElement('canvas'), w: 0, h: 0, data: {} };
+// Земля каждого чанка «запекается» в отдельную картинку ОДИН раз и потом
+// просто рисуется drawImage каждый кадр. Считать маски и смешивать слои
+// заново на каждом кадре на телефоне давало пару FPS.
+const GROUND_BAKE_MARGIN = 2;
+const GROUND_BAKE_PER_FRAME = 1;
+const GROUND_BAKE_KEEP_RADIUS = 3;
+const CHUNK_PX_W = CHUNK_SIZE * TILE_W;
+const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
+const groundMask = { canvas: document.createElement('canvas') };
+groundMask.canvas.width = Math.ceil(CHUNK_PX_W / GROUND_MASK_STEP) + 1;
+groundMask.canvas.height = Math.ceil(CHUNK_PX_H / GROUND_MASK_STEP) + 1;
 groundMask.ctx = groundMask.canvas.getContext('2d');
+groundMask.data = {};
+for (const t of GROUND_LAYER_ORDER) {
+  groundMask.data[t] = groundMask.ctx.createImageData(groundMask.canvas.width, groundMask.canvas.height);
+}
 const groundLayer = { canvas: document.createElement('canvas') };
+groundLayer.canvas.width = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
+groundLayer.canvas.height = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2;
 groundLayer.ctx = groundLayer.canvas.getContext('2d');
-const groundLayerPatterns = groundImages.map(() => null);
+const groundBakePatterns = groundImages.map(() => null);
 const groundWeightBuf = [0, 0, 0, 0, 0];
 
-function drawGround() {
-  const W = canvas.width, H = canvas.height;
-  const mw = Math.ceil(W / GROUND_MASK_STEP) + 1;
-  const mh = Math.ceil(H / GROUND_MASK_STEP) + 1;
-  if (groundMask.w !== mw || groundMask.h !== mh) {
-    groundMask.canvas.width = mw;
-    groundMask.canvas.height = mh;
-    groundMask.w = mw;
-    groundMask.h = mh;
-    for (const t of GROUND_LAYER_ORDER) groundMask.data[t] = groundMask.ctx.createImageData(mw, mh);
-  }
-  if (groundLayer.canvas.width !== W || groundLayer.canvas.height !== H) {
-    groundLayer.canvas.width = W;
-    groundLayer.canvas.height = H;
+function groundTexturesReady() {
+  return groundImages.every((img) => img.complete && img.naturalWidth);
+}
+
+// Положение левого верхнего угла чанка в «мировых пикселях» (экранные
+// координаты без учёта камеры) — одинаковое для всех кадров.
+function chunkPixelOrigin(chunk) {
+  const sx = chunk.cx * CHUNK_SIZE, sy = chunk.cy * CHUNK_SIZE;
+  return {
+    x: (sx - sy - CHUNK_SIZE) * (TILE_W / 2) - GROUND_BAKE_MARGIN,
+    y: (sx + sy) * (TILE_H / 2) - GROUND_BAKE_MARGIN
+  };
+}
+
+function setBakePatternTransform(pattern, ox, oy) {
+  const k = GROUND_TEX_PX / GROUND_TILES_PER_TEXTURE;
+  const a = TILE_W / (2 * k);
+  const b = TILE_H / (2 * k);
+  pattern.setTransform(new DOMMatrix([a, b, -a, b, -ox, -oy]));
+}
+
+function bakeChunkGround(chunk) {
+  const W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
+  const H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2;
+  const o = chunkPixelOrigin(chunk);
+  const out = document.createElement('canvas');
+  out.width = W;
+  out.height = H;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+
+  const lctx = groundLayer.ctx;
+  for (let t = 0; t < groundImages.length; t++) {
+    if (!groundBakePatterns[t]) groundBakePatterns[t] = lctx.createPattern(groundImages[t], 'repeat');
+    setBakePatternTransform(groundBakePatterns[t], o.x, o.y);
   }
 
-  // Маски: для каждой точки сетки экрана — обратная изометрическая
-  // проекция в мировые координаты и веса слоёв.
+  // Маски: точка маски -> «мировой пиксель» -> координаты мира -> веса.
+  const mw = groundMask.canvas.width, mh = groundMask.canvas.height;
   const maxA = { 1: 0, 2: 0, 3: 0, 4: 0 };
   for (let j = 0; j < mh; j++) {
-    const syp = (j + 0.5) * GROUND_MASK_STEP + camera.y - H / 2;
-    const sum = syp / (TILE_H / 2);
+    const sum = ((j + 0.5) * GROUND_MASK_STEP + o.y) / (TILE_H / 2);
     for (let i = 0; i < mw; i++) {
-      const sxp = (i + 0.5) * GROUND_MASK_STEP + camera.x - W / 2;
-      const diff = sxp / (TILE_W / 2);
+      const diff = ((i + 0.5) * GROUND_MASK_STEP + o.x) / (TILE_W / 2);
       groundWeights((sum + diff) / 2, (sum - diff) / 2, groundWeightBuf);
       const idx = (j * mw + i) * 4 + 3;
       for (const t of GROUND_LAYER_ORDER) {
@@ -438,59 +481,74 @@ function drawGround() {
     }
   }
 
-  ctx.fillStyle = groundPatterns[0] || GROUND_BASE_COLOR;
-  ctx.fillRect(0, 0, W, H);
-
-  const lctx = groundLayer.ctx;
+  octx.fillStyle = groundBakePatterns[0];
+  octx.fillRect(0, 0, W, H);
   for (const t of GROUND_LAYER_ORDER) {
     if (maxA[t] === 0) continue;
-    if (!groundLayerPatterns[t] && groundImages[t].complete && groundImages[t].naturalWidth) {
-      groundLayerPatterns[t] = lctx.createPattern(groundImages[t], 'repeat');
-    }
-    if (!groundLayerPatterns[t]) continue;
-    updateGroundPatternTransform(groundLayerPatterns[t]);
-
     groundMask.ctx.putImageData(groundMask.data[t], 0, 0);
     lctx.globalCompositeOperation = 'source-over';
     lctx.clearRect(0, 0, W, H);
-    lctx.fillStyle = groundLayerPatterns[t];
+    lctx.fillStyle = groundBakePatterns[t];
     lctx.fillRect(0, 0, W, H);
     lctx.globalCompositeOperation = 'destination-in';
     lctx.imageSmoothingEnabled = true;
-    lctx.imageSmoothingQuality = 'high';
     lctx.drawImage(groundMask.canvas, 0, 0, mw * GROUND_MASK_STEP, mh * GROUND_MASK_STEP);
     lctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(groundLayer.canvas, 0, 0);
+    octx.drawImage(groundLayer.canvas, 0, 0);
   }
+
+  // Оставляем только ромб чанка (с нахлёстом в пару пикселей — соседние
+  // чанки перекрываются одинаковой картинкой, стык не виден).
+  const m = GROUND_BAKE_MARGIN, ov = 1.5;
+  octx.globalCompositeOperation = 'destination-in';
+  octx.beginPath();
+  octx.moveTo(m + CHUNK_PX_W / 2, m - ov);
+  octx.lineTo(m + CHUNK_PX_W + ov, m + CHUNK_PX_H / 2);
+  octx.lineTo(m + CHUNK_PX_W / 2, m + CHUNK_PX_H + ov);
+  octx.lineTo(m - ov, m + CHUNK_PX_H / 2);
+  octx.closePath();
+  octx.fillStyle = '#000';
+  octx.fill();
+  octx.globalCompositeOperation = 'source-over';
+
+  chunk.ground = out;
+  chunk.groundOrigin = o;
 }
 
-// Обновляет матрицу паттерна так, чтобы он был «приклеен» к миру (двигался
-// вместе с камерой), а не к экрану — иначе при ходьбе земля будет скользить
-// под ногами игрока, а не оставаться на месте под деревьями.
-function updateGroundPatternTransform(pattern) {
-  const k = GROUND_TEX_PX / GROUND_TILES_PER_TEXTURE;
-  const a = TILE_W / (2 * k);
-  const b = TILE_H / (2 * k);
-  const offsetX = -camera.x + canvas.width / 2;
-  const offsetY = -camera.y + canvas.height / 2;
-  pattern.setTransform(new DOMMatrix([a, b, -a, b, offsetX, offsetY]));
+function drawGround() {
+  const W = canvas.width, H = canvas.height;
+  const camX = Math.round(camera.x - W / 2);
+  const camY = Math.round(camera.y - H / 2);
+  const pcx = Math.floor(player.x / CHUNK_SIZE);
+  const pcy = Math.floor(player.y / CHUNK_SIZE);
+
+  ctx.fillStyle = GROUND_BASE_COLOR;
+  ctx.fillRect(0, 0, W, H);
+
+  // Запекаем не больше нескольких чанков за кадр, ближние — первыми.
+  if (groundTexturesReady()) {
+    const pending = [];
+    for (const chunk of loadedChunks.values()) {
+      const d = Math.max(Math.abs(chunk.cx - pcx), Math.abs(chunk.cy - pcy));
+      if (d > GROUND_BAKE_KEEP_RADIUS) { chunk.ground = null; continue; }
+      if (!chunk.ground) pending.push([d, chunk]);
+    }
+    pending.sort((p, q) => p[0] - q[0]);
+    for (let i = 0; i < Math.min(GROUND_BAKE_PER_FRAME, pending.length); i++) bakeChunkGround(pending[i][1]);
+  }
+
+  for (const chunk of loadedChunks.values()) {
+    if (!chunk.ground) continue;
+    const x = chunk.groundOrigin.x - camX;
+    const y = chunk.groundOrigin.y - camY;
+    if (x > W || y > H || x + chunk.ground.width < 0 || y + chunk.ground.height < 0) continue;
+    ctx.drawImage(chunk.ground, x, y);
+  }
 }
 
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-
   const renderQueue = [];
-
-  // Паттерны создаются лениво, как только картинка загрузилась, и каждый
-  // кадр переориентируются под текущее положение камеры.
-  for (let i = 0; i < groundImages.length; i++) {
-    if (!groundPatterns[i] && groundImages[i].complete && groundImages[i].naturalWidth) {
-      groundPatterns[i] = ctx.createPattern(groundImages[i], 'repeat');
-    }
-    if (groundPatterns[i]) updateGroundPatternTransform(groundPatterns[i]);
-  }
   drawGround();
 
   for (const [, chunk] of loadedChunks.entries()) {
