@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 14;
+const ASSET_VERSION = 15;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -17,8 +17,6 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-const TILE_W = 64;
-const TILE_H = 32;
 
 const player = {
   x: 0,
@@ -60,6 +58,19 @@ const treeSprites = TREE_FILES.map((file) => {
   img.src = `assets/trees/${file}?v=${ASSET_VERSION}`;
   return img;
 });
+// Сломанные ветром версии тех же пород (обломанный ствол с рваным изломом),
+// нарезаны в той же сетке 360x500 с тем же основанием ствола. У сухостоя (4)
+// сломанной версии нет — он и так мёртвый.
+const BROKEN_TREE_CHANCE = 0.03;
+const brokenTreeSprites = TREE_FILES.map((file, i) => {
+  if (i === 4) return null;
+  const img = new Image();
+  img.src = `assets/trees/broken/${file}?v=${ASSET_VERSION}`;
+  return img;
+});
+function isBrokenRoll(type, r) {
+  return type !== 4 && r < BROKEN_TREE_CHANCE;
+}
 
 // Земля: настоящие бесшовные фототекстуры (Poly Haven, CC0), но НЕ нарезаны
 // по одной картинке на клетку — так в изометрической ромбовидной сетке
@@ -70,14 +81,13 @@ const treeSprites = TREE_FILES.map((file) => {
 // поэтому шва нет в принципе: соседние клетки — окна в одну и ту же плоскость.
 // 0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел.
 const GROUND_TEXTURE_FILES = ['grass.jpg', 'light.jpg', 'path.jpg', 'dark.jpg', 'ash.jpg'];
-const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клеток занимает одно повторение текстуры
 const groundImages = GROUND_TEXTURE_FILES.map((file) => {
   const img = new Image();
   img.src = `assets/ground/${file}?v=${ASSET_VERSION}`;
   return img;
 });
 
-// Лесной мусор: поваленные и сломанные деревья, пни, камни, мох.
+// Лесной мусор: сломанные стволы, пни, камни.
 // w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
 // Размеры — в пикселях при масштабе 1, в пропорции к дереву (~225px) и
 // будущему человеку (~40px): пень ниже колена, сломанный ствол в пару
@@ -87,11 +97,9 @@ const groundImages = GROUND_TEXTURE_FILES.map((file) => {
 // кромка картинки = точка касания земли.
 // tilt — максимальный случайный наклон (рад), scale — разброс размера.
 const CLUTTER_TYPES = {
-  fallen_log:   { files: ['fallen_log.png'], w: 120, scale: [0.8, 1.15] },
   broken_trunk: { files: ['broken_trunk.png', 'broken_trunk_b.png', 'broken_trunk_c.png'], h: 92, tilt: 0.14, scale: [0.7, 1.1] },
   stump:        { files: ['stump.png'], h: 50, scale: [0.8, 1.15] },
-  rocks:        { files: ['rocks.png'], w: 76, scale: [0.75, 1.2] },
-  moss_patch:   { files: ['moss_patch.png'], w: 64, scale: [0.8, 1.15] }
+  rocks:        { files: ['rocks.png'], w: 76, scale: [0.75, 1.2] }
 };
 const clutterSprites = {};
 for (const kind in CLUTTER_TYPES) {
@@ -107,7 +115,6 @@ for (const kind in CLUTTER_TYPES) {
 // - Верхний ярус (Великаны: Сосны, Дубы, Кедры, Лиственницы) — растут просторно (дистанция 3.5 - 6 клеток).
 // - Средний ярус (Березы, Осины, Липы, Рябины) — группируются между великанами.
 // - Подлесок (Молодые деревца 12, Папоротники 13) — растут пятнами у подножия.
-const CHUNK_SIZE = 12;
 const CHUNK_RADIUS = 2;
 const loadedChunks = new Map();
 
@@ -189,7 +196,8 @@ function generateChunk(cx, cy) {
       chunk.trees.push({
         x: gx, y: gy,
         type: type,
-        scale: 1.0 + pseudoRand(seed++) * 0.25,
+        scale: 1.0 + pseudoRand(seed++) * 0.12,
+        broken: isBrokenRoll(type, pseudoRand(seed++)),
         isGiant: true
       });
 
@@ -201,7 +209,11 @@ function generateChunk(cx, cy) {
         const sx = gx + Math.cos(ang) * dist;
         const sy = gy + Math.sin(ang) * dist;
         const subType = eco.subcanopy[Math.floor(pseudoRand(seed++) * eco.subcanopy.length)];
-        chunk.trees.push({ x: sx, y: sy, type: subType, scale: 0.75 + pseudoRand(seed++) * 0.2 });
+        chunk.trees.push({
+          x: sx, y: sy, type: subType,
+          scale: 0.88 + pseudoRand(seed++) * 0.1,
+          broken: isBrokenRoll(subType, pseudoRand(seed++))
+        });
       }
     }
   }
@@ -219,18 +231,18 @@ function generateChunk(cx, cy) {
       if (Math.hypot(t.x - dx, t.y - dy) < 3.0) { tooClose = true; break; }
     }
     if (!onPath && !tooClose) {
-      chunk.trees.push({ x: dx, y: dy, type: 4, scale: 0.9 + pseudoRand(seed++) * 0.3, isGiant: true });
+      chunk.trees.push({ x: dx, y: dy, type: 4, scale: 0.95 + pseudoRand(seed++) * 0.1, isGiant: true });
     }
   }
 
   // 3. ЛЕСНОЙ МУСОР: то, что обычно встречается под ногами в реальном лесу —
-  // поваленные и сломанные деревья, пни, валуны, пятна мха. Редко и не на тропе.
-  const CLUTTER_KINDS = ['moss_patch', 'rocks', 'fallen_log', 'stump', 'broken_trunk'];
-  const CLUTTER_WEIGHTS = [0.30, 0.28, 0.18, 0.15, 0.09];
+  // сломанные стволы, пни, валуны. Редко и не на тропе.
+  const CLUTTER_KINDS = ['rocks', 'stump', 'broken_trunk'];
+  const CLUTTER_WEIGHTS = [0.5, 0.3, 0.2];
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       if (chunk.tiles[x][y].isPath) continue; // Не на тропе
-      if (pseudoRand(seed++) > 0.07) continue; // ~7% клеток
+      if (pseudoRand(seed++) > 0.05) continue; // ~5% клеток
 
       const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
       const wy = startY + y + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
@@ -384,157 +396,59 @@ function update(dt) {
 }
 
 // 5. ОТРИСОВКА
-// Земля: основа — трава на весь экран, поверх — светлая трава, тёмная
-// земля, пепел и тропа, каждая через свою маску прозрачности. Маска
-// считается не по клеткам, а по точкам экрана (шаг GROUND_MASK_STEP px)
-// из плавных функций мировых координат и растягивается со сглаживанием —
-// поэтому переходы между типами земли и биомами получаются мягким
-// градиентом, без ромбов, зубцов и «молний».
-const GROUND_TEX_PX = 192; // ассеты assets/ground/*.jpg приведены к этому размеру
-const GROUND_MASK_STEP = 8;
-const GROUND_LAYER_ORDER = [1, 3, 4, 2]; // светлая, тёмная, пепел, тропа (сверху)
+// Земля каждого чанка «запекается» в картинку один раз (код — src/ground.js)
+// и потом просто рисуется drawImage. Запекание идёт в фоновом потоке
+// (src/ground-worker.js): на телефоне один чанк готовится до ~0.2 с, и в
+// основном потоке это было заметным рывком при переходе в новый участок.
+// Если браузер не умеет OffscreenCanvas в потоке — запекаем по одному чанку
+// за кадр прямо в игре, как раньше.
 const GROUND_BASE_COLOR = '#5a6a3a';
-
-function pathDistAt(wx, wy) {
-  return Math.abs(wy - Math.sin(wx * 0.15) * 8);
-}
-
-// Крупные органичные пятна светлой травы / тёмной земли.
-function soilNoise(wx, wy) {
-  return (
-    Math.sin(wx * 0.03 + wy * 0.017) +
-    Math.sin(wx * 0.017 - wy * 0.035) * 1.3 +
-    Math.sin(wx * 0.06 + wy * 0.045) * 0.5
-  ) / 2.8;
-}
-
-function smoothstep(e0, e1, x) {
-  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
-  return t * t * (3 - 2 * t);
-}
-
-// Вес (0..1) каждого слоя земли в точке мира. Пепел — там же, где биом
-// «Выгоревшая гарь» (тот же шум, что в getEcosystemAt), но с широкой
-// плавной кромкой вместо жёсткого порога.
-function groundWeights(wx, wy, out) {
-  const n = soilNoise(wx, wy);
-  const eco = Math.sin(wx / CHUNK_SIZE * 0.3) + Math.cos(wy / CHUNK_SIZE * 0.3);
-  out[1] = smoothstep(0.18, 0.46, n);
-  out[3] = smoothstep(-0.14, -0.42, n);
-  out[4] = smoothstep(-0.55, -1.1, eco);
-  out[2] = smoothstep(1.9, 0.7, pathDistAt(wx, wy));
-}
-
-// Земля каждого чанка «запекается» в отдельную картинку ОДИН раз и потом
-// просто рисуется drawImage каждый кадр. Считать маски и смешивать слои
-// заново на каждом кадре на телефоне давало пару FPS.
-const GROUND_BAKE_MARGIN = 2;
-const GROUND_BAKE_PER_FRAME = 1;
 const GROUND_BAKE_KEEP_RADIUS = 3;
-const CHUNK_PX_W = CHUNK_SIZE * TILE_W;
-const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
-const groundMask = { canvas: document.createElement('canvas') };
-groundMask.canvas.width = Math.ceil(CHUNK_PX_W / GROUND_MASK_STEP) + 1;
-groundMask.canvas.height = Math.ceil(CHUNK_PX_H / GROUND_MASK_STEP) + 1;
-groundMask.ctx = groundMask.canvas.getContext('2d');
-groundMask.data = {};
-for (const t of GROUND_LAYER_ORDER) {
-  groundMask.data[t] = groundMask.ctx.createImageData(groundMask.canvas.width, groundMask.canvas.height);
-}
-const groundLayer = { canvas: document.createElement('canvas') };
-groundLayer.canvas.width = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
-groundLayer.canvas.height = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2;
-groundLayer.ctx = groundLayer.canvas.getContext('2d');
-const groundBakePatterns = groundImages.map(() => null);
-const groundWeightBuf = [0, 0, 0, 0, 0];
+const GROUND_MAX_IN_FLIGHT = 2;
 
 function groundTexturesReady() {
   return groundImages.every((img) => img.complete && img.naturalWidth);
 }
 
-// Положение левого верхнего угла чанка в «мировых пикселях» (экранные
-// координаты без учёта камеры) — одинаковое для всех кадров.
-function chunkPixelOrigin(chunk) {
-  const sx = chunk.cx * CHUNK_SIZE, sy = chunk.cy * CHUNK_SIZE;
-  return {
-    x: (sx - sy - CHUNK_SIZE) * (TILE_W / 2) - GROUND_BAKE_MARGIN,
-    y: (sx + sy) * (TILE_H / 2) - GROUND_BAKE_MARGIN
-  };
-}
+const groundBake = { started: false, worker: null, ready: false, inFlight: new Set(), local: null };
 
-function setBakePatternTransform(pattern, ox, oy) {
-  const k = GROUND_TEX_PX / GROUND_TILES_PER_TEXTURE;
-  const a = TILE_W / (2 * k);
-  const b = TILE_H / (2 * k);
-  pattern.setTransform(new DOMMatrix([a, b, -a, b, -ox, -oy]));
-}
-
-function bakeChunkGround(chunk) {
-  const W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
-  const H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2;
-  const o = chunkPixelOrigin(chunk);
-  const out = document.createElement('canvas');
-  out.width = W;
-  out.height = H;
-  const octx = out.getContext('2d');
-  octx.imageSmoothingEnabled = true;
-  octx.imageSmoothingQuality = 'high';
-
-  const lctx = groundLayer.ctx;
-  for (let t = 0; t < groundImages.length; t++) {
-    if (!groundBakePatterns[t]) groundBakePatterns[t] = lctx.createPattern(groundImages[t], 'repeat');
-    setBakePatternTransform(groundBakePatterns[t], o.x, o.y);
-  }
-
-  // Маски: точка маски -> «мировой пиксель» -> координаты мира -> веса.
-  const mw = groundMask.canvas.width, mh = groundMask.canvas.height;
-  const maxA = { 1: 0, 2: 0, 3: 0, 4: 0 };
-  for (let j = 0; j < mh; j++) {
-    const sum = ((j + 0.5) * GROUND_MASK_STEP + o.y) / (TILE_H / 2);
-    for (let i = 0; i < mw; i++) {
-      const diff = ((i + 0.5) * GROUND_MASK_STEP + o.x) / (TILE_W / 2);
-      groundWeights((sum + diff) / 2, (sum - diff) / 2, groundWeightBuf);
-      const idx = (j * mw + i) * 4 + 3;
-      for (const t of GROUND_LAYER_ORDER) {
-        const a = Math.round(groundWeightBuf[t] * 255);
-        groundMask.data[t].data[idx] = a;
-        if (a > maxA[t]) maxA[t] = a;
-      }
+function startGroundBaking() {
+  groundBake.started = true;
+  if (window.Worker && window.OffscreenCanvas && window.createImageBitmap) {
+    try {
+      const w = new Worker(`src/ground-worker.js?v=${ASSET_VERSION}`);
+      w.onmessage = (e) => {
+        const { key, bitmap } = e.data;
+        groundBake.inFlight.delete(key);
+        const chunk = loadedChunks.get(key);
+        if (!chunk || chunk.ground) { bitmap.close(); return; }
+        chunk.ground = bitmap;
+        chunk.groundOrigin = chunkPixelOrigin(chunk.cx, chunk.cy);
+      };
+      w.onerror = () => { groundBake.worker = null; groundBake.ready = false; groundBake.inFlight.clear(); };
+      groundBake.worker = w;
+      Promise.all(groundImages.map((img) => createImageBitmap(img))).then((textures) => {
+        w.postMessage({ type: 'init', textures }, textures);
+        groundBake.ready = true;
+      }).catch(() => { groundBake.worker = null; });
+      return;
+    } catch (e) {
+      groundBake.worker = null;
     }
   }
+}
 
-  octx.fillStyle = groundBakePatterns[0];
-  octx.fillRect(0, 0, W, H);
-  for (const t of GROUND_LAYER_ORDER) {
-    if (maxA[t] === 0) continue;
-    groundMask.ctx.putImageData(groundMask.data[t], 0, 0);
-    lctx.globalCompositeOperation = 'source-over';
-    lctx.clearRect(0, 0, W, H);
-    lctx.fillStyle = groundBakePatterns[t];
-    lctx.fillRect(0, 0, W, H);
-    lctx.globalCompositeOperation = 'destination-in';
-    lctx.imageSmoothingEnabled = true;
-    lctx.drawImage(groundMask.canvas, 0, 0, mw * GROUND_MASK_STEP, mh * GROUND_MASK_STEP);
-    lctx.globalCompositeOperation = 'source-over';
-    octx.drawImage(groundLayer.canvas, 0, 0);
+function localBake(chunk) {
+  if (!groundBake.local) {
+    groundBake.local = createGroundBaker((w, h) => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      return c;
+    }, groundImages);
   }
-
-  // Оставляем только ромб чанка (с нахлёстом в пару пикселей — соседние
-  // чанки перекрываются одинаковой картинкой, стык не виден).
-  const m = GROUND_BAKE_MARGIN, ov = 1.5;
-  octx.globalCompositeOperation = 'destination-in';
-  octx.beginPath();
-  octx.moveTo(m + CHUNK_PX_W / 2, m - ov);
-  octx.lineTo(m + CHUNK_PX_W + ov, m + CHUNK_PX_H / 2);
-  octx.lineTo(m + CHUNK_PX_W / 2, m + CHUNK_PX_H + ov);
-  octx.lineTo(m - ov, m + CHUNK_PX_H / 2);
-  octx.closePath();
-  octx.fillStyle = '#000';
-  octx.fill();
-  octx.globalCompositeOperation = 'source-over';
-
-  chunk.ground = out;
-  chunk.groundOrigin = o;
+  chunk.ground = groundBake.local(chunk.cx, chunk.cy);
+  chunk.groundOrigin = chunkPixelOrigin(chunk.cx, chunk.cy);
 }
 
 function drawGround() {
@@ -547,16 +461,30 @@ function drawGround() {
   ctx.fillStyle = GROUND_BASE_COLOR;
   ctx.fillRect(0, 0, W, H);
 
-  // Запекаем не больше нескольких чанков за кадр, ближние — первыми.
   if (groundTexturesReady()) {
+    if (!groundBake.started) startGroundBaking();
     const pending = [];
-    for (const chunk of loadedChunks.values()) {
+    for (const [key, chunk] of loadedChunks.entries()) {
       const d = Math.max(Math.abs(chunk.cx - pcx), Math.abs(chunk.cy - pcy));
-      if (d > GROUND_BAKE_KEEP_RADIUS) { chunk.ground = null; continue; }
-      if (!chunk.ground) pending.push([d, chunk]);
+      if (d > GROUND_BAKE_KEEP_RADIUS) {
+        if (chunk.ground && chunk.ground.close) chunk.ground.close();
+        chunk.ground = null;
+        continue;
+      }
+      if (!chunk.ground && !groundBake.inFlight.has(key)) pending.push([d, key, chunk]);
     }
     pending.sort((p, q) => p[0] - q[0]);
-    for (let i = 0; i < Math.min(GROUND_BAKE_PER_FRAME, pending.length); i++) bakeChunkGround(pending[i][1]);
+    if (groundBake.worker) {
+      if (groundBake.ready) {
+        for (const [, key, chunk] of pending) {
+          if (groundBake.inFlight.size >= GROUND_MAX_IN_FLIGHT) break;
+          groundBake.inFlight.add(key);
+          groundBake.worker.postMessage({ type: 'bake', key, cx: chunk.cx, cy: chunk.cy });
+        }
+      }
+    } else if (pending.length) {
+      localBake(pending[0][2]);
+    }
   }
 
   for (const chunk of loadedChunks.values()) {
@@ -574,7 +502,7 @@ function render() {
   drawGround();
 
   for (const [, chunk] of loadedChunks.entries()) {
-    // Лесной мусор (пни, поваленные стволы, камни, мох)
+    // Лесной мусор (пни, сломанные стволы, камни)
     for (const c of chunk.clutter) {
       renderQueue.push({ isPlayer: false, isClutter: true, obj: c, depth: c.x + c.y });
     }
@@ -642,11 +570,12 @@ function render() {
       const dh = TREE_DRAW_H * scale;
       if (pos.x < -dw || pos.x > canvas.width + dw || pos.y < -20 || pos.y - dh > canvas.height) return;
 
-      const sprite = treeSprites[obj.type];
+      const sprite = obj.broken ? brokenTreeSprites[obj.type] : treeSprites[obj.type];
+      const shadow = obj.broken ? 0.45 : 1; // без кроны тень маленькая
 
       // Тень — вокруг основания ствола, чуть вправо-вниз (свет сверху-слева).
       ctx.beginPath();
-      ctx.ellipse(pos.x + 6 * scale, pos.y + 2, 34 * scale, 13 * scale, 0, 0, Math.PI * 2);
+      ctx.ellipse(pos.x + 6 * scale * shadow, pos.y + 2, 34 * scale * shadow, 13 * scale * shadow, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
       ctx.fill();
 
