@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Survival Game</title>
+  <title>Survival: Forest Zone</title>
   <style>
     * {
       box-sizing: border-box;
@@ -16,7 +16,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #151815;
+      background-color: #0b0f0b;
       touch-action: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
@@ -25,95 +25,96 @@
       width: 100vw;
       height: 100vh;
     }
-    #hud-left {
+    /* Верхняя панель в стиле Last Day on Earth */
+    #top-bar {
       position: absolute;
-      top: 15px;
-      left: 15px;
-      color: #fff;
-      font-size: 13px;
-      pointer-events: none;
-      text-shadow: 1px 1px 3px #000;
-    }
-    .bar-container {
-      width: 150px;
-      height: 12px;
-      background: rgba(0, 0, 0, 0.6);
-      border: 1px solid #555;
-      border-radius: 6px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-    .bar-hp {
-      width: 100%;
-      height: 100%;
-      background: #e74c3c;
-    }
-    #hud-right {
-      position: absolute;
-      top: 15px;
-      right: 15px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      pointer-events: none;
-    }
-    .res-badge {
-      background: rgba(20, 24, 20, 0.85);
-      border: 1px solid #3e4a3a;
-      border-radius: 12px;
-      padding: 4px 10px;
-      color: #eee;
-      font-size: 12px;
-      font-weight: bold;
+      top: 12px;
+      left: 14px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      gap: 12px;
+      pointer-events: none;
     }
-    #action-btn {
-      position: absolute;
-      right: 25px;
-      bottom: 25px;
-      width: 75px;
-      height: 75px;
-      background: radial-gradient(circle, #e67e22, #d35400);
-      border: 3px solid rgba(255, 255, 255, 0.9);
-      border-radius: 50%;
-      color: white;
-      font-weight: 900;
+    .avatar-box {
+      width: 46px;
+      height: 46px;
+      border-radius: 8px;
+      background: #2a3328;
+      border: 2px solid #5a6e54;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.6);
-      touch-action: manipulation;
+      font-size: 24px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
-    #action-btn:active {
-      transform: scale(0.92);
-      filter: brightness(1.2);
+    .status-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .bar-wrap {
+      width: 130px;
+      height: 10px;
+      background: rgba(0,0,0,0.7);
+      border-radius: 5px;
+      border: 1px solid #444;
+      overflow: hidden;
+    }
+    .bar-fill-hp {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #c0392b, #e74c3c);
+    }
+    .bar-fill-hunger {
+      width: 85%;
+      height: 100%;
+      background: linear-gradient(90deg, #d35400, #f39c12);
+    }
+    /* Радар / миникарта в правом верхнем углу */
+    #radar {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(18, 24, 18, 0.85);
+      border: 2px solid #4e6349;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #95a5a6;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    /* Зона управления движением внизу */
+    #joystick-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 12px;
+      letter-spacing: 1px;
+      pointer-events: none;
+      text-transform: uppercase;
     }
   </style>
 </head>
 <body>
 
-  <div id="hud-left">
-    <div><strong>Выживший</strong></div>
-    <div class="bar-container">
-      <div class="bar-hp" id="hp-bar"></div>
+  <div id="top-bar">
+    <div class="avatar-box">🧔</div>
+    <div class="status-bars">
+      <div class="bar-wrap"><div class="bar-fill-hp"></div></div>
+      <div class="bar-wrap"><div class="bar-fill-hunger"></div></div>
     </div>
   </div>
 
-  <div id="hud-right">
-    <div class="res-badge">🪵 Дерево: <span id="res-wood">0</span></div>
-    <div class="res-badge">🪨 Камень: <span id="res-stone">0</span></div>
-    <div class="res-badge">📦 Припасы: <span id="res-supplies">0</span></div>
-  </div>
-
-  <div id="action-btn">
-    <span style="font-size: 18px;">⛏️</span>
-    <span>ДОБЫЧА</span>
-  </div>
+  <div id="radar">ЛЕС</div>
+  <div id="joystick-hint">Касание в левой нижней зоне для движения</div>
 
   <canvas id="gameCanvas"></canvas>
 
@@ -128,28 +129,12 @@
     window.addEventListener('resize', resize);
     resize();
 
+    // 1. ИЗОМЕТРИЧЕСКАЯ ПРОЕКЦИЯ (наклон камеры как в Last Day on Earth)
     const TILE_W = 64;
     const TILE_H = 32;
-    const MAP_SIZE = 26;
+    const MAP_SIZE = 36; // Локация 36x36
 
-    const inventory = { wood: 0, stone: 0, supplies: 0 };
-    function updateHUD() {
-      document.getElementById('res-wood').textContent = inventory.wood;
-      document.getElementById('res-stone').textContent = inventory.stone;
-      document.getElementById('res-supplies').textContent = inventory.supplies;
-    }
-
-    const player = {
-      x: 13,
-      y: 13,
-      speed: 4.2,
-      radius: 12,
-      angle: 0,
-      isActing: false
-    };
-
-    const camera = { x: 0, y: 0 };
-
+    // Преобразование сетки (x, y) в экранные координаты
     function toScreen(x, y) {
       return {
         x: (x - y) * (TILE_W / 2) - camera.x + canvas.width / 2,
@@ -157,71 +142,87 @@
       };
     }
 
-    const sprites = {
-      tree: new Image(),
-      rock: new Image(),
-      crate: new Image()
-    };
-    sprites.tree.src = 'https://image.pollinations.ai/prompt/isometric%20stylized%20pine%20tree%20game%20sprite%20isolated%20on%20black%20background?width=128&height=128&nologo=true&seed=42';
-    sprites.rock.src = 'https://image.pollinations.ai/prompt/isometric%20stylized%20boulder%20rock%20stone%20game%20sprite%20isolated%20on%20black%20background?width=128&height=128&nologo=true&seed=101';
-    sprites.crate.src = 'https://image.pollinations.ai/prompt/isometric%20wooden%20crate%20supply%20box%20isolated%20on%20black%20background?width=128&height=128&nologo=true&seed=202';
-
-    const entities = [];
-    const resourceTypes = [
-      { type: 'tree', count: 18, name: 'Дерево', res: 'wood', hp: 3 },
-      { type: 'rock', count: 12, name: 'Камень', res: 'stone', hp: 4 },
-      { type: 'crate', count: 6, name: 'Ящик', res: 'supplies', hp: 2 }
-    ];
-
-    resourceTypes.forEach(config => {
-      for (let i = 0; i < config.count; i++) {
-        let rx, ry;
-        do {
-          rx = Math.floor(Math.random() * (MAP_SIZE - 4)) + 2;
-          ry = Math.floor(Math.random() * (MAP_SIZE - 4)) + 2;
-        } while (Math.hypot(rx - player.x, ry - player.y) < 3);
-
-        entities.push({
-          type: config.type,
-          name: config.name,
-          res: config.res,
-          x: rx,
-          y: ry,
-          hp: config.hp,
-          maxHp: config.hp,
-          wobble: 0
-        });
+    // 2. ГЕНЕРАЦИЯ ЛЕСНОЙ КАРТЫ
+    // Цвета тайлов земли: лесная трава, тёмная хвоя, тропинки
+    const groundTiles = [];
+    for (let x = 0; x < MAP_SIZE; x++) {
+      groundTiles[x] = [];
+      for (let y = 0; y < MAP_SIZE; y++) {
+        const rand = (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
+        let color = '#24311e'; // Тёмная хвоя
+        if (rand > 0.6) color = '#2c3b24'; // Сочная лесная трава
+        else if (rand > 0.3) color = '#1e2819'; // Мох / грунт
+        groundTiles[x][y] = color;
       }
-    });
-
-    const floatingTexts = [];
-    function spawnFloatingText(text, x, y, color = '#2ecc71') {
-      floatingTexts.push({ text, x, y, life: 1.0, color });
     }
 
+    // Объекты леса (густые сосны по краям и поляны внутри)
+    const trees = [];
+    const rocks = [];
+    const bushes = [];
+
+    // Граница карты: глухая стена сосен, не пускающая за край
+    for (let x = 0; x < MAP_SIZE; x++) {
+      for (let y = 0; y < MAP_SIZE; y++) {
+        const isBorder = (x < 3 || x >= MAP_SIZE - 3 || y < 3 || y >= MAP_SIZE - 3);
+        if (isBorder) {
+          // Плотный забор из деревьев по периметру
+          trees.push({ x: x + 0.5, y: y + 0.5, height: 75, r: 24, type: 'pine', solid: true });
+        } else {
+          // Внутри леса: группы сосен, валуны, кустарник
+          const noise = Math.sin(x * 0.7) * Math.cos(y * 0.7);
+          if (noise > 0.45 && Math.random() < 0.6) {
+            trees.push({ x: x + 0.4 + Math.random() * 0.2, y: y + 0.4 + Math.random() * 0.2, height: 65 + Math.random() * 20, r: 20, type: 'pine' });
+          } else if (Math.random() < 0.05) {
+            rocks.push({ x: x + 0.5, y: y + 0.5, size: 10 + Math.random() * 6 });
+          } else if (Math.random() < 0.08) {
+            bushes.push({ x: x + 0.5, y: y + 0.5, size: 12 + Math.random() * 4 });
+          }
+        }
+      }
+    }
+
+    // 3. ПЕРСОНАЖ (Человек-выживший)
+    const player = {
+      x: MAP_SIZE / 2,
+      y: MAP_SIZE / 2,
+      speed: 4.8,
+      angle: 0,
+      isMoving: false,
+      walkCycle: 0,
+      radius: 10
+    };
+
+    const camera = { x: 0, y: 0 };
+
+    // 4. СЕНСОРНОЕ УПРАВЛЕНИЕ ВНИЗУ ЭКРАНА
     const joystick = {
-      touchId: null,
       active: false,
-      baseX: 0,
-      baseY: 0,
-      currentX: 0,
-      currentY: 0,
-      maxRadius: 45,
-      deltaX: 0,
-      deltaY: 0
+      touchId: null,
+      startX: 0,
+      startY: 0,
+      currX: 0,
+      currY: 0,
+      maxDist: 50,
+      dx: 0,
+      dy: 0
     };
 
     window.addEventListener('touchstart', (e) => {
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
-        const touch = e.changedTouches[i];
-        if (touch.clientX < canvas.width / 2 && !joystick.active) {
-          joystick.touchId = touch.identifier;
+        const t = e.changedTouches[i];
+        // Нижняя или левая область экрана активирует движение
+        if ((t.clientY > canvas.height * 0.4 || t.clientX < canvas.width * 0.5) && !joystick.active) {
           joystick.active = true;
-          joystick.baseX = touch.clientX;
-          joystick.baseY = touch.clientY;
-          joystick.currentX = touch.clientX;
-          joystick.currentY = touch.clientY;
+          joystick.touchId = t.identifier;
+          joystick.startX = t.clientX;
+          joystick.startY = t.clientY;
+          joystick.currX = t.clientX;
+          joystick.currY = t.clientY;
+          joystick.dx = 0;
+          joystick.dy = 0;
+          document.getElementById('joystick-hint').style.display = 'none';
         }
       }
     }, { passive: false });
@@ -229,120 +230,191 @@
     window.addEventListener('touchmove', (e) => {
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
-        const touch = e.changedTouches[i];
-        if (touch.identifier === joystick.touchId) {
-          const dx = touch.clientX - joystick.baseX;
-          const dy = touch.clientY - joystick.baseY;
-          const dist = Math.hypot(dx, dy);
+        const t = e.changedTouches[i];
+        if (t.identifier === joystick.touchId) {
+          const diffX = t.clientX - joystick.startX;
+          const diffY = t.clientY - joystick.startY;
+          const dist = Math.hypot(diffX, diffY);
 
-          if (dist > joystick.maxRadius) {
-            joystick.currentX = joystick.baseX + (dx / dist) * joystick.maxRadius;
-            joystick.currentY = joystick.baseY + (dy / dist) * joystick.maxRadius;
+          if (dist > joystick.maxDist) {
+            joystick.currX = joystick.startX + (diffX / dist) * joystick.maxDist;
+            joystick.currY = joystick.startY + (diffY / dist) * joystick.maxDist;
           } else {
-            joystick.currentX = touch.clientX;
-            joystick.currentY = touch.clientY;
+            joystick.currX = t.clientX;
+            joystick.currY = t.clientY;
           }
 
-          joystick.deltaX = (joystick.currentX - joystick.baseX) / joystick.maxRadius;
-          joystick.deltaY = (joystick.currentY - joystick.baseY) / joystick.maxRadius;
+          joystick.dx = (joystick.currX - joystick.startX) / joystick.maxDist;
+          joystick.dy = (joystick.currY - joystick.startY) / joystick.maxDist;
         }
       }
     }, { passive: false });
 
-    function resetJoystick() {
-      joystick.active = false;
-      joystick.touchId = null;
-      joystick.deltaX = 0;
-      joystick.deltaY = 0;
-    }
-
-    window.addEventListener('touchend', (e) => {
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === joystick.touchId) resetJoystick();
+    function stopJoystick(id) {
+      if (joystick.touchId === id) {
+        joystick.active = false;
+        joystick.touchId = null;
+        joystick.dx = 0;
+        joystick.dy = 0;
       }
+    }
+    window.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) stopJoystick(e.changedTouches[i].identifier);
     });
     window.addEventListener('touchcancel', (e) => {
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === joystick.touchId) resetJoystick();
-      }
+      for (let i = 0; i < e.changedTouches.length; i++) stopJoystick(e.changedTouches[i].identifier);
     });
 
-    const actionBtn = document.getElementById('action-btn');
-    function performAction() {
-      player.isActing = true;
-      setTimeout(() => player.isActing = false, 180);
-
-      let closestEntity = null;
-      let minDistance = 1.6;
-
-      entities.forEach((ent) => {
-        const dist = Math.hypot(ent.x - player.x, ent.y - player.y);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestEntity = ent;
-        }
-      });
-
-      if (closestEntity) {
-        closestEntity.hp -= 1;
-        closestEntity.wobble = 0.25;
-
-        inventory[closestEntity.res] += 1;
-        updateHUD();
-
-        const sPos = toScreen(closestEntity.x, closestEntity.y);
-        spawnFloatingText(`+1 ${closestEntity.name}`, sPos.x, sPos.y - 20, '#f1c40f');
-
-        if (closestEntity.hp <= 0) {
-          const idx = entities.indexOf(closestEntity);
-          if (idx !== -1) entities.splice(idx, 1);
-        }
-      }
-    }
-
-    actionBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      performAction();
-    }, { passive: false });
-
+    // 5. ИГРОВОЙ ЦИКЛ (ФИЗИКА И ПЕРЕДВИЖЕНИЕ)
     let lastTime = performance.now();
     function update(dt) {
-      if (joystick.active) {
-        const isoX = joystick.deltaX + joystick.deltaY;
-        const isoY = joystick.deltaY - joystick.deltaX;
+      if (joystick.active && (Math.abs(joystick.dx) > 0.05 || Math.abs(joystick.dy) > 0.05)) {
+        player.isMoving = true;
 
-        player.x += isoX * player.speed * dt;
-        player.y += isoY * player.speed * dt;
+        // Пересчет вектора движения джойстика под наклон изометрии
+        const moveX = joystick.dx + joystick.dy;
+        const moveY = joystick.dy - joystick.dx;
 
-        player.x = Math.max(1, Math.min(MAP_SIZE - 1, player.x));
-        player.y = Math.max(1, Math.min(MAP_SIZE - 1, player.y));
+        player.x += moveX * player.speed * dt;
+        player.y += moveY * player.speed * dt;
 
-        player.angle = Math.atan2(joystick.deltaY, joystick.deltaX);
+        // Ограничение по границам леса
+        player.x = Math.max(3.2, Math.min(MAP_SIZE - 3.2, player.x));
+        player.y = Math.max(3.2, Math.min(MAP_SIZE - 3.2, player.y));
+
+        player.angle = Math.atan2(joystick.dy, joystick.dx);
+        player.walkCycle += dt * 14;
+      } else {
+        player.isMoving = false;
+        player.walkCycle = 0;
       }
 
-      const targetCam = {
-        x: (player.x - player.y) * (TILE_W / 2),
-        y: (player.x + player.y) * (TILE_H / 2)
-      };
-      camera.x += (targetCam.x - camera.x) * 0.1;
-      camera.y += (targetCam.y - camera.y) * 0.1;
+      // Камера плавно держит человека по центру экрана
+      const targetCamX = (player.x - player.y) * (TILE_W / 2);
+      const targetCamY = (player.x + player.y) * (TILE_H / 2);
+      camera.x += (targetCamX - camera.x) * 0.12;
+      camera.y += (targetCamY - camera.y) * 0.12;
+    }
 
-      entities.forEach(ent => {
-        if (ent.wobble > 0) ent.wobble = Math.max(0, ent.wobble - dt * 2);
+    // 6. ОТРИСОВКА В СТИЛЕ LAST DAY ON EARTH
+    function drawHuman(pos, p) {
+      // Тень человека
+      ctx.beginPath();
+      ctx.ellipse(pos.x, pos.y + 4, 11, 6, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fill();
+
+      // Ноги (анимация шага при беге)
+      const legStep = p.isMoving ? Math.sin(p.walkCycle) * 5 : 0;
+      ctx.fillStyle = '#2c3e50'; // Тёмные брюки
+      // Левая нога
+      ctx.beginPath();
+      ctx.ellipse(pos.x - 3 + Math.cos(p.angle + Math.PI/2)*legStep, pos.y - 4 + Math.sin(p.angle + Math.PI/2)*legStep, 3, 5, p.angle, 0, Math.PI*2);
+      ctx.fill();
+      // Правая нога
+      ctx.beginPath();
+      ctx.ellipse(pos.x + 3 - Math.cos(p.angle + Math.PI/2)*legStep, pos.y - 4 - Math.sin(p.angle + Math.PI/2)*legStep, 3, 5, p.angle, 0, Math.PI*2);
+      ctx.fill();
+
+      // Торс / Куртка выжившего (зеленовато-коричневая, как в LDoE)
+      ctx.fillStyle = '#4a5d43';
+      ctx.beginPath();
+      ctx.ellipse(pos.x, pos.y - 14, 8, 10, p.angle, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#2d3829';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Голова с волосами
+      ctx.fillStyle = '#e0ac69'; // Кожа
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y - 23, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#4a3319'; // Волосы
+      ctx.beginPath();
+      ctx.arc(pos.x - Math.cos(p.angle)*1.5, pos.y - 24 - Math.sin(p.angle)*1.5, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Руки выжившего
+      const armSwing = p.isMoving ? Math.sin(p.walkCycle) * 4 : 0;
+      ctx.fillStyle = '#4a5d43';
+      ctx.beginPath();
+      ctx.arc(pos.x + Math.cos(p.angle + Math.PI/2)*7, pos.y - 14 + armSwing, 3, 0, Math.PI*2);
+      ctx.arc(pos.x - Math.cos(p.angle + Math.PI/2)*7, pos.y - 14 - armSwing, 3, 0, Math.PI*2);
+      ctx.fill();
+
+      // Луч взгляда (направление лица)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y - 20);
+      ctx.lineTo(pos.x + Math.cos(p.angle) * 14, pos.y - 20 + Math.sin(p.angle) * 14);
+      ctx.stroke();
+    }
+
+    function drawPineTree(pos, tree) {
+      // Тень кроны
+      ctx.beginPath();
+      ctx.ellipse(pos.x + 8, pos.y + 4, tree.r * 0.9, tree.r * 0.45, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(5, 12, 5, 0.4)';
+      ctx.fill();
+
+      // Ствол дерева
+      ctx.fillStyle = '#3e2714';
+      ctx.fillRect(pos.x - 3, pos.y - 14, 6, 16);
+
+      // Ярусы хвои (3 яруса треугольников для эффекта объема)
+      const layers = [
+        { h: tree.height * 0.35, w: tree.r * 1.3, y: 12, c: '#153119' },
+        { h: tree.height * 0.38, w: tree.r * 1.0, y: 28, c: '#1c4222' },
+        { h: tree.height * 0.42, w: tree.r * 0.7, y: 44, c: '#23522a' }
+      ];
+
+      layers.forEach(l => {
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y - l.y - l.h);
+        ctx.lineTo(pos.x + l.w, pos.y - l.y);
+        ctx.lineTo(pos.x - l.w, pos.y - l.y);
+        ctx.closePath();
+        ctx.fillStyle = l.c;
+        ctx.fill();
       });
+    }
 
-      for (let i = floatingTexts.length - 1; i >= 0; i--) {
-        const ft = floatingTexts[i];
-        ft.y -= dt * 30;
-        ft.life -= dt * 1.2;
-        if (ft.life <= 0) floatingTexts.splice(i, 1);
-      }
+    function drawRock(pos, r) {
+      ctx.beginPath();
+      ctx.ellipse(pos.x, pos.y + 3, r.size * 0.9, r.size * 0.45, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fill();
+
+      ctx.fillStyle = '#636e72';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y - r.size * 0.4, r.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7f8c8d';
+      ctx.beginPath();
+      ctx.arc(pos.x - 2, pos.y - r.size * 0.6, r.size * 0.65, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawBush(pos, b) {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(pos.x, pos.y + 2, b.size * 0.8, b.size * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#2d5a27';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y - 4, b.size * 0.7, 0, Math.PI * 2);
+      ctx.arc(pos.x - 4, pos.y - 2, b.size * 0.5, 0, Math.PI * 2);
+      ctx.arc(pos.x + 4, pos.y - 2, b.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // 1. Отрисовка земли леса
       for (let x = 0; x < MAP_SIZE; x++) {
         for (let y = 0; y < MAP_SIZE; y++) {
           const pt = toScreen(x, y);
@@ -355,110 +427,52 @@
           ctx.lineTo(pt.x - TILE_W / 2, pt.y + TILE_H / 2);
           ctx.closePath();
 
-          ctx.fillStyle = (x + y) % 2 === 0 ? '#2d3824' : '#27311f';
+          ctx.fillStyle = groundTiles[x][y];
           ctx.fill();
-          ctx.strokeStyle = '#1e2618';
+          ctx.strokeStyle = '#182214';
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
 
-      const renderQueue = [
-        ...entities.map(e => ({ isPlayer: false, data: e, depth: e.x + e.y })),
-        { isPlayer: true, data: player, depth: player.x + player.y }
+      // 2. Сортировка объектов по глубине (Y-sorting)
+      const renderList = [
+        ...trees.map(t => ({ type: 'tree', obj: t, depth: t.x + t.y })),
+        ...rocks.map(r => ({ type: 'rock', obj: r, depth: r.x + r.y })),
+        ...bushes.map(b => ({ type: 'bush', obj: b, depth: b.x + b.y })),
+        { type: 'player', obj: player, depth: player.x + player.y }
       ];
-      renderQueue.sort((a, b) => a.depth - b.depth);
 
-      renderQueue.forEach(item => {
-        if (item.isPlayer) {
-          const pPos = toScreen(player.x, player.y);
+      renderList.sort((a, b) => a.depth - b.depth);
 
-          ctx.beginPath();
-          ctx.ellipse(pPos.x, pPos.y + 8, 12, 6, 0, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-          ctx.fill();
+      renderList.forEach(item => {
+        const pos = toScreen(item.obj.x, item.obj.y);
+        // Не рисуем то, что за пределами видимости экрана
+        if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -150 || pos.y > canvas.height + 100) return;
 
-          ctx.beginPath();
-          ctx.arc(pPos.x, pPos.y - (player.isActing ? 4 : 0), player.radius, 0, Math.PI * 2);
-          ctx.fillStyle = '#3498db';
-          ctx.fill();
-          ctx.strokeStyle = '#1f618d';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.moveTo(pPos.x, pPos.y);
-          ctx.lineTo(
-            pPos.x + Math.cos(player.angle) * 18,
-            pPos.y + Math.sin(player.angle) * 18
-          );
-          ctx.strokeStyle = '#fff';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-
-        } else {
-          const ent = item.data;
-          const pos = toScreen(ent.x, ent.y);
-          const wobbleOffset = Math.sin(Date.now() * 0.05) * (ent.wobble * 8);
-
-          ctx.beginPath();
-          ctx.ellipse(pos.x, pos.y + 4, 16, 8, 0, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-          ctx.fill();
-
-          const sprite = sprites[ent.type];
-          if (sprite && sprite.complete && sprite.naturalWidth !== 0) {
-            ctx.drawImage(sprite, pos.x - 32 + wobbleOffset, pos.y - 56, 64, 64);
-          } else {
-            if (ent.type === 'tree') {
-              ctx.fillStyle = '#1e8449';
-              ctx.beginPath();
-              ctx.moveTo(pos.x + wobbleOffset, pos.y - 48);
-              ctx.lineTo(pos.x + 18 + wobbleOffset, pos.y);
-              ctx.lineTo(pos.x - 18 + wobbleOffset, pos.y);
-              ctx.closePath();
-              ctx.fill();
-            } else if (ent.type === 'rock') {
-              ctx.fillStyle = '#7f8c8d';
-              ctx.beginPath();
-              ctx.arc(pos.x + wobbleOffset, pos.y - 10, 14, 0, Math.PI * 2);
-              ctx.fill();
-            } else if (ent.type === 'crate') {
-              ctx.fillStyle = '#d35400';
-              ctx.fillRect(pos.x - 12 + wobbleOffset, pos.y - 20, 24, 20);
-            }
-          }
-
-          if (ent.hp < ent.maxHp) {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            ctx.fillRect(pos.x - 14, pos.y - 52, 28, 5);
-            ctx.fillStyle = '#2ecc71';
-            ctx.fillRect(pos.x - 14, pos.y - 52, (ent.hp / ent.maxHp) * 28, 5);
-          }
-        }
+        if (item.type === 'player') drawHuman(pos, player);
+        else if (item.type === 'tree') drawPineTree(pos, item.obj);
+        else if (item.type === 'rock') drawRock(pos, item.obj);
+        else if (item.type === 'bush') drawBush(pos, item.obj);
       });
 
-      floatingTexts.forEach(ft => {
-        ctx.fillStyle = ft.color;
-        ctx.font = 'bold 13px sans-serif';
-        ctx.globalAlpha = Math.max(0, ft.life);
-        ctx.fillText(ft.text, ft.x - 20, ft.y);
-        ctx.globalAlpha = 1.0;
-      });
-
+      // 3. Сенсорный джойстик внизу
       if (joystick.active) {
         ctx.beginPath();
-        ctx.arc(joystick.baseX, joystick.baseY, joystick.maxRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.arc(joystick.startX, joystick.startY, joystick.maxDist, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
         ctx.lineWidth = 2;
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(joystick.currentX, joystick.currentY, 20, 0, Math.PI * 2);
+        ctx.arc(joystick.currX, joystick.currY, 22, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
         ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
     }
 
