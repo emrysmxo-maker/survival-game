@@ -52,13 +52,21 @@ const treeSprites = TREE_FILES.map((file) => {
   return img;
 });
 
-// Текстуры земли (вместо плоской заливки) — по одной картинке на тип грунта.
-const GROUND_FILES = ['tile_grass.png', 'tile_light.png', 'tile_path.png', 'tile_dark.png', 'tile_ash.png'];
-const groundSprites = GROUND_FILES.map((file) => {
+// Текстуры земли (вместо плоской заливки) — несколько вариантов картинки на
+// тип грунта (0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел), чтобы при
+// мощении одинаковыми ромбами не получался заметный шахматный узор.
+const GROUND_VARIANT_FILES = [
+  ['tile_grass.png', 'tile_grass_b.png', 'tile_grass_c.png'],
+  ['tile_light.png', 'tile_light_b.png', 'tile_light_c.png'],
+  ['tile_path.png', 'tile_path_b.png'],
+  ['tile_dark.png', 'tile_dark_b.png', 'tile_dark_c.png'],
+  ['tile_ash.png'],
+];
+const groundSprites = GROUND_VARIANT_FILES.map((files) => files.map((file) => {
   const img = new Image();
   img.src = `assets/ground/${file}`;
   return img;
-});
+}));
 
 // Лесной мусор: поваленные и сломанные деревья, пни, камни, ямы, мох.
 // w/h — базовый размер отрисовки, anchor — какая доля высоты картинки выше точки (x,y).
@@ -151,7 +159,10 @@ function generateChunk(cx, cy) {
         if (n > 0.35) tileType = 1;
         else if (n < -0.3) tileType = 3;
       }
-      chunk.tiles[x][y] = groundMap[tileType];
+      const groundType = groundMap[tileType];
+      const variantCount = GROUND_VARIANT_FILES[groundType].length;
+      const variant = Math.floor(pseudoRand(seed++) * variantCount);
+      chunk.tiles[x][y] = { t: groundType, v: variant, isPath: tileType === 2 };
     }
   }
 
@@ -163,7 +174,7 @@ function generateChunk(cx, cy) {
 
     const localX = Math.floor(gx - startX);
     const localY = Math.floor(gy - startY);
-    if (chunk.tiles[localX] && chunk.tiles[localX][localY] === 2) continue; // Не на тропе
+    if (chunk.tiles[localX] && chunk.tiles[localX][localY].isPath) continue; // Не на тропе
 
     let tooClose = false;
     for (const t of chunk.trees) {
@@ -199,7 +210,7 @@ function generateChunk(cx, cy) {
     const dy = startY + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
     const localX = Math.floor(dx - startX);
     const localY = Math.floor(dy - startY);
-    const onPath = chunk.tiles[localX] && chunk.tiles[localX][localY] === 2;
+    const onPath = chunk.tiles[localX] && chunk.tiles[localX][localY].isPath;
     let tooClose = false;
     for (const t of chunk.trees) {
       if (Math.hypot(t.x - dx, t.y - dy) < 3.0) { tooClose = true; break; }
@@ -215,7 +226,7 @@ function generateChunk(cx, cy) {
   const CLUTTER_WEIGHTS = [0.30, 0.25, 0.17, 0.14, 0.09, 0.05];
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
-      if (chunk.tiles[x][y] === 2) continue; // Не на тропе
+      if (chunk.tiles[x][y].isPath) continue; // Не на тропе
       if (pseudoRand(seed++) > 0.07) continue; // ~7% клеток
 
       const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
@@ -373,8 +384,8 @@ function render() {
 
         if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
 
-        const tileType = chunk.tiles[x][y];
-        const groundImg = groundSprites[tileType];
+        const tile = chunk.tiles[x][y];
+        const groundImg = groundSprites[tile.t][tile.v];
         if (groundImg.complete) {
           ctx.drawImage(groundImg, pt.x - halfW, pt.y, TILE_W, TILE_H);
         } else {
@@ -384,7 +395,7 @@ function render() {
           ctx.lineTo(pt.x, pt.y + TILE_H);
           ctx.lineTo(pt.x - halfW, pt.y + halfH);
           ctx.closePath();
-          ctx.fillStyle = tileColors[tileType];
+          ctx.fillStyle = tileColors[tile.t];
           ctx.fill();
         }
       }
