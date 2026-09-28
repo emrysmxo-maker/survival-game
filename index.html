@@ -4,14 +4,87 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Survival Game: Realistic Trees</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0f0b;
+      touch-action: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #biome-bar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 6px;
+      pointer-events: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    #biome-bar::-webkit-scrollbar { display: none; }
+    .biome-btn {
+      flex: 0 0 auto;
+      background: rgba(18, 24, 18, 0.92);
+      border: 1.5px solid #3d5038;
+      border-radius: 20px;
+      padding: 8px 14px;
+      color: #c8d6c5;
+      font-size: 13px;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+      cursor: pointer;
+    }
+    .biome-btn.active {
+      background: #27ae60;
+      border-color: #2ecc71;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(46, 204, 113, 0.5);
+    }
+    .hint-bar {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #334430;
+      border-radius: 20px;
+      padding: 6px 16px;
+      color: #a4b3a1;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+  </style>
 </head>
 <body>
 
   <canvas id="gameCanvas"></canvas>
 
   <div id="ui-overlay">
-    <!-- Кнопки выбора реалистичных живых деревьев без аниме -->
     <div id="biome-bar">
       <button class="biome-btn active" data-style="0">🌲 1. Сосна</button>
       <button class="biome-btn" data-style="1">🌳 2. Дуб</button>
@@ -19,12 +92,394 @@
       <button class="biome-btn" data-style="3">🍁 4. Клён</button>
       <button class="biome-btn" data-style="4">⚡ 5. Сухостой</button>
     </div>
-
-    <div class="hint-bar">Нажимайте кнопки для переключения деревьев (без аниме)</div>
+    <div class="hint-bar">Свайп по экрану для перемещения камеры</div>
   </div>
 
-  <script src="src/camera.js"></script>
-  <script src="src/world.js"></script>
-  <script src="src/main.js"></script>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const TILE_W = 64;
+    const TILE_H = 32;
+    const MAP_SIZE = 36;
+
+    let currentStyle = 0;
+
+    const camera = {
+      x: 0,
+      y: (MAP_SIZE) * (TILE_H / 2),
+      targetX: 0,
+      targetY: (MAP_SIZE) * (TILE_H / 2)
+    };
+
+    function toScreen(gx, gy) {
+      return {
+        x: (gx - gy) * (TILE_W / 2) - camera.x + canvas.width / 2,
+        y: (gx + gy) * (TILE_H / 2) - camera.y + canvas.height / 2
+      };
+    }
+
+    // Генерация карты ландшафта (земля, тропинка)
+    const grid = [];
+    const trees = [];
+    const tileColors = ['#1a2417', '#22321e', '#33271c', '#151e13', '#0a0f08'];
+
+    for (let x = 0; x < MAP_SIZE; x++) {
+      grid[x] = [];
+      for (let y = 0; y < MAP_SIZE; y++) {
+        const isBorder = (x < 3 || x >= MAP_SIZE - 3 || y < 3 || y >= MAP_SIZE - 3);
+        const pathDist = Math.abs(y - (Math.sin(x * 0.25) * 4 + MAP_SIZE / 2));
+
+        if (isBorder) {
+          grid[x][y] = 4;
+          trees.push({ x: x + 0.5, y: y + 0.5, scale: 1.15 });
+        } else if (pathDist < 1.3) {
+          grid[x][y] = 2; // Тропинка
+        } else {
+          const noise = Math.sin(x * 0.4) * Math.cos(y * 0.4);
+          if (noise > 0.35) grid[x][y] = 1;
+          else if (noise < -0.3) grid[x][y] = 3;
+          else grid[x][y] = 0;
+
+          if (noise > 0.42 && Math.random() < 0.65) {
+            trees.push({ x: x + 0.3 + Math.random() * 0.4, y: y + 0.3 + Math.random() * 0.4, scale: 0.85 + Math.random() * 0.35 });
+          }
+        }
+      }
+    }
+
+    // Предварительная генерация 5 текстур реалистичных деревьев
+    const treeSprites = [];
+    function initTreeSprites() {
+      for (let s = 0; s < 5; s++) {
+        const c = document.createElement('canvas');
+        c.width = 180;
+        c.height = 240;
+        const sctx = c.getContext('2d');
+        renderRealisticTreeToCanvas(sctx, s);
+        treeSprites[s] = c;
+      }
+    }
+
+    function pseudoRand(s) {
+      const x = Math.sin(s) * 10000;
+      return x - Math.floor(x);
+    }
+
+    function renderRealisticTreeToCanvas(tctx, style) {
+      const cx = 90;
+      const baseY = 220;
+
+      if (style === 0) {
+        // 1. РЕАЛИСТИЧНАЯ СОСНА
+        // Ствол
+        tctx.fillStyle = '#26170d';
+        tctx.beginPath();
+        tctx.moveTo(cx - 8, baseY);
+        tctx.quadraticCurveTo(cx - 4, baseY - 50, cx - 2, baseY - 130);
+        tctx.lineTo(cx + 2, baseY - 130);
+        tctx.quadraticCurveTo(cx + 4, baseY - 50, cx + 8, baseY);
+        tctx.closePath();
+        tctx.fill();
+
+        // Кора
+        tctx.strokeStyle = '#140c06';
+        tctx.lineWidth = 1.2;
+        for (let y = baseY; y > baseY - 110; y -= 7) {
+          tctx.beginPath();
+          tctx.moveTo(cx - 3 + Math.sin(y)*2, y);
+          tctx.lineTo(cx + 3 + Math.cos(y)*2, y - 5);
+          tctx.stroke();
+        }
+
+        // Хвоя
+        let s = 42;
+        for (let i = 0; i < 480; i++) {
+          const t = pseudoRand(s++);
+          const tierY = baseY - 30 - t * 140;
+          const spread = (1 - t * 0.72) * 52;
+          const ox = (pseudoRand(s++) - 0.5) * 2 * spread;
+          const oy = (pseudoRand(s++) - 0.5) * 12;
+
+          const px = cx + ox;
+          const py = tierY + oy;
+
+          const depth = (px - (cx - spread)) / (spread * 2);
+          let col = '#0e2412';
+          if (depth > 0.5) col = '#1b4023';
+          if (depth > 0.75) col = '#295c34';
+
+          tctx.fillStyle = col;
+          tctx.fillRect(px, py, 2.5, 4.5);
+          tctx.strokeStyle = col;
+          tctx.lineWidth = 0.8;
+          tctx.beginPath();
+          tctx.moveTo(px, py);
+          tctx.lineTo(px + (ox > 0 ? 3 : -3), py + 2);
+          tctx.stroke();
+        }
+
+      } else if (style === 1) {
+        // 2. ВЕКОВОЙ ДУБ
+        tctx.fillStyle = '#2c1e14';
+        tctx.beginPath();
+        tctx.moveTo(cx - 14, baseY);
+        tctx.quadraticCurveTo(cx - 6, baseY - 30, cx - 10, baseY - 60);
+        tctx.lineTo(cx - 22, baseY - 95);
+        tctx.lineTo(cx - 16, baseY - 98);
+        tctx.lineTo(cx - 5, baseY - 68);
+        tctx.lineTo(cx + 5, baseY - 68);
+        tctx.lineTo(cx + 20, baseY - 92);
+        tctx.lineTo(cx + 24, baseY - 89);
+        tctx.quadraticCurveTo(cx + 8, baseY - 35, cx + 14, baseY);
+        tctx.closePath();
+        tctx.fill();
+
+        let s = 101;
+        for (let i = 0; i < 680; i++) {
+          const u = pseudoRand(s++);
+          const v = pseudoRand(s++);
+          const ang = u * Math.PI * 2;
+          const rx = Math.sqrt(v) * 58;
+          const ry = Math.sqrt(v) * 44;
+
+          const lx = cx + Math.cos(ang) * rx;
+          const ly = (baseY - 105) + Math.sin(ang) * ry;
+
+          const isSun = (lx > cx - 10) && (ly < baseY - 105);
+          const isShad = (ly > baseY - 85) || (lx < cx - 22);
+
+          let col = '#1e3818';
+          if (isShad) col = '#0f200c';
+          else if (isSun) col = '#38662d';
+          if (isSun && pseudoRand(s++) > 0.6) col = '#4c823d';
+
+          tctx.fillStyle = col;
+          tctx.beginPath();
+          tctx.ellipse(lx, ly, 3.5, 2.5, ang, 0, Math.PI * 2);
+          tctx.fill();
+        }
+
+      } else if (style === 2) {
+        // 3. БЕРЁЗА
+        tctx.fillStyle = '#f0f0ec';
+        tctx.beginPath();
+        tctx.moveTo(cx - 5, baseY);
+        tctx.quadraticCurveTo(cx - 1, baseY - 70, cx + 2, baseY - 150);
+        tctx.lineTo(cx + 5, baseY - 150);
+        tctx.quadraticCurveTo(cx + 2, baseY - 70, cx - 1, baseY);
+        tctx.closePath();
+        tctx.fill();
+
+        tctx.fillStyle = '#1e1e1e';
+        const marks = [6, 16, 30, 46, 64, 82, 102, 122];
+        marks.forEach(my => {
+          tctx.fillRect(cx - 2, baseY - my, 4, 2);
+          tctx.fillRect(cx, baseY - my - 4, 3.5, 1.5);
+        });
+
+        tctx.strokeStyle = '#2b261f';
+        tctx.lineWidth = 1;
+        for (let b = 0; b < 12; b++) {
+          const by = baseY - 75 - b * 6;
+          const dir = b % 2 === 0 ? 1 : -1;
+          tctx.beginPath();
+          tctx.moveTo(cx + 2, by);
+          tctx.quadraticCurveTo(cx + dir * 18, by + 10, cx + dir * 30, by + 28);
+          tctx.stroke();
+        }
+
+        let s = 303;
+        for (let i = 0; i < 500; i++) {
+          const ang = pseudoRand(s++) * Math.PI * 2;
+          const rx = pseudoRand(s++) * 36;
+          const ry = pseudoRand(s++) * 54;
+
+          const lx = cx + Math.cos(ang) * rx;
+          const ly = (baseY - 105) + Math.sin(ang) * ry;
+
+          tctx.fillStyle = lx > cx ? '#4a7536' : '#2b4d1d';
+          tctx.fillRect(lx, ly, 2.5, 2.5);
+        }
+
+      } else if (style === 3) {
+        // 4. КЛЁН (Осенний)
+        tctx.fillStyle = '#2b1c14';
+        tctx.beginPath();
+        tctx.moveTo(cx - 8, baseY);
+        tctx.quadraticCurveTo(cx - 4, baseY - 40, cx - 6, baseY - 80);
+        tctx.lineTo(cx + 6, baseY - 80);
+        tctx.quadraticCurveTo(cx + 4, baseY - 40, cx + 8, baseY);
+        tctx.closePath();
+        tctx.fill();
+
+        let s = 505;
+        const pal = ['#7c2214', '#9e321b', '#b84918', '#cb6819', '#d98b1b', '#e8ae23'];
+        for (let i = 0; i < 700; i++) {
+          const u = pseudoRand(s++);
+          const v = pseudoRand(s++);
+          const ang = u * Math.PI * 2;
+          const rx = Math.sqrt(v) * 54;
+          const ry = Math.sqrt(v) * 44;
+
+          const lx = cx + Math.cos(ang) * rx;
+          const ly = (baseY - 110) + Math.sin(ang) * ry;
+
+          const cIdx = Math.floor(pseudoRand(s++) * pal.length);
+          tctx.fillStyle = pal[cIdx];
+          tctx.beginPath();
+          tctx.ellipse(lx, ly, 3.2, 2.2, ang, 0, Math.PI * 2);
+          tctx.fill();
+        }
+
+      } else if (style === 4) {
+        // 5. СУХОСТОЙ
+        tctx.fillStyle = '#3a3d3c';
+        tctx.beginPath();
+        tctx.moveTo(cx - 10, baseY);
+        tctx.lineTo(cx - 5, baseY - 50);
+        tctx.lineTo(cx - 18, baseY - 90);
+        tctx.lineTo(cx - 14, baseY - 92);
+        tctx.lineTo(cx - 3, baseY - 65);
+        tctx.lineTo(cx - 1, baseY - 130);
+        tctx.lineTo(cx + 3, baseY - 128);
+        tctx.lineTo(cx + 4, baseY - 75);
+        tctx.lineTo(cx + 20, baseY - 105);
+        tctx.lineTo(cx + 22, baseY - 102);
+        tctx.lineTo(cx + 7, baseY - 55);
+        tctx.lineTo(cx + 10, baseY);
+        tctx.closePath();
+        tctx.fill();
+
+        tctx.strokeStyle = '#1b1d1c';
+        tctx.lineWidth = 1.8;
+        tctx.beginPath();
+        tctx.moveTo(cx - 3, baseY); tctx.lineTo(cx - 2, baseY - 80);
+        tctx.moveTo(cx + 2, baseY - 20); tctx.lineTo(cx + 1, baseY - 100);
+        tctx.stroke();
+
+        tctx.lineWidth = 1.2;
+        tctx.beginPath();
+        tctx.moveTo(cx - 14, baseY - 90); tctx.lineTo(cx - 26, baseY - 105);
+        tctx.moveTo(cx + 18, baseY - 100); tctx.lineTo(cx + 28, baseY - 118);
+        tctx.moveTo(cx, baseY - 110); tctx.lineTo(cx - 12, baseY - 135);
+        tctx.stroke();
+      }
+    }
+
+    initTreeSprites();
+
+    // Кнопки
+    const buttons = document.querySelectorAll('.biome-btn');
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        buttons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStyle = parseInt(btn.dataset.style);
+      });
+    });
+
+    // Управление камерой пальцем
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+
+    window.addEventListener('touchstart', (e) => {
+      if (e.target.closest('#biome-bar')) return;
+      if (e.touches.length === 1) {
+        isDragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches.length === 1) {
+        e.preventDefault();
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        camera.targetX -= (curX - lastX);
+        camera.targetY -= (curY - lastY);
+        lastX = curX;
+        lastY = curY;
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => { isDragging = false; });
+    window.addEventListener('touchcancel', () => { isDragging = false; });
+
+    // Игровой цикл
+    function loop() {
+      camera.x += (camera.targetX - camera.x) * 0.12;
+      camera.y += (camera.targetY - camera.y) * 0.12;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Отрисовка земли
+      const halfW = TILE_W / 2;
+      const halfH = TILE_H / 2;
+      for (let x = 0; x < MAP_SIZE; x++) {
+        for (let y = 0; y < MAP_SIZE; y++) {
+          const pt = toScreen(x, y);
+          if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
+
+          ctx.beginPath();
+          ctx.moveTo(pt.x, pt.y);
+          ctx.lineTo(pt.x + halfW, pt.y + halfH);
+          ctx.lineTo(pt.x, pt.y + TILE_H);
+          ctx.lineTo(pt.x - halfW, pt.y + halfH);
+          ctx.closePath();
+
+          ctx.fillStyle = tileColors[grid[x][y]];
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+
+      // 2. Деревья
+      trees.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+      const sprite = treeSprites[currentStyle];
+
+      for (let i = 0; i < trees.length; i++) {
+        const t = trees[i];
+        const pos = toScreen(t.x, t.y);
+        if (pos.x < -120 || pos.x > canvas.width + 120 || pos.y < -200 || pos.y > canvas.height + 100) continue;
+
+        const scale = t.scale || 1.0;
+        const dw = 110 * scale;
+        const dh = 150 * scale;
+
+        ctx.beginPath();
+        ctx.ellipse(pos.x + 4, pos.y + 3, 26 * scale, 13 * scale, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fill();
+
+        ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * 0.92, dw, dh);
+      }
+
+      // 3. Виньетка
+      const vignette = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * 0.35,
+        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75
+      );
+      vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      vignette.addColorStop(1, 'rgba(4, 7, 4, 0.55)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+  </script>
 </body>
 </html>
