@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 9;
+const ASSET_VERSION = 10;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -167,19 +167,27 @@ function generateChunk(cx, cy) {
       let tileType = 0;
       if (pathDist < 1.2) tileType = 2; // Тропа
       else {
-        // sin(x)*cos(y) даёт математически «клетчатый» узор с прямыми
-        // границами (перемножение двух волн) — вместо этого складываем
-        // несколько волн под разными углами и частотами (как и для шума
-        // экосистемы выше): границы получаются органичными, а не
-        // нарисованными по линейке, и пятна — крупные, в духе настоящих
-        // полян/просек, а не мелкая мозаика через каждые 15 клеток.
+        // Сумма нескольких волн под разными углами/частотами — органичные
+        // пятна, не «клетчатый» узор от перемножения. Частоты снижены ещё
+        // сильнее — пятна крупные, редко меняются на экране.
         const n = (
-          Math.sin(wx * 0.06 + wy * 0.035) +
-          Math.sin(wx * 0.035 - wy * 0.07) * 1.3 +
-          Math.sin(wx * 0.12 + wy * 0.09) * 0.5
+          Math.sin(wx * 0.03 + wy * 0.017) +
+          Math.sin(wx * 0.017 - wy * 0.035) * 1.3 +
+          Math.sin(wx * 0.06 + wy * 0.045) * 0.5
         ) / 2.8;
-        if (n > 0.32) tileType = 1;
-        else if (n < -0.28) tileType = 3;
+        // Резкий порог всё равно рисует на сетке ромбов чёткую (пусть и не
+        // прямую) зубчатую границу — при увеличенном масштабе патчей она
+        // становится заметной «молнией». Поэтому у порога — полоса
+        // дизеринга: чем ближе значение к границе, тем выше шанс упасть
+        // на «другую» сторону, тип чередуется точечно и граница выглядит
+        // как естественная рыхлая кайма, а не прочерченная линия.
+        const BAND = 0.16;
+        const lightEdge = n - 0.32;
+        const darkEdge = -0.28 - n;
+        if (lightEdge > BAND) tileType = 1;
+        else if (lightEdge > -BAND && pseudoRand(seed++) < (lightEdge + BAND) / (2 * BAND)) tileType = 1;
+        else if (darkEdge > BAND) tileType = 3;
+        else if (darkEdge > -BAND && pseudoRand(seed++) < (darkEdge + BAND) / (2 * BAND)) tileType = 3;
       }
       const groundType = groundMap[tileType];
       chunk.tiles[x][y] = { t: groundType, isPath: tileType === 2 };
