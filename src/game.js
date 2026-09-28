@@ -5,7 +5,7 @@
 // Версия ассетов: увеличивать при каждом обновлении PNG-спрайтов, чтобы
 // браузер (в т.ч. кэш GitHub Pages и мобильный Chrome) не показывал старые
 // картинки из кэша по тому же URL.
-const ASSET_VERSION = 10;
+const ASSET_VERSION = 11;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -126,7 +126,6 @@ function getEcosystemAt(cx, cy) {
     name: '⚡ Выгоревшая гарь',
     canopy: [4, 4, 0],      // Сухостой
     subcanopy: [4, 0],
-    ground: [4, 4, 2, 4],  // Пепел вместо травы, тропа остаётся тропой
   };
 }
 
@@ -147,50 +146,15 @@ function generateChunk(cx, cy) {
   const startY = cy * CHUNK_SIZE;
   let seed = Math.abs(cx * 73856093 ^ cy * 19349663);
 
-  // Земля. eco.ground переопределяет, какая текстура соответствует каждому
-  // базовому типу почвы (0 трава, 1 светлая, 2 тропа, 3 тёмная) — например,
-  // в выгоревшей гари трава и тёмная земля заменяются на пепел.
-  // Биом для земли берётся не по чанку целиком (иначе на границе чанка
-  // получается резкая прямая линия), а по мировым координатам каждой
-  // клетки — тот же плавный шум, что определяет чанковый биом, просто
-  // посчитанный в масштабе одной клетки, так что переход растянут на
-  // много клеток и выглядит как естественная опушка, а не стена.
+  // Тип земли больше не хранится по клеткам — земля рисуется плавными
+  // масками прямо по пикселям (см. drawGround). По клеткам нужно только
+  // знать, где тропа, чтобы не ставить на неё деревья и мусор.
   for (let x = 0; x < CHUNK_SIZE; x++) {
     chunk.tiles[x] = [];
     for (let y = 0; y < CHUNK_SIZE; y++) {
       const wx = startX + x;
       const wy = startY + y;
-      const tileEco = getEcosystemAt(wx / CHUNK_SIZE, wy / CHUNK_SIZE);
-      const groundMap = tileEco.ground || [0, 1, 2, 3];
-      const pathDist = Math.abs(wy - Math.sin(wx * 0.15) * 8);
-
-      let tileType = 0;
-      if (pathDist < 1.2) tileType = 2; // Тропа
-      else {
-        // Сумма нескольких волн под разными углами/частотами — органичные
-        // пятна, не «клетчатый» узор от перемножения. Частоты снижены ещё
-        // сильнее — пятна крупные, редко меняются на экране.
-        const n = (
-          Math.sin(wx * 0.03 + wy * 0.017) +
-          Math.sin(wx * 0.017 - wy * 0.035) * 1.3 +
-          Math.sin(wx * 0.06 + wy * 0.045) * 0.5
-        ) / 2.8;
-        // Резкий порог всё равно рисует на сетке ромбов чёткую (пусть и не
-        // прямую) зубчатую границу — при увеличенном масштабе патчей она
-        // становится заметной «молнией». Поэтому у порога — полоса
-        // дизеринга: чем ближе значение к границе, тем выше шанс упасть
-        // на «другую» сторону, тип чередуется точечно и граница выглядит
-        // как естественная рыхлая кайма, а не прочерченная линия.
-        const BAND = 0.16;
-        const lightEdge = n - 0.32;
-        const darkEdge = -0.28 - n;
-        if (lightEdge > BAND) tileType = 1;
-        else if (lightEdge > -BAND && pseudoRand(seed++) < (lightEdge + BAND) / (2 * BAND)) tileType = 1;
-        else if (darkEdge > BAND) tileType = 3;
-        else if (darkEdge > -BAND && pseudoRand(seed++) < (darkEdge + BAND) / (2 * BAND)) tileType = 3;
-      }
-      const groundType = groundMap[tileType];
-      chunk.tiles[x][y] = { t: groundType, isPath: tileType === 2 };
+      chunk.tiles[x][y] = { isPath: pathDistAt(wx, wy) < 1.2 };
     }
   }
 
@@ -391,13 +355,114 @@ function update(dt) {
 }
 
 // 5. ОТРИСОВКА
-// Земля рисуется сплошной заливкой (0 трава, 1 светлая, 2 тропа, 3 тёмная,
-// 4 пепел) с лёгким шумом яркости на клетку — никаких повторяющихся
-// картинок-плиток, поэтому в изометрической ромбовидной сетке в принципе
-// неоткуда взяться видимым швам или «шахматному» узору.
+// Земля: основа — трава на весь экран, поверх — светлая трава, тёмная
+// земля, пепел и тропа, каждая через свою маску прозрачности. Маска
+// считается не по клеткам, а по точкам экрана (шаг GROUND_MASK_STEP px)
+// из плавных функций мировых координат и растягивается со сглаживанием —
+// поэтому переходы между типами земли и биомами получаются мягким
+// градиентом, без ромбов, зубцов и «молний».
 const GROUND_TEX_PX = 192; // ассеты assets/ground/*.jpg приведены к этому размеру
-const GROUND_OVERSCAN = 1.2; // нахлёст между соседними ромбами, см. комментарий в render()
-const tileFallbackColors = ['#3a5428', '#60843a', '#7c603e', '#2a3620', '#3a3836'];
+const GROUND_MASK_STEP = 6;
+const GROUND_LAYER_ORDER = [1, 3, 4, 2]; // светлая, тёмная, пепел, тропа (сверху)
+const GROUND_BASE_COLOR = '#5a6a3a';
+
+function pathDistAt(wx, wy) {
+  return Math.abs(wy - Math.sin(wx * 0.15) * 8);
+}
+
+// Крупные органичные пятна светлой травы / тёмной земли.
+function soilNoise(wx, wy) {
+  return (
+    Math.sin(wx * 0.03 + wy * 0.017) +
+    Math.sin(wx * 0.017 - wy * 0.035) * 1.3 +
+    Math.sin(wx * 0.06 + wy * 0.045) * 0.5
+  ) / 2.8;
+}
+
+function smoothstep(e0, e1, x) {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+// Вес (0..1) каждого слоя земли в точке мира. Пепел — там же, где биом
+// «Выгоревшая гарь» (тот же шум, что в getEcosystemAt), но с широкой
+// плавной кромкой вместо жёсткого порога.
+function groundWeights(wx, wy, out) {
+  const n = soilNoise(wx, wy);
+  const eco = Math.sin(wx / CHUNK_SIZE * 0.3) + Math.cos(wy / CHUNK_SIZE * 0.3);
+  out[1] = smoothstep(0.18, 0.46, n);
+  out[3] = smoothstep(-0.14, -0.42, n);
+  out[4] = smoothstep(-0.55, -1.1, eco);
+  out[2] = smoothstep(1.9, 0.7, pathDistAt(wx, wy));
+}
+
+const groundMask = { canvas: document.createElement('canvas'), w: 0, h: 0, data: {} };
+groundMask.ctx = groundMask.canvas.getContext('2d');
+const groundLayer = { canvas: document.createElement('canvas') };
+groundLayer.ctx = groundLayer.canvas.getContext('2d');
+const groundLayerPatterns = groundImages.map(() => null);
+const groundWeightBuf = [0, 0, 0, 0, 0];
+
+function drawGround() {
+  const W = canvas.width, H = canvas.height;
+  const mw = Math.ceil(W / GROUND_MASK_STEP) + 1;
+  const mh = Math.ceil(H / GROUND_MASK_STEP) + 1;
+  if (groundMask.w !== mw || groundMask.h !== mh) {
+    groundMask.canvas.width = mw;
+    groundMask.canvas.height = mh;
+    groundMask.w = mw;
+    groundMask.h = mh;
+    for (const t of GROUND_LAYER_ORDER) groundMask.data[t] = groundMask.ctx.createImageData(mw, mh);
+  }
+  if (groundLayer.canvas.width !== W || groundLayer.canvas.height !== H) {
+    groundLayer.canvas.width = W;
+    groundLayer.canvas.height = H;
+  }
+
+  // Маски: для каждой точки сетки экрана — обратная изометрическая
+  // проекция в мировые координаты и веса слоёв.
+  const maxA = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  for (let j = 0; j < mh; j++) {
+    const syp = (j + 0.5) * GROUND_MASK_STEP + camera.y - H / 2;
+    const sum = syp / (TILE_H / 2);
+    for (let i = 0; i < mw; i++) {
+      const sxp = (i + 0.5) * GROUND_MASK_STEP + camera.x - W / 2;
+      const diff = sxp / (TILE_W / 2);
+      groundWeights((sum + diff) / 2, (sum - diff) / 2, groundWeightBuf);
+      const idx = (j * mw + i) * 4 + 3;
+      for (const t of GROUND_LAYER_ORDER) {
+        const a = Math.round(groundWeightBuf[t] * 255);
+        groundMask.data[t].data[idx] = a;
+        if (a > maxA[t]) maxA[t] = a;
+      }
+    }
+  }
+
+  ctx.fillStyle = groundPatterns[0] || GROUND_BASE_COLOR;
+  ctx.fillRect(0, 0, W, H);
+
+  const lctx = groundLayer.ctx;
+  for (const t of GROUND_LAYER_ORDER) {
+    if (maxA[t] === 0) continue;
+    if (!groundLayerPatterns[t] && groundImages[t].complete && groundImages[t].naturalWidth) {
+      groundLayerPatterns[t] = lctx.createPattern(groundImages[t], 'repeat');
+    }
+    if (!groundLayerPatterns[t]) continue;
+    updateGroundPatternTransform(groundLayerPatterns[t]);
+
+    groundMask.ctx.putImageData(groundMask.data[t], 0, 0);
+    lctx.globalCompositeOperation = 'source-over';
+    lctx.clearRect(0, 0, W, H);
+    lctx.fillStyle = groundLayerPatterns[t];
+    lctx.fillRect(0, 0, W, H);
+    lctx.globalCompositeOperation = 'destination-in';
+    lctx.imageSmoothingEnabled = true;
+    lctx.imageSmoothingQuality = 'high';
+    lctx.drawImage(groundMask.canvas, 0, 0, mw * GROUND_MASK_STEP, mh * GROUND_MASK_STEP);
+    lctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(groundLayer.canvas, 0, 0);
+  }
+}
 
 // Обновляет матрицу паттерна так, чтобы он был «приклеен» к миру (двигался
 // вместе с камерой), а не к экрану — иначе при ходьбе земля будет скользить
@@ -416,8 +481,6 @@ function render() {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  const halfW = TILE_W / 2;
-  const halfH = TILE_H / 2;
   const renderQueue = [];
 
   // Паттерны создаются лениво, как только картинка загрузилась, и каждый
@@ -428,38 +491,9 @@ function render() {
     }
     if (groundPatterns[i]) updateGroundPatternTransform(groundPatterns[i]);
   }
+  drawGround();
 
   for (const [, chunk] of loadedChunks.entries()) {
-    const startX = chunk.cx * CHUNK_SIZE;
-    const startY = chunk.cy * CHUNK_SIZE;
-
-    for (let x = 0; x < CHUNK_SIZE; x++) {
-      for (let y = 0; y < CHUNK_SIZE; y++) {
-        const wx = startX + x;
-        const wy = startY + y;
-        const pt = toScreen(wx, wy);
-
-        if (pt.x < -TILE_W || pt.x > canvas.width + TILE_W || pt.y < -TILE_H || pt.y > canvas.height + TILE_H) continue;
-
-        const tile = chunk.tiles[x][y];
-        // Каждый ромб красится отдельным ctx.fill(), и Canvas сглаживает
-        // (антиалиасит) края КАЖДОГО из них независимо — на стыке двух
-        // соседних ромбов это даёт тонкую паразитную линию, даже если
-        // текстура под ними абсолютно одна и та же. Лечится небольшим
-        // нахлёстом: полигон рисуется на пару пикселей больше клетки,
-        // соседи перекрывают друг друга и линия пропадает.
-        const cy = pt.y + halfH;
-        ctx.beginPath();
-        ctx.moveTo(pt.x, cy - halfH - GROUND_OVERSCAN);
-        ctx.lineTo(pt.x + halfW + GROUND_OVERSCAN, cy);
-        ctx.lineTo(pt.x, cy + halfH + GROUND_OVERSCAN);
-        ctx.lineTo(pt.x - halfW - GROUND_OVERSCAN, cy);
-        ctx.closePath();
-        ctx.fillStyle = groundPatterns[tile.t] || tileFallbackColors[tile.t];
-        ctx.fill();
-      }
-    }
-
     // Лесной мусор (пни, поваленные стволы, камни, ямы, мох)
     for (const c of chunk.clutter) {
       renderQueue.push({ isPlayer: false, isClutter: true, obj: c, depth: c.x + c.y });
