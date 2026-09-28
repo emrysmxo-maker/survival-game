@@ -96,12 +96,12 @@ function getEcosystemAt(cx, cy) {
   if (n > 0.2) return {
     name: '🌳 Смешанный вековой лес',
     canopy: [1, 10, 0],     // Дуб, Лиственница, Сосна
-    subcanopy: [11, 8, 3],  // Липа, Рябина, Клен
+    subcanopy: [11, 8, 3, 6], // Липа, Рябина, Клен, Ива
   };
   if (n > -0.4) return {
     name: '🪵 Берёзово-осиновая роща',
     canopy: [2, 7],         // Березы, Осины
-    subcanopy: [8, 11],     // Рябина, Липа
+    subcanopy: [8, 11, 6],  // Рябина, Липа, Ива
   };
   if (n > -0.9) return {
     name: '🍁 Осенняя дубрава',
@@ -185,6 +185,23 @@ function generateChunk(cx, cy) {
         const subType = eco.subcanopy[Math.floor(pseudoRand(seed++) * eco.subcanopy.length)];
         chunk.trees.push({ x: sx, y: sy, type: subType, scale: 0.75 + pseudoRand(seed++) * 0.2 });
       }
+    }
+  }
+
+  // 1.5. РЕДКИЕ СУХОСТОИ: одиночное мёртвое/сломанное дерево может реалистично
+  // встретиться в любом биоме, не только в выгоревшей гари — но нечасто.
+  if (pseudoRand(seed++) < 0.22) {
+    const dx = startX + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
+    const dy = startY + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
+    const localX = Math.floor(dx - startX);
+    const localY = Math.floor(dy - startY);
+    const onPath = chunk.tiles[localX] && chunk.tiles[localX][localY] === 2;
+    let tooClose = false;
+    for (const t of chunk.trees) {
+      if (Math.hypot(t.x - dx, t.y - dy) < 3.0) { tooClose = true; break; }
+    }
+    if (!onPath && !tooClose) {
+      chunk.trees.push({ x: dx, y: dy, type: 4, scale: 0.9 + pseudoRand(seed++) * 0.3, isGiant: true });
     }
   }
 
