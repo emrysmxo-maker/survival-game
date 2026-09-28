@@ -25,7 +25,16 @@
     <div id="joystick-hint">Касание в левой нижней зоне для перемещения</div>
   </div>
 
+  <!-- Порядок важен: config -> assets грузит по этим спискам, world/player/
+       input друг от друга не зависят, render использует все предыдущие,
+       main запускает игровой цикл и должен идти последним. -->
   <script src="src/ground.js?v=15"></script>
-  <script src="src/game.js?v=15"></script>
+  <script src="src/config.js?v=15"></script>
+  <script src="src/assets.js?v=15"></script>
+  <script src="src/world.js?v=15"></script>
+  <script src="src/player.js?v=15"></script>
+  <script src="src/input.js?v=15"></script>
+  <script src="src/render.js?v=15"></script>
+  <script src="src/main.js?v=15"></script>
 </body>
 </html>
