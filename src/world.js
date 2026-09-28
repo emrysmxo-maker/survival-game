@@ -139,16 +139,23 @@ function generateChunk(cx, cy) {
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       if (chunk.tiles[x][y].isPath) continue; // Не на тропе
-      if (pseudoRand(seed++) > 0.02) continue; // ~2% клеток
+      if (pseudoRand(seed++) > 0.03) continue; // ~3% клеток (часть отсеется у деревьев)
 
       const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
       const wy = startY + y + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
 
-      let tooCloseToGiant = false;
+      // Не у края чанка — туда могут дотягиваться деревья соседнего чанка,
+      // которых отсюда не видно.
+      if (x < 2 || y < 2 || x >= CHUNK_SIZE - 2 || y >= CHUNK_SIZE - 2) continue;
+
+      // Держимся подальше от ВСЕХ деревьев (и крупных, и подлеска): иначе
+      // сломанный ствол с наклоном вставал вплотную и будто лежал на
+      // соседнем дереве.
+      let tooCloseToTree = false;
       for (const t of chunk.trees) {
-        if (t.isGiant && Math.hypot(t.x - wx, t.y - wy) < 1.3) { tooCloseToGiant = true; break; }
+        if (Math.hypot(t.x - wx, t.y - wy) < 2.0) { tooCloseToTree = true; break; }
       }
-      if (tooCloseToGiant) continue;
+      if (tooCloseToTree) continue;
 
       let roll = pseudoRand(seed++);
       let kind = CLUTTER_KINDS[CLUTTER_KINDS.length - 1];

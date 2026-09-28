@@ -3,6 +3,8 @@
 const player = {
   x: 0,
   y: 0,
+  vx: 0,
+  vy: 0,
   speed: 6.8,
   angle: 0,
   radius: 9,
