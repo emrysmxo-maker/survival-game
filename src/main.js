@@ -34,10 +34,10 @@ const PLAYER_START_ACCEL = 14;
 function update(dt) {
   let wantX = 0, wantY = 0;
   if (joystick.active && (joystick.dx !== 0 || joystick.dy !== 0)) {
-    // Стрельба вперёд/вбок — боец идёт шагом (прицельно). Стрельба назад —
-    // бежит дальше, но медленнее обычного (развёрнут корпусом назад).
+    // Стрельба вперёд/вбок — боец идёт шагом (прицельно). Цель сзади —
+    // пятится спиной вперёд, ещё медленнее.
     const back = typeof charBackFire !== 'undefined' ? charBackFire : 0;
-    const spd = player.speed * (weapon.firing ? WEAPON_WALK_FACTOR + (0.75 - WEAPON_WALK_FACTOR) * back : 1);
+    const spd = player.speed * (weapon.firing ? WEAPON_WALK_FACTOR + (0.45 - WEAPON_WALK_FACTOR) * back : 1);
     wantX = (joystick.dx + joystick.dy) * spd;
     wantY = (joystick.dy - joystick.dx) * spd;
     player.angle = Math.atan2(joystick.dy, joystick.dx);

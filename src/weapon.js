@@ -108,10 +108,10 @@ function updateWeapon(dt) {
 function shootBullet() {
   const hasGun = typeof charMuzzle !== 'undefined' && charMuzzle.ok;
   const d = hasGun ? { x: charMuzzle.dirX, y: charMuzzle.dirY } : playerAimDir();
-  // Разброс: прицельно с плеча — маленький, на ходу — больше, стрельба назад
-  // на бегу, развернувшись корпусом, — заметно больше (как в жизни).
+  // Разброс: прицельно с плеча — маленький, на ходу — больше, пятясь
+  // назад — ещё больше (как в жизни).
   const back = typeof charBackFire !== 'undefined' ? charBackFire : 0;
-  const cone = BULLET_SPREAD * (player.isMoving ? 1.8 : 1) + 0.06 * back;
+  const cone = BULLET_SPREAD * (player.isMoving ? 1.8 : 1) + 0.03 * back;
   const spread = (Math.random() - 0.5) * 2 * cone;
   const c = Math.cos(spread), s = Math.sin(spread);
   const dx = d.x * c - d.y * s, dy = d.x * s + d.y * c;
