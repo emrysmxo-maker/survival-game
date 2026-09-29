@@ -139,7 +139,7 @@ function generateChunk(cx, cy) {
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       if (chunk.tiles[x][y].isPath) continue; // Не на тропе
-      if (pseudoRand(seed++) > 0.03) continue; // ~3% клеток (часть отсеется у деревьев)
+      if (pseudoRand(seed++) > CLUTTER_CHANCE) continue; // доля клеток (часть отсеется у деревьев)
 
       const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
       const wy = startY + y + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
