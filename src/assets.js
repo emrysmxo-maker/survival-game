@@ -27,6 +27,12 @@ const groundImages = GROUND_TEXTURE_FILES.map((file) => {
   return img;
 });
 
+const rockSprites = ROCK_TYPES.map((r) => {
+  const img = new Image();
+  img.src = `assets/rocks/${r.file}?v=${ASSET_VERSION}`;
+  return img;
+});
+
 const clutterSprites = {};
 for (const kind in CLUTTER_TYPES) {
   clutterSprites[kind] = CLUTTER_TYPES[kind].files.map((file) => {

@@ -45,6 +45,20 @@ function getEcosystemAt(cx, cy) {
   };
 }
 
+// Можно ли тут стоять дереву (рельеф): не в воде и не на дне оврага,
+// не на поляне; в болоте — реже. Возвращает null (нельзя) или признаки места.
+const _tp = {};
+function treeSpot(wx, wy, r) {
+  const t = terrainAt(wx, wy, _tp);
+  if (t.water > 0.05 || t.ravine > 0.8) return null;
+  if (t.clearing > 0.45) return null;
+  if (t.swamp > 0.5 && r > 0.45) return null;
+  if (t.rocky > 0.6 && r > 0.6) return null;
+  return t;
+}
+// В болоте растут в основном берёзы и чахлые сосны.
+const SWAMP_TREES = [2, 2, 0, 7];
+
 function generateChunk(cx, cy) {
   const key = `${cx},${cy}`;
   if (loadedChunks.has(key)) return loadedChunks.get(key);
@@ -55,7 +69,8 @@ function generateChunk(cx, cy) {
     biomeName: eco.name,
     tiles: [],
     trees: [],
-    clutter: []
+    clutter: [],
+    rocks: []
   };
 
   const startX = cx * CHUNK_SIZE;
@@ -89,8 +104,10 @@ function generateChunk(cx, cy) {
       if (Math.hypot(t.x - gx, t.y - gy) < 3.2) { tooClose = true; break; }
     }
 
-    if (!tooClose) {
-      const type = eco.canopy[Math.floor(pseudoRand(seed++) * eco.canopy.length)];
+    const spot = treeSpot(gx, gy, pseudoRand(seed++));
+    if (!tooClose && spot) {
+      const pool = spot.swamp > 0.5 ? SWAMP_TREES : eco.canopy;
+      const type = pool[Math.floor(pseudoRand(seed++) * pool.length)];
       chunk.trees.push({
         x: gx, y: gy,
         type: type,
@@ -106,7 +123,10 @@ function generateChunk(cx, cy) {
         const dist = 1.8 + pseudoRand(seed++) * 1.6;
         const sx = gx + Math.cos(ang) * dist;
         const sy = gy + Math.sin(ang) * dist;
-        const subType = eco.subcanopy[Math.floor(pseudoRand(seed++) * eco.subcanopy.length)];
+        const sSpot = treeSpot(sx, sy, pseudoRand(seed++));
+        if (!sSpot) continue;
+        const sPool = sSpot.swamp > 0.5 ? SWAMP_TREES : eco.subcanopy;
+        const subType = sPool[Math.floor(pseudoRand(seed++) * sPool.length)];
         chunk.trees.push({
           x: sx, y: sy, type: subType,
           scale: 0.88 + pseudoRand(seed++) * 0.1,
@@ -128,7 +148,7 @@ function generateChunk(cx, cy) {
     for (const t of chunk.trees) {
       if (Math.hypot(t.x - dx, t.y - dy) < 3.0) { tooClose = true; break; }
     }
-    if (!onPath && !tooClose) {
+    if (!onPath && !tooClose && treeSpot(dx, dy, 0)) {
       chunk.trees.push({ x: dx, y: dy, type: 4, scale: 0.95 + pseudoRand(seed++) * 0.1, isGiant: true });
     }
   }
@@ -173,6 +193,26 @@ function generateChunk(cx, cy) {
         tilt: (pseudoRand(seed++) - 0.5) * 2 * (def.tilt || 0)
       });
     }
+  }
+
+  // 4. ВАЛУНЫ: на каменистых местах часто, в остальном лесу — изредка;
+  // не в воде, не на тропе, не вплотную к деревьям.
+  const rockTries = 6;
+  for (let r = 0; r < rockTries; r++) {
+    const rx = startX + 1 + pseudoRand(seed++) * (CHUNK_SIZE - 2);
+    const ry = startY + 1 + pseudoRand(seed++) * (CHUNK_SIZE - 2);
+    const t = terrainAt(rx, ry, _tp);
+    const chance = t.rocky > 0.4 ? 0.55 : 0.04;
+    if (pseudoRand(seed++) > chance) continue;
+    if (t.water > 0.05 || t.swamp > 0.4 || pathDistAt(rx, ry) < 1.6) continue;
+    if (chunk.trees.some((tr) => Math.hypot(tr.x - rx, tr.y - ry) < 1.6)) continue;
+    if (chunk.rocks.some((o) => Math.hypot(o.x - rx, o.y - ry) < 1.8)) continue;
+    chunk.rocks.push({
+      x: rx, y: ry,
+      type: Math.floor(pseudoRand(seed++) * ROCK_TYPES.length),
+      scale: 0.75 + pseudoRand(seed++) * 0.5,
+      flip: pseudoRand(seed++) > 0.5
+    });
   }
 
   loadedChunks.set(key, chunk);

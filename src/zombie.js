@@ -163,7 +163,7 @@ function updateZombies(dt) {
       const speed = crawl ? ZOMBIE_CRAWL_TPS : ZOMBIE_WALK_TPS * (z.broken.legL || z.broken.legR ? 0.6 : 1);
       if (dist > ZOMBIE_REACH) {
         // Идёт к бойцу; пока не развернулся к нему — медленнее (не скользит боком).
-        const facing = Math.max(0.15, Math.cos(d));
+        const facing = Math.max(0.15, Math.cos(d)) * terrainSpeed(z.x, z.y, dx, dy);
         z.x += dx / dist * speed * facing * dt;
         z.y += dy / dist * speed * facing * dt;
         collideZombie(z);
@@ -186,6 +186,11 @@ function collideZombie(z) {
     for (let iy = cy - 1; iy <= cy + 1; iy++) {
       const chunk = loadedChunks.get(`${ix},${iy}`);
       if (!chunk) continue;
+      for (const t of chunk.rocks || []) {
+        const r = rockCollideRadius(t);
+        const ddx = z.x - t.x, ddy = z.y - t.y, dd = Math.hypot(ddx, ddy);
+        if (dd < r && dd > 1e-4) { z.x = t.x + ddx / dd * r; z.y = t.y + ddy / dd * r; }
+      }
       for (const t of chunk.trees) {
         const r = treeCollideRadius(t) * 0.8;
         const ddx = z.x - t.x, ddy = z.y - t.y, dd = Math.hypot(ddx, ddy);

@@ -203,6 +203,9 @@ function bulletHitsTree(b) {
   const cx = Math.floor(b.x / CHUNK_SIZE), cy = Math.floor(b.y / CHUNK_SIZE);
   const chunk = loadedChunks.get(`${cx},${cy}`);
   if (!chunk) return false;
+  for (const o of chunk.rocks || []) {
+    if (Math.hypot(o.x - b.x, o.y - b.y) < rockCollideRadius(o) - 0.15) return true;
+  }
   for (const t of chunk.trees) {
     if (Math.abs(t.x - b.x) > BULLET_HIT_R || Math.abs(t.y - b.y) > BULLET_HIT_R) continue;
     if (Math.hypot(t.x - b.x, t.y - b.y) < BULLET_HIT_R) return true;

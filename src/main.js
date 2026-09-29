@@ -39,6 +39,10 @@ function update(dt) {
     const spd = player.speed * (weapon.firing ? mf : 1);
     wantX = (joystick.dx + joystick.dy) * spd;
     wantY = (joystick.dy - joystick.dx) * spd;
+    // местность: вода, болото, склон
+    const tk = terrainSpeed(player.x, player.y, wantX, wantY);
+    wantX *= tk;
+    wantY *= tk;
     player.angle = Math.atan2(joystick.dy, joystick.dx);
     player.isMoving = spd > 0.01;
     // Короткий разгон (~0.1 с): человек не стартует сразу на полной скорости.
@@ -69,6 +73,7 @@ function update(dt) {
 
   updateWeapon(dt);
   if (typeof updateZombies === 'function') updateZombies(dt);
+  if (typeof updateMinimap === 'function') updateMinimap(dt);
   updateWorldChunks();
 }
 

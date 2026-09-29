@@ -9,9 +9,10 @@ window.loadGlb=(url)=>new Promise((res,rej)=>new GLTFLoader().load(url,g=>{gltfC
 window.THREE=THREE; window.Tree=Tree; window.TreePreset=TreePreset;
 window.ready=true;
 // Рендер одного дерева под камеру игры. spec: {preset, opts:{path:value}, height (м), seed}
-const CW=360, CH=720, SS=2;       // холст спрайта и суперсэмплинг
+const SS=2;                       // суперсэмплинг (размер холста — в spec.cw/ch)
 const PPM=63.2;                  // px холста на метр (как у бойца: 32.5 px/м на экране)
 window.renderTree=function(spec){
+  const CW=spec.cw||360, CH=spec.ch||720, TOP=spec.top||0.9;
   const elev=spec.elev ?? Math.asin(54/74);
   const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
   r.setSize(CW*SS,CH*SS); r.setClearColor(0x000000,0);
@@ -54,7 +55,7 @@ window.renderTree=function(spec){
   sc.add(dl);
   const R=30;
   const wM=CW*SS/(PPM*SS)/1, hM=CH/PPM;
-  const cam=new THREE.OrthographicCamera(-wM/2,wM/2, 0.9*hM, -0.1*hM, 0.1, 100);
+  const cam=new THREE.OrthographicCamera(-wM/2,wM/2, TOP*hM, -(1-TOP)*hM, 0.1, 100);
   cam.position.set(0,R*Math.sin(elev),R*Math.cos(elev)); cam.lookAt(0,0,0);
   r.render(sc,cam);
   const url=r.domElement.toDataURL('image/png');

@@ -53,6 +53,8 @@ function toggleAutoFire() {
   document.getElementById('auto-btn').classList.toggle('on', weapon.auto);
 }
 document.getElementById('auto-btn').addEventListener('click', toggleAutoFire);
+document.getElementById('minimap').addEventListener('click', () => toggleBigMap(true));
+document.getElementById('bigmap').addEventListener('click', () => toggleBigMap(false));
 document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
 
 window.addEventListener('touchstart', (e) => {
@@ -61,6 +63,8 @@ window.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[i];
     if (t.target.closest && t.target.closest('#zombie-btn')) { spawnZombie(); continue; }
     if (t.target.closest && t.target.closest('#auto-btn')) { toggleAutoFire(); continue; }
+    if (t.target.closest && t.target.closest('#minimap')) { toggleBigMap(true); continue; }
+    if (t.target.closest && t.target.closest('#bigmap')) { toggleBigMap(false); continue; }
     const sb = t.target.closest && t.target.closest('.style-btn');
     if (sb) { selectFireStyle(Number(sb.dataset.style)); continue; }
     if (fireBtn.contains(t.target)) {

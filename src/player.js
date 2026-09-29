@@ -69,6 +69,7 @@ function forNearbyObstacles(fn) {
       if (!chunk) continue;
       fn(chunk.trees, treeCollideRadius);
       fn(chunk.clutter, (c) => CLUTTER_COLLIDE_R * Math.min(1.05, c.scale || 1));
+      if (chunk.rocks) fn(chunk.rocks, rockCollideRadius);
     }
   }
 }
@@ -92,4 +93,27 @@ function pushOut(list, radiusOf) {
 function treeCollideRadius(t) {
   const halfPx = (TREE_TRUNK_W[t.type] || 0.1) * TREE_DRAW_W * (t.scale || 1) / 2;
   return Math.max(TREE_COLLIDE_MIN, halfPx * 1.15 / (TILE_W * 0.7) + TREE_COLLIDE_BODY);
+}
+
+// Радиус упора валуна (тайлы): полуширина камня на экране -> тайлы + тело.
+function rockCollideRadius(o) {
+  const halfPx = ROCK_TYPES[o.type].w * ROCK_DRAW * (o.scale || 1) / 2;
+  return halfPx / (TILE_W * 0.7) + 0.22;
+}
+
+// Множитель скорости от местности: вода, болото, подъём/спуск.
+// (mx, my) — направление движения в тайлах (не обязательно единичное).
+const _ts = {};
+function terrainSpeed(x, y, mx, my) {
+  const t = terrainAt(x, y, _ts);
+  let k = 1 - (1 - SPEED_WATER) * t.water;
+  k *= 1 - (1 - SPEED_SWAMP) * t.swamp;
+  const l = Math.hypot(mx, my);
+  if (l > 1e-6) {
+    // уклон по ходу движения (м на тайл): вверх — медленнее, вниз — чуть быстрее
+    const e = 0.5, ux = mx / l, uy = my / l;
+    const slope = (terrainHeight(x + ux * e, y + uy * e) - terrainHeight(x - ux * e, y - uy * e)) / (2 * e);
+    k *= slope > 0 ? Math.max(0.55, 1 - slope * 0.55) : Math.min(1.12, 1 - slope * 0.15);
+  }
+  return k;
 }
