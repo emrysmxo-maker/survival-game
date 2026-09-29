@@ -107,3 +107,18 @@
   touch-action: none;
 }
 #fire-btn.pressed { background: rgba(230, 70, 50, 0.75); }
+
+/* Кнопка огня — ещё и стик прицела: точка показывает, куда целится боец */
+#fire-btn { position: absolute; }
+#fire-btn span { pointer-events: none; }
+#fire-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 26px; height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  display: none;
+}
+#fire-btn.pressed #fire-knob { display: block; }

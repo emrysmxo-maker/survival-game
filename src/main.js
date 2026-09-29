@@ -34,8 +34,10 @@ const PLAYER_START_ACCEL = 14;
 function update(dt) {
   let wantX = 0, wantY = 0;
   if (joystick.active && (joystick.dx !== 0 || joystick.dy !== 0)) {
-    // Во время стрельбы боец идёт шагом, а не бежит.
-    const spd = player.speed * (weapon.firing ? WEAPON_WALK_FACTOR : 1);
+    // Стрельба вперёд/вбок — боец идёт шагом (прицельно). Стрельба назад —
+    // продолжает бежать (почти полная скорость), отстреливаясь от бедра.
+    const back = typeof charBackFire !== 'undefined' ? charBackFire : 0;
+    const spd = player.speed * (weapon.firing ? WEAPON_WALK_FACTOR + (0.9 - WEAPON_WALK_FACTOR) * back : 1);
     wantX = (joystick.dx + joystick.dy) * spd;
     wantY = (joystick.dy - joystick.dx) * spd;
     player.angle = Math.atan2(joystick.dy, joystick.dx);
@@ -46,6 +48,8 @@ function update(dt) {
     player.vx += (wantX - player.vx) * k;
     player.vy += (wantY - player.vy) * k;
   } else {
+    // Стоя на месте с зажатой кнопкой огня — боец целиком поворачивается к цели.
+    if (weapon.firing) player.angle = weapon.aimAngle;
     player.isMoving = false;
     player.vx = 0;
     player.vy = 0;

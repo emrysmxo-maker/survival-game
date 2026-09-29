@@ -21,6 +21,7 @@ const CASING_MAX = 80;
 
 const weapon = {
   firing: false,
+  aimAngle: 0,   // экранный угол прицела (кнопка огня как стик)
   cooldown: 0,
   bullets: [],
   casings: [],
@@ -107,7 +108,11 @@ function updateWeapon(dt) {
 function shootBullet() {
   const hasGun = typeof charMuzzle !== 'undefined' && charMuzzle.ok;
   const d = hasGun ? { x: charMuzzle.dirX, y: charMuzzle.dirY } : playerAimDir();
-  const spread = (Math.random() - 0.5) * 2 * BULLET_SPREAD;
+  // Разброс: прицельно с плеча — маленький, на ходу — больше, стрельба назад
+  // на бегу от бедра одной рукой — очень большой (как в жизни).
+  const back = typeof charBackFire !== 'undefined' ? charBackFire : 0;
+  const cone = BULLET_SPREAD * (player.isMoving ? 1.8 : 1) + 0.12 * back;
+  const spread = (Math.random() - 0.5) * 2 * cone;
   const c = Math.cos(spread), s = Math.sin(spread);
   const dx = d.x * c - d.y * s, dy = d.x * s + d.y * c;
   const mx = player.x + (hasGun ? charMuzzle.gx : dx * 0.4);

@@ -15,9 +15,24 @@ const joystick = {
 // бежать одним пальцем и стрелять другим.
 const fireBtn = document.getElementById('fire-btn');
 let fireTouchId = null;
+// Кнопка огня работает как второй джойстик: нажал — стреляет туда, куда
+// смотрит боец; повёл пальцем — боец поворачивается и стреляет в ту
+// сторону (weapon.aimAngle — экранный угол, как у джойстика движения).
+const fireKnob = document.getElementById('fire-knob');
+const FIRE_AIM_RADIUS = 40;   // px — насколько далеко уводится точка прицела
+const FIRE_AIM_DEAD = 12;     // px — меньше этого считаем «просто нажал»
+let fireCX = 0, fireCY = 0;
 function setFire(on) {
   weapon.firing = on;
   fireBtn.classList.toggle('pressed', on);
+  if (on) weapon.aimAngle = player.angle;
+  else fireKnob.style.transform = '';
+}
+function aimFireTo(x, y) {
+  const dx = x - fireCX, dy = y - fireCY, d = Math.hypot(dx, dy);
+  if (d > FIRE_AIM_DEAD) weapon.aimAngle = Math.atan2(dy, dx);
+  const k = Math.min(d, FIRE_AIM_RADIUS) / (d || 1);
+  fireKnob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
 }
 window.addEventListener('keydown', (e) => { if (e.code === 'Space') setFire(true); });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') setFire(false); });
@@ -28,6 +43,9 @@ window.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[i];
     if (fireBtn.contains(t.target)) {
       fireTouchId = t.identifier;
+      const r = fireBtn.getBoundingClientRect();
+      fireCX = r.left + r.width / 2;
+      fireCY = r.top + r.height / 2;
       setFire(true);
       continue;
     }
@@ -46,6 +64,7 @@ window.addEventListener('touchmove', (e) => {
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
+    if (t.identifier === fireTouchId) { aimFireTo(t.clientX, t.clientY); continue; }
     if (t.identifier === joystick.touchId) {
       const diffX = t.clientX - joystick.startX;
       const diffY = t.clientY - joystick.startY;
