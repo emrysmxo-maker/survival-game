@@ -122,3 +122,29 @@
   display: none;
 }
 #fire-btn.pressed #fire-knob { display: block; }
+
+/* Выбор стиля стрельбы (временно, для теста) */
+#style-bar {
+  position: absolute;
+  right: 10px;
+  top: 150px;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  pointer-events: auto;
+}
+#style-bar .style-title { font: 10px sans-serif; color: rgba(255,255,255,0.7); text-align: center; }
+.style-btn {
+  height: 34px;
+  line-height: 34px;
+  text-align: center;
+  font: bold 15px sans-serif;
+  color: #fff;
+  background: rgba(20, 30, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+}
+.style-btn.active { background: rgba(46, 204, 113, 0.75); }
+#style-name { font: 10px sans-serif; color: #f1c40f; text-align: center; }

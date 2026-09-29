@@ -111,7 +111,8 @@ function shootBullet() {
   // Разброс: прицельно с плеча — маленький, на ходу — больше, пятясь
   // назад — ещё больше (как в жизни).
   const back = typeof charBackFire !== 'undefined' ? charBackFire : 0;
-  const cone = BULLET_SPREAD * (player.isMoving ? 1.8 : 1) + 0.03 * back;
+  const hip = typeof charHipFire !== 'undefined' ? charHipFire : 0;
+  const cone = BULLET_SPREAD * (player.isMoving ? 1.8 : 1) + 0.04 * back + 0.1 * hip;
   const spread = (Math.random() - 0.5) * 2 * cone;
   const c = Math.cos(spread), s = Math.sin(spread);
   const dx = d.x * c - d.y * s, dy = d.x * s + d.y * c;

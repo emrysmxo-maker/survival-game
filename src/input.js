@@ -37,10 +37,22 @@ function aimFireTo(x, y) {
 window.addEventListener('keydown', (e) => { if (e.code === 'Space') setFire(true); });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') setFire(false); });
 
+// Кнопки выбора стиля стрельбы (1–5), см. fireStyle в character.js.
+function selectFireStyle(n) {
+  fireStyle = n;
+  try { localStorage.setItem('fireStyle', String(n)); } catch (e) { /* нет хранилища */ }
+  document.querySelectorAll('.style-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.style) === n));
+  document.getElementById('style-name').textContent = FIRE_STYLE_NAMES[n];
+}
+selectFireStyle(fireStyle);
+document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
+
 window.addEventListener('touchstart', (e) => {
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
+    const sb = t.target.closest && t.target.closest('.style-btn');
+    if (sb) { selectFireStyle(Number(sb.dataset.style)); continue; }
     if (fireBtn.contains(t.target)) {
       fireTouchId = t.identifier;
       const r = fireBtn.getBoundingClientRect();

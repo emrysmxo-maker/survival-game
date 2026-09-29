@@ -52,9 +52,37 @@ let charFlashT = 0;
 // charBackFire: 0 — обычная стрельба, 1 — стрельба назад от бедра на бегу.
 let charAimLocal = 0;
 let charHipOffset = 0;  // доворот бёдер к цели при стрельбе на бегу (рад)
-let charAimSide = 0;
-let charBackpedal = false; // пятится назад, стреляя по цели позади    // через какое плечо целимся назад (-1/1), чтобы не дёргало
-let charBackFire = 0;
+let charAimSide = 0;        // через какое плечо целимся назад (-1/1), чтобы не дёргало
+let charBackpedal = false;  // шаги проигрываются назад (пятится)
+let charBackFire = 0;       // 0..1 — насколько цель позади (для разброса)
+let charHipFire = 0;        // 0..1 — автомат у бедра одной рукой (стиль 5)
+let charAimWorld = null;    // куда сейчас реально смотрит ствол (рад, мир) — поворачивается плавно
+let charMoveFactor = 1;     // множитель скорости бега при стрельбе (читает main.js)
+
+// Стили стрельбы на ходу (выбор владельца — кнопки 1–5 на экране):
+// 1 Полуоборот — ноги бегут, корпус разворачивается боком, руки добирают до ~150°
+// 2 Пятится   — цель сзади: разворачивается к ней и отходит спиной вперёд
+// 3 Боком     — всегда лицом к цели, идёт в любую сторону шагом
+// 4 Остановка — при стрельбе останавливается и плавно разворачивается к цели
+// 5 От бедра  — бежит почти в полную силу, назад стреляет одной рукой от бедра
+let fireStyle = 1;
+try { fireStyle = Number(localStorage.getItem('fireStyle')) || 1; } catch (e) { /* нет хранилища */ }
+const FIRE_STYLE_NAMES = ['', 'Полуоборот', 'Пятится', 'Боком', 'Остановка', 'От бедра'];
+// Скорость поворота ствола к цели (рад/с): ~260°/с — быстро, но не рывком.
+const AIM_TURN_RATE = 4.5;
+// Скорость поворота всего тела при стрельбе (рад/с).
+const BODY_TURN_RATE = 5.5;
+
+function wrapAngle(a) {
+  while (a < -Math.PI) a += Math.PI * 2;
+  while (a > Math.PI) a -= Math.PI * 2;
+  return a;
+}
+// Поворот cur к target не быстрее maxStep за кадр.
+function turnToward(cur, target, maxStep) {
+  const d = wrapAngle(target - cur);
+  return cur + Math.max(-maxStep, Math.min(maxStep, d));
+}
 
 // Инициализация Three.js и персонажа
 function init3DCharacter() {
@@ -313,54 +341,73 @@ function updateCharacter(dt, isMoving, angle, speed) {
   // При движении вверх (angle = -PI/2): atan2(cos, sin) = atan2(0, -1) = PI (смотрит вверх).
   // При движении вниз (angle = PI/2): atan2(cos, sin) = atan2(0, 1) = 0 (смотрит вниз).
   const targetYaw = Math.atan2(Math.cos(angle), Math.sin(angle));
-  // Прицел. Как у живого человека, стреляющего назад на бегу: ноги бегут
-  // вперёд, бёдра доворачиваются к цели частично (до ~63°), остальное —
-  // скручивание корпуса (до ~69°) и руки с автоматом у плеча.
+  // Прицел (см. стили выше). Ствол всегда поворачивается к цели плавно —
+  // с ограниченной скоростью, без рывков при резком движении пальца.
   const firingNow = typeof weapon !== 'undefined' && weapon.firing;
   let bodyYaw = targetYaw;
-  let relMove = 0;
+  charBackpedal = false;
+  charMoveFactor = 1;
+  let hipTarget = 0, backTarget = 0, hipFireTarget = 0;
   if (firingNow) {
-    const aimYaw = Math.atan2(Math.cos(weapon.aimAngle), Math.sin(weapon.aimAngle));
-    relMove = aimYaw - targetYaw;
-    while (relMove < -Math.PI) relMove += Math.PI * 2;
-    while (relMove > Math.PI) relMove -= Math.PI * 2;
-    // Строго назад: не перескакивать между «через левое» и «через правое» плечо.
-    if (Math.abs(relMove) > 2.8 && charAimSide !== 0 && Math.sign(relMove) !== charAimSide) {
-      relMove = charAimSide * Math.PI;
-    }
-    if (Math.abs(relMove) > 0.2) charAimSide = Math.sign(relMove);
-    // Цель сзади (больше ~110° от направления бега) — боец разворачивается
-    // к ней лицом и отходит спиной вперёд (пятится). Иначе бежит вперёд,
-    // бёдра чуть доворачиваются (до ~29°), остальное — корпус и руки.
-    const ar = Math.abs(relMove);
-    if (charBackpedal) { if (!isMoving || ar < 1.75) charBackpedal = false; }
-    else if (isMoving && ar > 1.95) charBackpedal = true;
-    if (charBackpedal) {
-      charHipOffset = 0;
+    const wantYaw = Math.atan2(Math.cos(weapon.aimAngle), Math.sin(weapon.aimAngle));
+    if (charAimWorld === null) charAimWorld = charYaw + charAimLocal;
+    charAimWorld = wrapAngle(turnToward(charAimWorld, wantYaw, AIM_TURN_RATE * dt));
+    const aimYaw = charAimWorld;
+    // угол цели относительно направления бега; строго назад — держим сторону
+    let rel = wrapAngle(aimYaw - targetYaw);
+    if (Math.abs(rel) > 2.8 && charAimSide !== 0 && Math.sign(rel) !== charAimSide) rel = charAimSide * Math.PI;
+    if (Math.abs(rel) > 0.2) charAimSide = Math.sign(rel);
+    const ar = Math.abs(rel), side = Math.sign(rel) || 1;
+    backTarget = Math.max(0, Math.min(1, (ar - 1.6) / 1.2));
+
+    if (!isMoving || fireStyle === 3 || fireStyle === 4) {
+      // Стоит / «Боком» / «Остановка»: всё тело к цели.
       bodyYaw = aimYaw;
+      if (fireStyle === 3 && isMoving) {
+        charMoveFactor = 0.55;
+        // идёт спиной вперёд, если движение против взгляда
+        charBackpedal = Math.cos(wrapAngle(targetYaw - aimYaw)) < -0.2;
+      }
+      if (fireStyle === 4) charMoveFactor = 0;
+    } else if (fireStyle === 2) {
+      // «Пятится»: цель сзади — лицом к ней спиной вперёд, иначе бег с доворотом.
+      if (ar > 1.9) { bodyYaw = aimYaw; charBackpedal = true; charMoveFactor = 0.45; }
+      else { hipTarget = side * Math.min(ar * 0.35, 0.5); charMoveFactor = 0.6; }
+    } else if (fireStyle === 5) {
+      // «От бедра»: бедра почти не поворачивают, назад — одной рукой у бедра.
+      hipTarget = side * Math.min(ar * 0.2, 0.35);
+      hipFireTarget = Math.max(0, Math.min(1, (ar - 1.4) / 0.5));
+      charMoveFactor = 0.85;
     } else {
-      const hip = isMoving ? Math.sign(relMove) * Math.min(ar * 0.35, 0.5) : 0;
-      charHipOffset += (hip - charHipOffset) * Math.min(1, 10 * dt);
+      // «Полуоборот»: бёдра до ~40°, корпус до ~57°, дальше руки (до ~150°).
+      hipTarget = side * Math.min(ar * 0.45, 0.7);
+      charMoveFactor = 0.75 - 0.15 * backTarget;
+    }
+    charHipOffset += (hipTarget - charHipOffset) * Math.min(1, 6 * dt);
+    if (hipTarget !== 0 || (isMoving && fireStyle !== 3 && fireStyle !== 4 && !charBackpedal)) {
       bodyYaw = targetYaw + charHipOffset;
     }
-    // угол прицела относительно корпуса (бёдер)
-    let rel = aimYaw - (charYaw);
-    while (rel < -Math.PI) rel += Math.PI * 2;
-    while (rel > Math.PI) rel -= Math.PI * 2;
-    if (Math.abs(rel) > 2.8 && Math.sign(rel) !== charAimSide) rel = charAimSide * Math.PI;
-    charAimLocal += (rel - charAimLocal) * Math.min(1, 14 * dt);
+    // стоя — ноги тоже к цели; сохраняем это направление после отпускания
+    if (!isMoving && typeof player !== 'undefined') player.angle = Math.PI / 2 - charYaw;
   } else {
-    charHipOffset += (0 - charHipOffset) * Math.min(1, 10 * dt);
-    charAimLocal += (0 - charAimLocal) * Math.min(1, 10 * dt);
+    charAimWorld = null;
+    charHipOffset += (0 - charHipOffset) * Math.min(1, 8 * dt);
     charAimSide = 0;
-    charBackpedal = false;
   }
-  // 0 — стреляет вперёд/вбок, 1 — назад (от ~100° до ~150° от направления бега)
-  charBackFire += ((charBackpedal ? 1 : 0) - charBackFire) * Math.min(1, 8 * dt);
-  let diff = bodyYaw - charYaw;
-  while (diff < -Math.PI) diff += Math.PI * 2;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  charYaw += diff * Math.min(1, 24 * dt);
+  charBackFire += (backTarget - charBackFire) * Math.min(1, 6 * dt);
+  charHipFire += (hipFireTarget - charHipFire) * Math.min(1, 6 * dt);
+
+  // Тело: при стрельбе поворачивается с ограниченной скоростью, без стрельбы — как раньше.
+  if (firingNow) charYaw = wrapAngle(turnToward(charYaw, bodyYaw, BODY_TURN_RATE * dt));
+  else charYaw += wrapAngle(bodyYaw - charYaw) * Math.min(1, 24 * dt);
+
+  // Угол ствола относительно тела (что добирают корпус и руки).
+  const aimRelTarget = firingNow ? wrapAngle(charAimWorld - charYaw) : 0;
+  let aimRel = aimRelTarget;
+  if (firingNow && Math.abs(aimRel) > 2.8 && charAimSide !== 0 && Math.sign(aimRel) !== charAimSide) aimRel = charAimSide * Math.PI;
+  const reach = fireStyle === 5 ? 2.9 : 2.6;   // дальше руками не довернуть
+  aimRel = Math.max(-reach, Math.min(reach, aimRel));
+  charAimLocal += (aimRel - charAimLocal) * Math.min(1, (firingNow ? 12 : 8) * dt);
   if (soldierRoot) {
     soldierRoot.rotation.y = charYaw;
   }
@@ -380,7 +427,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
     charRunPhase += (mps * dt / cycleLen) * Math.PI * 2;
 
     if (charMixer) {
-      if (charBackpedal) charIsRunning = false;       // пятятся шагом
+      if (charBackpedal || (firingNow && fireStyle === 3)) charIsRunning = false; // пятятся/боком — шагом
       const clip = charIsRunning ? 'Run' : 'Walk';
       fadeToAction(clip, 0.12);
       const act = charActions[clip];
@@ -776,28 +823,30 @@ function applyRiflePose(dt, wantAim) {
   const chest = soldierRoot.worldToLocal(B.Spine2.getWorldPosition(_v1.clone()));
   const sideR = Math.sign(soldierRoot.worldToLocal(B.RightArm.getWorldPosition(_v2.clone())).x) || 1;
 
-  // Поворот корпуса к цели: три позвонка делят скручивание до ±69°.
-  const twist = Math.max(-1.1, Math.min(1.1, charAimLocal));
+  // Поворот корпуса к цели: три позвонка делят скручивание до ±57°,
+  // дальше угол добирают руки (автомат выносится вбок/назад).
+  const hf = charHipFire;
+  const twist = Math.max(-1.0, Math.min(1.0, charAimLocal)) * (1 - 0.4 * hf);
   B.Spine.rotateY(twist * 0.3);
   if (B.Spine1) B.Spine1.rotateY(twist * 0.35);
   B.Spine2.rotateY(twist * 0.35);
   soldierRoot.updateMatrixWorld(true);
   const chest2 = soldierRoot.worldToLocal(B.Spine2.getWorldPosition(new THREE.Vector3()));
 
-  // Позы (в системе бойца, относительно груди): «наготове» и «к плечу».
-  // Автомат поворачиваем вокруг груди на угол прицела — всегда в обеих
-  // руках у плеча. При стрельбе назад на бегу чуть ниже и с сильной отдачей.
+  // Позы (в системе бойца, относительно груди): «наготове» и «к плечу»,
+  // повёрнутые вокруг груди на угол прицела. От бедра (hf) — ниже, вбок,
+  // ствол чуть вниз, одна рука.
   const k = charAimBlend;
-  const bf = charBackFire;
-  const cx = sideR * (0.05 + 0.04 * k);
-  const cy = -0.21 + 0.31 * k - 0.05 * bf;
-  const cz = 0.26 + 0.07 * k - 0.035 * charRecoil * (1 + bf);
+  const cx = sideR * (0.05 + 0.04 * k) * (1 - hf);
+  const cy = -0.21 + 0.31 * k - 0.22 * hf;
+  const cz = (0.26 + 0.07 * k - 0.035 * charRecoil * (1 + hf)) * (1 - 0.35 * hf);
   const ay = charAimLocal;
-  const px = cx * Math.cos(ay) + cz * Math.sin(ay);
-  const pz = -cx * Math.sin(ay) + cz * Math.cos(ay);
+  const lateral = Math.sign(ay || 1) * 0.24 * hf;
+  const px = (cx + lateral) * Math.cos(ay) + cz * Math.sin(ay);
+  const pz = -(cx + lateral) * Math.sin(ay) + cz * Math.cos(ay);
   rifleRig.position.set(chest2.x + px, chest2.y + cy, chest2.z + pz);
-  const pitch = 0.42 * (1 - k) - 0.03 * charRecoil * (1 + 1.5 * bf) + 0.05 * bf; // + = ствол вниз
-  const yaw = -sideR * 0.22 * (1 - k) + ay;
+  const pitch = 0.42 * (1 - k) - 0.03 * charRecoil * (1 + 2 * hf) + 0.12 * hf; // + = ствол вниз
+  const yaw = -sideR * 0.22 * (1 - k) * (1 - hf) + ay;
   rifleRig.rotation.set(pitch, yaw, 0, 'YXZ');
   rifleRig.updateMatrixWorld(true);
 
@@ -810,5 +859,5 @@ function applyRiflePose(dt, wantAim) {
     .add(soldierRoot.localToWorld(new THREE.Vector3(-sideR * 0.5, -1, -0.3)).sub(soldierRoot.localToWorld(new THREE.Vector3())));
 
   solveArmIK(B.RightArm, B.RightForeArm, B.RightHand, gripW, poleR);
-  solveArmIK(B.LeftArm, B.LeftForeArm, B.LeftHand, guardW, poleL);
+  if (hf < 0.5) solveArmIK(B.LeftArm, B.LeftForeArm, B.LeftHand, guardW, poleL);
 }

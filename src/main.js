@@ -34,22 +34,19 @@ const PLAYER_START_ACCEL = 14;
 function update(dt) {
   let wantX = 0, wantY = 0;
   if (joystick.active && (joystick.dx !== 0 || joystick.dy !== 0)) {
-    // Стрельба вперёд/вбок — боец идёт шагом (прицельно). Цель сзади —
-    // пятится спиной вперёд, ещё медленнее.
-    const back = typeof charBackFire !== 'undefined' ? charBackFire : 0;
-    const spd = player.speed * (weapon.firing ? WEAPON_WALK_FACTOR + (0.45 - WEAPON_WALK_FACTOR) * back : 1);
+    // При стрельбе скорость задаёт выбранный стиль (charMoveFactor, character.js).
+    const mf = typeof charMoveFactor !== 'undefined' ? charMoveFactor : WEAPON_WALK_FACTOR;
+    const spd = player.speed * (weapon.firing ? mf : 1);
     wantX = (joystick.dx + joystick.dy) * spd;
     wantY = (joystick.dy - joystick.dx) * spd;
     player.angle = Math.atan2(joystick.dy, joystick.dx);
-    player.isMoving = true;
+    player.isMoving = spd > 0.01;
     // Короткий разгон (~0.1 с): человек не стартует сразу на полной скорости.
     // Остановка, наоборот, мгновенная — никакого скольжения после отпускания.
     const k = 1 - Math.exp(-PLAYER_START_ACCEL * dt);
     player.vx += (wantX - player.vx) * k;
     player.vy += (wantY - player.vy) * k;
   } else {
-    // Стоя на месте с зажатой кнопкой огня — боец целиком поворачивается к цели.
-    if (weapon.firing) player.angle = weapon.aimAngle;
     player.isMoving = false;
     player.vx = 0;
     player.vy = 0;
