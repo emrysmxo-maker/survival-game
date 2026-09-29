@@ -37,3 +37,31 @@ function toScreen(gx, gy) {
     y: (gx + gy) * (TILE_H / 2) - renderCam.y + view.h / 2
   };
 }
+
+// Выталкивает игрока из стволов деревьев и сломанных стволов рядом.
+// Смещение идёт по нормали к препятствию, поэтому вдоль него игрок скользит.
+function collidePlayer() {
+  const pcx = Math.floor(player.x / CHUNK_SIZE);
+  const pcy = Math.floor(player.y / CHUNK_SIZE);
+  for (let cx = pcx - 1; cx <= pcx + 1; cx++) {
+    for (let cy = pcy - 1; cy <= pcy + 1; cy++) {
+      const chunk = loadedChunks.get(`${cx},${cy}`);
+      if (!chunk) continue;
+      pushOut(chunk.trees, (t) => TREE_COLLIDE_R * Math.min(1.15, t.scale || 1));
+      pushOut(chunk.clutter, () => CLUTTER_COLLIDE_R);
+    }
+  }
+}
+
+function pushOut(list, radiusOf) {
+  for (const o of list) {
+    const dx = player.x - o.x, dy = player.y - o.y;
+    const r = radiusOf(o);
+    if (Math.abs(dx) > r || Math.abs(dy) > r) continue;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= r * r) continue;
+    const d = Math.sqrt(d2) || 0.0001;
+    player.x = o.x + dx / d * r;
+    player.y = o.y + dy / d * r;
+  }
+}

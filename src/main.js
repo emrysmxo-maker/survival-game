@@ -49,11 +49,15 @@ function update(dt) {
     player.vy = 0;
   }
 
+  const prevX = player.x, prevY = player.y;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
+  collidePlayer();
+  // Реальная скорость после столкновений: у дерева боец не «бежит на месте».
+  const realSpeed = dt > 0 ? Math.hypot(player.x - prevX, player.y - prevY) / dt : 0;
 
   if (typeof updateCharacter === 'function') {
-    updateCharacter(dt, player.isMoving, player.angle, Math.hypot(player.vx, player.vy));
+    updateCharacter(dt, player.isMoving, player.angle, realSpeed);
   }
 
   // Камера жёстко привязана к игроку
