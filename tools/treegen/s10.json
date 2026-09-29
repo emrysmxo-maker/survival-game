@@ -1,0 +1,71 @@
+{
+ "00_pine": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_16_ponderosa_pine.glb",
+  "height": 14,
+  "maxW": 5.0
+ },
+ "01_oak": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_12_oak_green.glb",
+  "height": 11,
+  "maxW": 5.2
+ },
+ "02_birch": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_07_birch_cluster.glb",
+  "height": 12,
+  "maxW": 4.8
+ },
+ "03_maple": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_10_red_maple.glb",
+  "height": 10.5,
+  "maxW": 5.2
+ },
+ "04_deadwood": {
+  "preset": "Ash Medium",
+  "height": 9.5,
+  "seed": 13,
+  "maxW": 5.2,
+  "opts": {
+   "leaves.count": 0,
+   "bark.tint": 14209224,
+   "branch.radius.1": 1.1,
+   "branch.radius.2": 0.9,
+   "leaves.size": 0.01
+  }
+ },
+ "05_bluespruce": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_02_colorado_blue_spruce.glb",
+  "height": 12,
+  "maxW": 4.6
+ },
+ "06_willow": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_12_oak_green.glb",
+  "height": 10.5,
+  "maxW": 5.6,
+  "rot": 1.9
+ },
+ "07_aspen": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_08_columnar_green.glb",
+  "height": 12,
+  "maxW": 4.4
+ },
+ "08_rowan": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_14_autumn_rust.glb",
+  "height": 10,
+  "maxW": 5.0
+ },
+ "09_cedar": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_22_black_spruce.glb",
+  "height": 14,
+  "maxW": 4.2
+ },
+ "10_larch": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_43_sitka_spruce.glb",
+  "height": 14,
+  "maxW": 4.8
+ },
+ "11_linden": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_09_round_green.glb",
+  "height": 10.5,
+  "maxW": 5.0
+ }
+}

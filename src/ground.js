@@ -24,6 +24,13 @@ const GROUND_TEX_PX = 192; // ассеты assets/ground/*.jpg приведен�
 const GROUND_MASK_STEP = 8;
 const GROUND_LAYER_ORDER = [1, 3, 4, 7, 5, 2, 6]; // …камни, болото, тропа, дно ручья (сверху)
 const GROUND_BAKE_MARGIN = 2;
+// Рельеф: 1 м высоты сдвигает точку на экране вверх на RELIEF_PX_PER_M px
+// (метр на экране по вертикали ≈ 37.7 px/м × cos(наклона камеры)).
+// Запечённая земля чанка «морщится» по сетке WARP_CELLS × WARP_CELLS, и в
+// холсте оставлен запас RELIEF_MARGIN сверху и снизу под перепад высот.
+const RELIEF_PX_PER_M = 26;
+const RELIEF_MARGIN = 176;
+const GROUND_WARP_CELLS = 16;
 const CHUNK_PX_W = CHUNK_SIZE * TILE_W;
 const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
 
@@ -48,8 +55,8 @@ function smoothstep(e0, e1, x) {
 // ---------------- Рельеф ----------------
 // Всё считается из плавных функций мировых координат (тайлы), поэтому
 // одинаково в игре и в фоновом потоке, без хранения карты.
-// Холмы: сумма «искривлённых» синусов, перепад ~±4 м, между вершинами
-// 40–90 тайлов (60–120 м).
+// Холмы: сумма «искривлённых» синусов, перепад ~±2.5 м (после ×0.5 в
+// terrainAt), между вершинами 40–90 тайлов (60–120 м).
 function hillHeight(wx, wy) {
   return (
     2.2 * Math.sin(wx * 0.041 + 1.3 * Math.sin(wy * 0.027)) +
@@ -87,6 +94,11 @@ function rockNoise(wx, wy) {
   return (Math.sin(wx * 0.037 - wy * 0.029 + 4.2) + Math.sin(wx * 0.071 + wy * 0.053 + 0.6) * 0.6) / 1.6;
 }
 
+// Котловины: округлые углубления 15–30 тайлов в поперечнике, до 3 м глубиной.
+function bowlNoise(wx, wy) {
+  return (Math.sin(wx * 0.045 + 1.1 * Math.sin(wy * 0.03 + 1)) + Math.sin(wy * 0.05 - 0.9 * Math.sin(wx * 0.04) + 2.5)) / 2;
+}
+
 // Всё о месте (wx, wy): высота (м), вода/болото/камни/поляна (0..1).
 // water — вода ручья; ravine — склон оврага вокруг ручья.
 function terrainAt(wx, wy, out) {
@@ -98,8 +110,10 @@ function terrainAt(wx, wy, out) {
   // болото — в сырых местах, чаще в низинах, не на ручье
   const swamp = smoothstep(0.5, 0.72, wet - hill * 0.16) * (1 - ravine);
   // болото плоское и низкое, овраг — глубокий
-  const h = hill * (1 - 0.8 * swamp) - swamp * 1.2 - ravine * 2.6;
+  const bowl = smoothstep(0.5, 0.85, bowlNoise(wx, wy)) * (1 - ravine);
+  const h = hill * 0.5 * (1 - 0.8 * swamp) - swamp * 0.8 - ravine * 3.4 - bowl * 3.0;
   out.h = h;
+  out.bowl = bowl;
   out.water = water;
   out.ravine = ravine;
   out.swamp = swamp;
@@ -130,6 +144,13 @@ function groundWeights(wx, wy, out) {
 
 // Положение левого верхнего угла картинки чанка в «мировых пикселях»
 // (экранные координаты без учёта камеры).
+// Где рисовать запечённую (с рельефом) землю чанка: та же точка, но на
+// RELIEF_MARGIN выше — сверху запас под холмы.
+function chunkBakeOrigin(cx, cy) {
+  const o = chunkPixelOrigin(cx, cy);
+  return { x: o.x, y: o.y - RELIEF_MARGIN };
+}
+
 function chunkPixelOrigin(cx, cy) {
   const sx = cx * CHUNK_SIZE, sy = cy * CHUNK_SIZE;
   return {
@@ -184,7 +205,7 @@ function createGroundBaker(makeCanvas, textures) {
         const h = weights.t.h;
         const hx = terrainAt(wx + 0.6, wy, tt).h - h;
         const hy = terrainAt(wx, wy + 0.6, tt).h - h;
-        const lightK = -(hx + hy) * 1.9;
+        const lightK = -(hx + hy) * 1.2;
         const extra = {
           water: weights.t.water * 0.82,
           lit: Math.min(0.32, Math.max(0, lightK)),
@@ -239,19 +260,60 @@ function createGroundBaker(makeCanvas, textures) {
     overlay('shade', 'rgb(20, 24, 16)');
     overlay('lit', 'rgb(255, 244, 205)', 'soft-light');
 
-    // Оставляем только ромб чанка (с нахлёстом в пару пикселей — соседние
-    // чанки перекрываются одинаковой картинкой, стык не виден).
-    const m = GROUND_BAKE_MARGIN, ov = 1.5;
-    octx.globalCompositeOperation = 'destination-in';
-    octx.beginPath();
-    octx.moveTo(m + CHUNK_PX_W / 2, m - ov);
-    octx.lineTo(m + CHUNK_PX_W + ov, m + CHUNK_PX_H / 2);
-    octx.lineTo(m + CHUNK_PX_W / 2, m + CHUNK_PX_H + ov);
-    octx.lineTo(m - ov, m + CHUNK_PX_H / 2);
-    octx.closePath();
-    octx.fillStyle = '#000';
-    octx.fill();
-    octx.globalCompositeOperation = 'source-over';
-    return out;
+    // Рельеф: плоская картинка `out` режется на сетку клеток мира, каждая
+    // клетка (два треугольника) сдвигается по вертикали на высоту своих
+    // углов. Рисуем от дальних к ближним — ближний склон закрывает дальний.
+    const HH = H + RELIEF_MARGIN * 2;
+    const res = makeCanvas(W, HH);
+    const rctx = res.getContext('2d');
+    const G = GROUND_WARP_CELLS, cs = CHUNK_SIZE / G;
+    const startX = cx * CHUNK_SIZE, startY = cy * CHUNK_SIZE;
+    const vx = new Float32Array((G + 1) * (G + 1)), vy = new Float32Array((G + 1) * (G + 1));
+    const vh = new Float32Array((G + 1) * (G + 1));
+    for (let j = 0; j <= G; j++) {
+      for (let i = 0; i <= G; i++) {
+        const wx = startX + i * cs, wy = startY + j * cs, k = j * (G + 1) + i;
+        vx[k] = (wx - wy) * (TILE_W / 2) - o.x;
+        vy[k] = (wx + wy) * (TILE_H / 2) - o.y;
+        vh[k] = terrainHeight(wx, wy) * RELIEF_PX_PER_M;
+      }
+    }
+    const tri = (a, b, c) => {
+      // источник (плоская картинка) -> приёмник (со сдвигом по y)
+      const sx0 = vx[a], sy0 = vy[a], sx1 = vx[b], sy1 = vy[b], sx2 = vx[c], sy2 = vy[c];
+      const dx0 = sx0, dy0 = sy0 - vh[a] + RELIEF_MARGIN;
+      const dx1 = sx1, dy1 = sy1 - vh[b] + RELIEF_MARGIN;
+      const dx2 = sx2, dy2 = sy2 - vh[c] + RELIEF_MARGIN;
+      const ax = sx1 - sx0, ay = sy1 - sy0, bx = sx2 - sx0, by = sy2 - sy0;
+      const det = ax * by - ay * bx;
+      if (Math.abs(det) < 1e-6) return;
+      const cx1 = dx1 - dx0, cy1 = dy1 - dy0, cx2 = dx2 - dx0, cy2 = dy2 - dy0;
+      const m11 = (cx1 * by - cx2 * ay) / det, m12 = (cy1 * by - cy2 * ay) / det;
+      const m21 = (cx2 * ax - cx1 * bx) / det, m22 = (cy2 * ax - cy1 * bx) / det;
+      const e = dx0 - m11 * sx0 - m21 * sy0, f = dy0 - m12 * sx0 - m22 * sy0;
+      // клип — приёмный треугольник, чуть раздутый (без щелей между клетками)
+      const mx = (dx0 + dx1 + dx2) / 3, my = (dy0 + dy1 + dy2) / 3;
+      const grow = (x, y) => { const l = Math.hypot(x - mx, y - my) || 1; return [x + (x - mx) / l * 0.8, y + (y - my) / l * 0.8]; };
+      const p0 = grow(dx0, dy0), p1 = grow(dx1, dy1), p2 = grow(dx2, dy2);
+      rctx.save();
+      rctx.beginPath();
+      rctx.moveTo(p0[0], p0[1]); rctx.lineTo(p1[0], p1[1]); rctx.lineTo(p2[0], p2[1]);
+      rctx.closePath();
+      rctx.clip();
+      rctx.setTransform(m11, m12, m21, m22, e, f);
+      const bx0 = Math.floor(Math.min(sx0, sx1, sx2)) - 1, by0 = Math.floor(Math.min(sy0, sy1, sy2)) - 1;
+      const bw = Math.ceil(Math.max(sx0, sx1, sx2)) - bx0 + 2, bh = Math.ceil(Math.max(sy0, sy1, sy2)) - by0 + 2;
+      rctx.drawImage(out, bx0, by0, bw, bh, bx0, by0, bw, bh);
+      rctx.restore();
+    };
+    for (let sum = 0; sum <= 2 * G - 2; sum++) {
+      for (let i = Math.max(0, sum - G + 1); i <= Math.min(G - 1, sum); i++) {
+        const j = sum - i;
+        const a = j * (G + 1) + i, b = a + 1, c = a + G + 1, d = c + 1;
+        tri(a, b, d);
+        tri(a, d, c);
+      }
+    }
+    return res;
   };
 }

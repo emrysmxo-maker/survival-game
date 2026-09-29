@@ -152,7 +152,7 @@ function shootBullet() {
   const mx = player.x + (hasGun ? charMuzzle.gx : dx * 0.4);
   const my = player.y + (hasGun ? charMuzzle.gy : dy * 0.4);
   const lift = hasGun ? charMuzzle.lift : 30;
-  weapon.bullets.push({ x: mx, y: my, sx: mx, sy: my, dx, dy, lift, age: 0 });
+  weapon.bullets.push({ x: mx, y: my, sx: mx, sy: my, dx, dy, lift, age: 0, h0: player.h || 0 });
 
   // Дымок у дула: пара серых клубочков, медленно расходятся и поднимаются.
   for (let k = 0; k < 2; k++) {
@@ -241,8 +241,10 @@ function drawBullet(ctx, b) {
   // Длина следа берётся в ЭКРАННЫХ пикселях, а не в тайлах: по вертикали
   // экрана тайл вдвое короче, и при стрельбе вниз/вверх след раньше
   // сжимался в едва заметную точку.
-  const head = toScreen(b.x, b.y);
-  const flown = toScreen(b.sx, b.sy);
+  // Пуля летит прямо на постоянной высоте (высота дула над землёй у бойца).
+  const hz = b.h0 === undefined ? (b.h0 = (player.h || 0)) : b.h0;
+  const head = toScreen(b.x, b.y, hz);
+  const flown = toScreen(b.sx, b.sy, hz);
   const hx = head.x - flown.x, hy = head.y - flown.y;
   const flownPx = Math.hypot(hx, hy);
   if (flownPx < 1) return;

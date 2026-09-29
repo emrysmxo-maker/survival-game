@@ -68,6 +68,11 @@ function update(dt) {
   }
 
   // Камера жёстко привязана к игроку
+  // Высота под бойцом; камера догоняет её плавно (~0.4 с), поэтому при спуске
+  // в овраг боец заметно опускается на экране, а земля вокруг поднимается.
+  player.h = terrainHeight(player.x, player.y);
+  if (camera.h === null) camera.h = player.h;
+  camera.h += (player.h - camera.h) * Math.min(1, 2.6 * dt);
   camera.x = (player.x - player.y) * (TILE_W / 2);
   camera.y = (player.x + player.y) * (TILE_H / 2);
 

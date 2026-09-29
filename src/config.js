@@ -32,7 +32,7 @@ const BROKEN_TREE_CHANCE = 0; // сломанные — пока выключе�
 // 0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел.
 const GROUND_TEXTURE_FILES = ['grass.jpg', 'light.jpg', 'path.jpg', 'dark.jpg', 'ash.jpg', 'swamp.jpg', 'riverbed.jpg', 'rocky.jpg'];
 const GROUND_BASE_COLOR = '#5a6a3a';
-const GROUND_BAKE_KEEP_RADIUS = 3;
+const GROUND_BAKE_KEEP_RADIUS = 2;
 const GROUND_MAX_IN_FLIGHT = 2;
 
 // Лесной мусор: только сломанные стволы (пни, камни, брёвна, мох и ямы
@@ -52,7 +52,7 @@ const CLUTTER_TYPES = {
 // Ширина основания ствола по породам (доля ширины картинки, по 3D-рендерам
 // деревьев, у самой земли). Радиус упора считается из неё:
 // у дуба корни в разы шире, чем у берёзы, и одинаковый круг не годился.
-const TREE_TRUNK_W = [0.08, 0.07, 0.09, 0.06, 0.07, 0.2, 0.05, 0.06, 0.06, 0.2, 0.2, 0.07];
+const TREE_TRUNK_W = [0.089, 0.064, 0.092, 0.09, 0.1, 0.14, 0.075, 0.053, 0.09, 0.1, 0.142, 0.061];
 const TREE_COLLIDE_BODY = 0.28;   // запас на тело бойца, тайлов
 const TREE_COLLIDE_MIN = 0.5;
 const CLUTTER_COLLIDE_R = 0.55;

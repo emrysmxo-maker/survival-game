@@ -16,7 +16,7 @@ const player = {
   isMoving: false
 };
 
-const camera = { x: 0, y: 0 };
+const camera = { x: 0, y: 0, h: null }; // h — высота (м), на которой «висит» камера; догоняет высоту бойца плавно
 
 // Камера для отрисовки кадра: выровнена по реальным точкам экрана
 // (1/dpr CSS-пикселя). Так картинка сдвигается ровными шагами в одну точку
@@ -26,16 +26,23 @@ const camera = { x: 0, y: 0 };
 const renderCam = { x: 0, y: 0 };
 function syncRenderCamera() {
   renderCam.x = Math.round(camera.x * view.dpr) / view.dpr;
-  renderCam.y = Math.round(camera.y * view.dpr) / view.dpr;
+  renderCam.y = Math.round((camera.y - (camera.h || 0) * RELIEF_PX_PER_M) * view.dpr) / view.dpr;
 }
 
 // Мир -> экран (изометрическая проекция, TILE_W/TILE_H — из ground.js),
 // в CSS-пикселях.
-function toScreen(gx, gy) {
+// h — высота точки (м); не передали — берём высоту рельефа в этом месте.
+// Объекты, которые стоят на месте (деревья, валуны), передают кешированную.
+function toScreen(gx, gy, h) {
+  if (h === undefined) h = terrainHeight(gx, gy);
   return {
     x: (gx - gy) * (TILE_W / 2) - renderCam.x + view.w / 2,
-    y: (gx + gy) * (TILE_H / 2) - renderCam.y + view.h / 2
+    y: (gx + gy) * (TILE_H / 2) - h * RELIEF_PX_PER_M - renderCam.y + view.h / 2
   };
+}
+function heightOf(o) {
+  if (o.h === undefined) o.h = terrainHeight(o.x, o.y);
+  return o.h;
 }
 
 // Выталкивает игрока из стволов деревьев и сломанных стволов рядом.

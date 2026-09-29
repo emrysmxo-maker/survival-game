@@ -26,7 +26,7 @@ function startGroundBaking() {
         const chunk = loadedChunks.get(key);
         if (!chunk || chunk.ground) { bitmap.close(); return; }
         chunk.ground = bitmap;
-        chunk.groundOrigin = chunkPixelOrigin(chunk.cx, chunk.cy);
+        chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
       };
       w.onerror = () => { groundBake.worker = null; groundBake.ready = false; groundBake.inFlight.clear(); };
       groundBake.worker = w;
@@ -51,7 +51,7 @@ function localBake(chunk) {
     }, groundImages);
   }
   chunk.ground = groundBake.local(chunk.cx, chunk.cy);
-  chunk.groundOrigin = chunkPixelOrigin(chunk.cx, chunk.cy);
+  chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
 }
 
 function drawGround() {
@@ -91,8 +91,11 @@ function drawGround() {
     }
   }
 
-  for (const chunk of loadedChunks.values()) {
-    if (!chunk.ground) continue;
+  // От дальних чанков к ближним: сдвинутая рельефом земля ближнего перекрывает дальний.
+  const drawList = [];
+  for (const chunk of loadedChunks.values()) if (chunk.ground) drawList.push(chunk);
+  drawList.sort((p, q) => (p.cx + p.cy) - (q.cx + q.cy));
+  for (const chunk of drawList) {
     const x = chunk.groundOrigin.x - camX;
     const y = chunk.groundOrigin.y - camY;
     if (x > W || y > H || x + chunk.ground.width < 0 || y + chunk.ground.height < 0) continue;
@@ -138,7 +141,7 @@ function render() {
   renderQueue.forEach(item => {
     if (item.isRock) {
       const o = item.obj;
-      const pos = toScreen(o.x, o.y);
+      const pos = toScreen(o.x, o.y, heightOf(o));
       const d = ROCK_DRAW * (o.scale || 1);
       if (pos.x < -d || pos.x > view.w + d || pos.y < -d || pos.y > view.h + d) return;
       const sp = rockSprites[o.type];
@@ -155,11 +158,11 @@ function render() {
     } else if (item.isPuff) {
       drawPuff(ctx, item.obj);
     } else if (item.isPlayer) {
-      const pos = toScreen(player.x, player.y);
+      const pos = toScreen(player.x, player.y, player.h);
       drawCharacter(ctx, pos.x, pos.y);
     } else if (item.isClutter) {
       const obj = item.obj;
-      const pos = toScreen(obj.x, obj.y);
+      const pos = toScreen(obj.x, obj.y, heightOf(obj));
       if (pos.x < -100 || pos.x > view.w + 100 || pos.y < -120 || pos.y > view.h + 100) return;
 
       const def = CLUTTER_TYPES[obj.kind];
@@ -182,7 +185,7 @@ function render() {
 
     } else {
       const obj = item.obj;
-      const pos = toScreen(obj.x, obj.y);
+      const pos = toScreen(obj.x, obj.y, heightOf(obj));
       const scale = obj.scale || 1.0;
       const dw = TREE_DRAW_W * scale;
       const dh = TREE_DRAW_H * scale;
@@ -197,7 +200,7 @@ function render() {
         // Дерево ближе к камере, чем боец, и его крона накрывает бойца на
         // экране — «прозрачное окошко» вокруг бойца, чтобы его форма и
         // оружие оставались видны (как в играх с таким видом сверху).
-        const pp = toScreen(player.x, player.y);
+        const pp = toScreen(player.x, player.y, player.h);
         const covers = (obj.x + obj.y) > (player.x + player.y) + 0.05 &&
           pp.x > left + dw * 0.12 && pp.x < left + dw * 0.88 &&
           pp.y - 35 > top && pp.y < pos.y + 6;
