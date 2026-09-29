@@ -45,12 +45,14 @@ function selectFireStyle(n) {
   document.getElementById('style-name').textContent = FIRE_STYLE_NAMES[n];
 }
 selectFireStyle(fireStyle);
+document.getElementById('zombie-btn').addEventListener('click', () => spawnZombie());
 document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
 
 window.addEventListener('touchstart', (e) => {
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
+    if (t.target.closest && t.target.closest('#zombie-btn')) { spawnZombie(); continue; }
     const sb = t.target.closest && t.target.closest('.style-btn');
     if (sb) { selectFireStyle(Number(sb.dataset.style)); continue; }
     if (fireBtn.contains(t.target)) {

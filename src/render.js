@@ -107,6 +107,7 @@ function render() {
   ctx.clearRect(0, 0, view.w, view.h);
   const renderQueue = [];
   drawGround();
+  drawBloodDecals(ctx);
   drawCasings(ctx);
 
   for (const [, chunk] of loadedChunks.entries()) {
@@ -125,11 +126,14 @@ function render() {
   for (const b of weapon.bullets) renderQueue.push({ isBullet: true, obj: b, depth: b.x + b.y });
   for (const p of weapon.puffs) renderQueue.push({ isPuff: true, obj: p, depth: p.x + p.y });
 
+  for (const z of zombies) renderQueue.push({ isZombie: true, obj: z, depth: z.x + z.y });
   renderQueue.push({ isPlayer: true, obj: player, depth: player.x + player.y });
   renderQueue.sort((a, b) => a.depth - b.depth);
 
   renderQueue.forEach(item => {
-    if (item.isBullet) {
+    if (item.isZombie) {
+      drawZombie(ctx, item.obj);
+    } else if (item.isBullet) {
       drawBullet(ctx, item.obj);
     } else if (item.isPuff) {
       drawPuff(ctx, item.obj);

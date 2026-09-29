@@ -54,9 +54,12 @@ function updateWeapon(dt) {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
     b.age += dt;
+    b.px = b.x; b.py = b.y;           // прошлое положение: попадание ищем по отрезку
     b.x += b.dx * BULLET_SPEED * dt;
     b.y += b.dy * BULLET_SPEED * dt;
-    if (bulletHitsTree(b)) {
+    if (typeof bulletHitsZombie === 'function' && bulletHitsZombie(b)) {
+      bullets.splice(i, 1);
+    } else if (bulletHitsTree(b)) {
       spawnImpact(b.x, b.y, b.lift, true);
       bullets.splice(i, 1);
     } else if (b.age > BULLET_LIFE) {
@@ -234,9 +237,9 @@ function drawPuff(ctx, p) {
   const s = toScreen(p.x, p.y);
   const t = p.age / p.life;
   ctx.save();
-  if (p.kind === 'chip') {
+  if (p.kind === 'chip' || p.kind === 'blood') {
     ctx.globalAlpha = 1 - t;
-    ctx.fillStyle = '#6b5236';
+    ctx.fillStyle = p.kind === 'blood' ? '#7a0a0a' : '#6b5236';
     ctx.fillRect(s.x - p.size / 2, s.y - p.z - p.size / 2, p.size, p.size);
   } else {
     const r = p.size * (1 + t * 2.5);

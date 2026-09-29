@@ -68,6 +68,7 @@ function update(dt) {
   camera.y = (player.x + player.y) * (TILE_H / 2);
 
   updateWeapon(dt);
+  if (typeof updateZombies === 'function') updateZombies(dt);
   updateWorldChunks();
 }
 

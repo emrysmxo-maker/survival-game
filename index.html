@@ -27,6 +27,8 @@
       <span style="font-size: 8px; color: #2ecc71;">ЭКОЛОГИЯ</span>
     </div>
 
+    <div id="zombie-btn">ЗОМБИ +</div>
+
     <div id="style-bar">
       <div class="style-title">Стрельба:</div>
       <div class="style-grid"><div class="style-btn" data-style="1">1</div><div class="style-btn" data-style="2">2</div><div class="style-btn" data-style="3">3</div><div class="style-btn" data-style="4">4</div><div class="style-btn" data-style="5">5</div><div class="style-btn" data-style="6">6</div><div class="style-btn" data-style="7">7</div><div class="style-btn" data-style="8">8</div><div class="style-btn" data-style="9">9</div><div class="style-btn" data-style="10">10</div></div>
@@ -54,7 +56,7 @@
     // main запускает игровой цикл и должен идти последним.
     // document.write гарантирует, что скрипты подключатся и выполнятся
     // строго по порядку, как обычные <script> теги.
-    ['ground', 'config', 'assets', 'character', 'world', 'player', 'weapon', 'input', 'render', 'main'].forEach((name) => {
+    ['ground', 'config', 'assets', 'character', 'world', 'player', 'weapon', 'zombie', 'input', 'render', 'main'].forEach((name) => {
       document.write(`<script src="src/${name}.js?v=${window.BUILD_VERSION}"><\/script>`);
     });
   </script>

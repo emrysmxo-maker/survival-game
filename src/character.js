@@ -91,6 +91,18 @@ const FIRE_STYLE_NAMES = FIRE_STYLES.map((st) => (st ? st.name : ''));
 const BODY_TURN_RATE = 5.5;
 const DEG = Math.PI / 180;
 
+// Экранный угол (как у джойстика) -> поворот 3D-модели вокруг вертикали.
+// Камера смотрит под наклоном CAMERA_ELEV: по вертикали экрана земля
+// сжата в sin(наклона) раз, поэтому экранный угол нельзя брать как есть —
+// иначе боец смотрит (и стреляет) на ~10° мимо цели. Модель при yaw=0
+// смотрит на +Z (вниз экрана).
+function screenAngleToYaw(a) {
+  return Math.atan2(Math.cos(a), Math.sin(a) / Math.sin(CAMERA_ELEV));
+}
+function yawToScreenAngle(yaw) {
+  return Math.atan2(Math.cos(yaw) * Math.sin(CAMERA_ELEV), Math.sin(yaw));
+}
+
 function wrapAngle(a) {
   while (a < -Math.PI) a += Math.PI * 2;
   while (a > Math.PI) a -= Math.PI * 2;
@@ -358,7 +370,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
   // Модель смотрит на +Z (вниз экрана) при rotation.y = 0.
   // При движении вверх (angle = -PI/2): atan2(cos, sin) = atan2(0, -1) = PI (смотрит вверх).
   // При движении вниз (angle = PI/2): atan2(cos, sin) = atan2(0, 1) = 0 (смотрит вниз).
-  const targetYaw = Math.atan2(Math.cos(angle), Math.sin(angle));
+  const targetYaw = screenAngleToYaw(angle);
   // Прицел (см. FIRE_STYLES). Ствол поворачивается к цели плавно,
   // с ограниченной скоростью. Ноги — строго по движению (вперёд или назад).
   const firingNow = typeof weapon !== 'undefined' && weapon.firing;
@@ -371,7 +383,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
   // Хочет ли игрок идти (джойстик), даже если стиль его сейчас остановил.
   const wantsMove = isMoving || (typeof joystick !== 'undefined' && joystick.active && (joystick.dx !== 0 || joystick.dy !== 0));
   if (firingNow) {
-    const wantYaw = Math.atan2(Math.cos(weapon.aimAngle), Math.sin(weapon.aimAngle));
+    const wantYaw = screenAngleToYaw(weapon.aimAngle);
     if (charAimWorld === null) charAimWorld = charYaw + charAimLocal;
     charAimWorld = wrapAngle(turnToward(charAimWorld, wantYaw, st.turn * DEG * dt));
     let rel = wrapAngle(charAimWorld - targetYaw);   // цель относительно направления бега
@@ -398,7 +410,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
     }
     charStopTurn = wantsMove && charMoveFactor === 0;
     if (charStopTurn) bodyYaw = charAimWorld;
-    if (!wantsMove && typeof player !== 'undefined') player.angle = Math.PI / 2 - charYaw;
+    if (!wantsMove && typeof player !== 'undefined') player.angle = yawToScreenAngle(charYaw);
   } else {
     charAimWorld = null;
     charAimSide = 0;

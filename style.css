@@ -153,3 +153,17 @@
 #style-bar .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 #style-bar .style-btn { height: 30px; line-height: 30px; font-size: 13px; }
 #style-name { font-size: 10px; line-height: 1.2; }
+
+/* Кнопка вызова зомби (для теста) */
+#zombie-btn {
+  position: absolute;
+  left: 12px;
+  top: 150px;
+  padding: 9px 12px;
+  font: bold 13px sans-serif;
+  color: #fff;
+  background: rgba(120, 20, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  pointer-events: auto;
+}
