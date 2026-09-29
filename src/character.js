@@ -317,7 +317,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
       const act = charActions[clip];
       if (act) {
         const ts = mps / (charIsRunning ? RUN_CLIP_MPS : WALK_CLIP_MPS);
-        act.setEffectiveTimeScale(Math.min(charIsRunning ? 1.6 : 1.7, Math.max(charIsRunning ? 0.7 : 0.4, ts)));
+        act.setEffectiveTimeScale(Math.min(charIsRunning ? 2.0 : 1.7, Math.max(charIsRunning ? 0.7 : 0.4, ts)));
       }
       charMixer.update(dt);
     } else if (proceduralSoldier) {
