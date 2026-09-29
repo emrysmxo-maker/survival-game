@@ -367,6 +367,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
   // Рендер 3D-персонажа в закадровый холст
   if (charRenderer && charScene && charCamera) {
     charRenderer.render(charScene, charCamera);
+    updateMuzzleScreen();
   }
 }
 
@@ -488,29 +489,28 @@ function loadRifle() {
     });
     rifleRig.add(model);
 
-    // Вспышка выстрела на дульном срезе: две пересекающиеся светящиеся плоскости.
-    const fc = document.createElement('canvas');
-    fc.width = fc.height = 64;
-    const fg = fc.getContext('2d');
-    const grad = fg.createRadialGradient(32, 32, 2, 32, 32, 30);
-    grad.addColorStop(0, 'rgba(255,250,220,1)');
-    grad.addColorStop(0.35, 'rgba(255,190,80,0.85)');
-    grad.addColorStop(1, 'rgba(255,120,20,0)');
-    fg.fillStyle = grad;
-    fg.fillRect(0, 0, 64, 64);
-    const fmat = new THREE.MeshBasicMaterial({
-      map: new THREE.CanvasTexture(fc), transparent: true,
-      blending: THREE.NormalBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide
+    // Вспышка выстрела: короткий вытянутый вперёд язычок пламени с рваными
+    // лучами (как на замедленной съёмке), а не круглый шар. Две плоскости
+    // вдоль ствола (горизонтальная и вертикальная) + маленькая «звезда»
+    // поперёк ствола. Каждый выстрел — случайный поворот и размер.
+    const mk = (canvas) => new THREE.MeshBasicMaterial({
+      map: new THREE.CanvasTexture(canvas), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
+      side: THREE.DoubleSide
     });
+    const sideMat = mk(makeFlashSideCanvas());
+    const starMat = mk(makeFlashStarCanvas());
     muzzleFlash = new THREE.Group();
-    const p1 = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), fmat);
-    const p2 = p1.clone();
-    p2.rotation.z = Math.PI / 2;
-    const p3 = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), fmat);
-    p3.rotation.y = Math.PI / 2;
-    muzzleFlash.add(p1, p2, p3);
+    const sideGeo = new THREE.PlaneGeometry(0.42, 0.16);
+    sideGeo.translate(0.21, 0, 0); // начало язычка — у дульного среза
+    const flatH = new THREE.Mesh(sideGeo, sideMat);
+    flatH.rotation.set(-Math.PI / 2, 0, -Math.PI / 2); // лежит вдоль +Z
+    const flatV = new THREE.Mesh(sideGeo, sideMat);
+    flatV.rotation.set(0, -Math.PI / 2, 0);             // стоит вдоль +Z
+    const star = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.17), starMat);
+    muzzleFlash.add(flatH, flatV, star);
+    muzzleFlash.userData.star = star;
     muzzleFlash.position.copy(RIFLE_MUZZLE);
-    muzzleFlash.position.z += 0.02;
     muzzleFlash.visible = false;
     rifleRig.add(muzzleFlash);
 
@@ -521,7 +521,135 @@ function loadRifle() {
 // Вызывается из weapon.js при каждом выстреле: отдача и вспышка.
 function characterShotFired() {
   charRecoil = 1;
-  charFlashT = 0.05;
+  charFlashT = 0.035; // 1–2 кадра, как у настоящей вспышки
+  if (muzzleFlash) {
+    const k = 0.75 + Math.random() * 0.5;
+    muzzleFlash.scale.set(k, k, 0.7 + Math.random() * 0.6);
+    muzzleFlash.rotation.z = Math.random() * Math.PI;
+    muzzleFlash.userData.star.rotation.z = Math.random() * Math.PI;
+  }
+}
+
+// Текстура язычка пламени сбоку: яркое ядро у дула, дальше рваные лучи.
+function makeFlashSideCanvas() {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 48;
+  const g = c.getContext('2d');
+  const core = g.createRadialGradient(10, 24, 1, 10, 24, 22);
+  core.addColorStop(0, 'rgba(255,255,235,1)');
+  core.addColorStop(0.4, 'rgba(255,215,120,0.8)');
+  core.addColorStop(1, 'rgba(255,140,40,0)');
+  g.fillStyle = core;
+  g.fillRect(0, 0, 40, 48);
+  for (let i = 0; i < 7; i++) {
+    const len = 50 + Math.random() * 70;
+    const off = (Math.random() - 0.5) * 16;
+    const w = 2 + Math.random() * 4;
+    const lg = g.createLinearGradient(8, 0, 8 + len, 0);
+    lg.addColorStop(0, 'rgba(255,245,200,0.9)');
+    lg.addColorStop(0.5, 'rgba(255,170,60,0.55)');
+    lg.addColorStop(1, 'rgba(255,110,20,0)');
+    g.fillStyle = lg;
+    g.beginPath();
+    g.moveTo(8, 24 - w);
+    g.lineTo(8 + len, 24 + off);
+    g.lineTo(8, 24 + w);
+    g.closePath();
+    g.fill();
+  }
+  return c;
+}
+
+// Текстура вспышки поперёк ствола: маленькая пятилучевая звезда.
+function makeFlashStarCanvas() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.translate(32, 32);
+  for (let i = 0; i < 5; i++) {
+    g.rotate(Math.PI * 2 / 5 + (Math.random() - 0.5) * 0.4);
+    const len = 18 + Math.random() * 12;
+    const lg = g.createLinearGradient(0, 0, len, 0);
+    lg.addColorStop(0, 'rgba(255,245,210,1)');
+    lg.addColorStop(1, 'rgba(255,140,40,0)');
+    g.fillStyle = lg;
+    g.beginPath();
+    g.moveTo(0, -3);
+    g.lineTo(len, 0);
+    g.lineTo(0, 3);
+    g.fill();
+  }
+  const core = g.createRadialGradient(0, 0, 0, 0, 0, 8);
+  core.addColorStop(0, 'rgba(255,255,240,1)');
+  core.addColorStop(1, 'rgba(255,200,100,0)');
+  g.fillStyle = core;
+  g.fillRect(-8, -8, 16, 16);
+  return c;
+}
+
+// Где на экране дульный срез и окно выброса гильз — считаем по настоящей
+// 3D-модели после отрисовки кадра, чтобы пули и гильзы вылетали из
+// автомата, а не из тела. Значения — смещения от точки игрока на земле:
+// gx/gy — в тайлах мира (проекция точки на землю), lift — высота над
+// землёй в экранных пикселях, dirX/dirY — куда смотрит ствол по земле,
+// sideX/sideY — куда вылетают гильзы (вправо от ствола).
+const RIFLE_PORT = new THREE.Vector3(0.02, 0.03, -0.02);
+const charMuzzle = { ok: false, gx: 0, gy: 0, lift: 30, dirX: 1, dirY: 0 };
+const charPort = { ok: false, gx: 0, gy: 0, lift: 30, sideX: 0, sideY: 1 };
+
+function screenOffsetOf(v3) {
+  const p = v3.clone().project(charCamera);
+  return {
+    x: (p.x + 1) / 2 * CHARACTER_DRAW_W - CHARACTER_DRAW_W / 2,
+    y: (1 - p.y) / 2 * CHARACTER_DRAW_H - CHARACTER_DRAW_H * CHARACTER_BASE_FRAC
+  };
+}
+
+// Экранное смещение (px) -> смещение по земле мира (тайлы): обратная
+// изометрическая проекция toScreen().
+function screenToWorldDelta(sx, sy) {
+  const a = sx / (TILE_W / 2), b = sy / (TILE_H / 2);
+  return { x: (a + b) / 2, y: (b - a) / 2 };
+}
+
+// Точка автомата -> положение на земле (тайлы) и высота над ней (px).
+function locateOnScreen(localPoint, out) {
+  const w = rifleRig.localToWorld(localPoint.clone());
+  const top = screenOffsetOf(w);
+  const ground = screenOffsetOf(new THREE.Vector3(w.x, 0, w.z));
+  const d = screenToWorldDelta(ground.x, ground.y);
+  out.gx = d.x;
+  out.gy = d.y;
+  out.lift = ground.y - top.y;
+  return w;
+}
+
+// Направление по земле мира от точки автомата вдоль локального вектора.
+function groundDirOf(localPoint, localDir) {
+  const a = rifleRig.localToWorld(localPoint.clone());
+  const b = rifleRig.localToWorld(localPoint.clone().add(localDir));
+  const s0 = screenOffsetOf(new THREE.Vector3(a.x, 0, a.z));
+  const s1 = screenOffsetOf(new THREE.Vector3(b.x, 0, b.z));
+  const d = screenToWorldDelta(s1.x - s0.x, s1.y - s0.y);
+  const l = Math.hypot(d.x, d.y);
+  return l > 1e-4 ? { x: d.x / l, y: d.y / l } : null;
+}
+
+function updateMuzzleScreen() {
+  if (!rifleRig || !charCamera) { charMuzzle.ok = charPort.ok = false; return; }
+  rifleRig.updateMatrixWorld(true);
+  locateOnScreen(RIFLE_MUZZLE, charMuzzle);
+  const fwd = groundDirOf(RIFLE_MUZZLE, new THREE.Vector3(0, 0, 1));
+  if (fwd) { charMuzzle.dirX = fwd.x; charMuzzle.dirY = fwd.y; }
+  charMuzzle.ok = true;
+
+  locateOnScreen(RIFLE_PORT, charPort);
+  // Окно выброса у этой (AR-подобной) винтовки справа: в модели,
+  // повёрнутой на 180°, «право» — это локальный -X.
+  const side = groundDirOf(RIFLE_PORT, new THREE.Vector3(-1, 0, 0));
+  if (side) { charPort.sideX = side.x; charPort.sideY = side.y; }
+  charPort.ok = true;
 }
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();

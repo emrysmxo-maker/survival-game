@@ -107,6 +107,7 @@ function render() {
   ctx.clearRect(0, 0, view.w, view.h);
   const renderQueue = [];
   drawGround();
+  drawCasings(ctx);
 
   for (const [, chunk] of loadedChunks.entries()) {
     // Лесной мусор (пни, сломанные стволы, камни)
