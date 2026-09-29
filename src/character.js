@@ -5,6 +5,8 @@
 
 const CHARACTER_DRAW_W = 78;
 const CHARACTER_DRAW_H = 78;
+// Доля высоты до подошв берцев в 3D (ортографическая камера, frustum 2.4, y=0)
+const CHARACTER_BASE_FRAC = 0.8363;
 
 let charCanvas = null;
 let charRenderer = null;
@@ -122,14 +124,14 @@ function createProceduralSoldier() {
   goggles.position.set(0, 1.39, 0.02);
   group.add(goggles);
 
-  // Ноги (с суставами для ходьбы и бега)
+  // Ноги (с суставами для ходьбы и бега, подошва на уровне земли Y = 0.00)
   const leftLeg = new THREE.Group();
   leftLeg.position.set(-0.10, 0.70, 0);
   const leftPants = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.50, 0.16), matPants);
   leftPants.position.y = -0.25;
   leftLeg.add(leftPants);
   const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.22), matBoots);
-  leftBoot.position.set(0, -0.56, 0.03);
+  leftBoot.position.set(0, -0.61, 0.03); // подошва на уровне земли Y = 0.00
   leftLeg.add(leftBoot);
   group.add(leftLeg);
 
@@ -139,7 +141,7 @@ function createProceduralSoldier() {
   rightPants.position.y = -0.25;
   rightLeg.add(rightPants);
   const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.22), matBoots);
-  rightBoot.position.set(0, -0.56, 0.03);
+  rightBoot.position.set(0, -0.61, 0.03); // подошва на уровне земли Y = 0.00
   rightLeg.add(rightBoot);
   group.add(rightLeg);
 
@@ -308,7 +310,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
       proceduralSoldier.rightLeg.rotation.x = 0;
       proceduralSoldier.leftArm.rotation.x = 0;
       proceduralSoldier.rightArm.rotation.x = 0;
-      proceduralSoldier.group.position.y = Math.sin(Date.now() * 0.003) * 0.015;
+      proceduralSoldier.group.position.y = 0; // ноги стоят ровно на земле, без подпрыгиваний
     }
   }
 
@@ -323,15 +325,9 @@ function drawCharacter(ctx, screenX, screenY) {
   const dw = CHARACTER_DRAW_W;
   const dh = CHARACTER_DRAW_H;
 
-  // Тень под ногами персонажа (согласована с увеличенным размером)
-  ctx.beginPath();
-  ctx.ellipse(screenX, screenY + 3, 20, 8, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.fill();
-
   if (is3DInitialized && charCanvas) {
-    // 3D-боец из WebGL-холста (ноги привязаны к точке касания земли)
-    ctx.drawImage(charCanvas, screenX - dw / 2, screenY - dh + 6, dw, dh);
+    // Подошвы берцев 3D-бойца точно привязаны к уровню земли (screenY)
+    ctx.drawImage(charCanvas, screenX - dw / 2, screenY - Math.round(dh * CHARACTER_BASE_FRAC), dw, dh);
   } else {
     // Запасной 2D-рендер бойца в военной форме, если Three.js ещё не загрузился
     drawFallback2DSoldier(ctx, screenX, screenY, player.angle, player.isMoving);
@@ -341,7 +337,7 @@ function drawCharacter(ctx, screenX, screenY) {
 // Запасной 2D-солдат в военной форме (камуфляж, шлем, берцы, поворот всего тела)
 function drawFallback2DSoldier(ctx, screenX, screenY, angle, isMoving) {
   ctx.save();
-  ctx.translate(screenX, screenY - 20);
+  ctx.translate(screenX, screenY - 18); // подошвы берцев (6+12=18) касаются screenY
   // Вращаем всего бойца в сторону движения
   // По умолчанию фигура нарисована смотрящей вниз (angle = PI/2)
   ctx.rotate(angle - Math.PI / 2);

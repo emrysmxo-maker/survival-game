@@ -159,13 +159,6 @@ function render() {
       if (pos.x < -dw || pos.x > view.w + dw || pos.y < -20 || pos.y - dh > view.h) return;
 
       const sprite = obj.broken ? brokenTreeSprites[obj.type] : treeSprites[obj.type];
-      const shadow = obj.broken ? 0.45 : 1; // без кроны тень маленькая
-
-      // Тень — вокруг основания ствола, чуть вправо-вниз (свет сверху-слева).
-      ctx.beginPath();
-      ctx.ellipse(pos.x + 6 * scale * shadow, pos.y + 2, 34 * scale * shadow, 13 * scale * shadow, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
-      ctx.fill();
 
       // В картинке дерева основание ствола стоит ровно по центру на 95% высоты
       // (так нарезаны assets/trees) — ставим эту точку в точку дерева на карте.
