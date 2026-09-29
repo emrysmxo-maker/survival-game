@@ -21,7 +21,9 @@ let charIsRunning = false;
 const CHARACTER_DRAW_W = 78;
 const CHARACTER_DRAW_H = 78;
 // Доля высоты до подошв берцев в 3D (ортографическая камера, frustum 2.4, y=0)
-const CHARACTER_BASE_FRAC = 0.8363;
+// Точка земли под ногами в холсте бойца: центр кадра — точка (0, 0.85 м, 0),
+// земля на 0.85·cos(наклона) ниже, в кадре высотой 2.4 м (+0.02 — подошвы).
+const CHARACTER_BASE_FRAC = 0.5 + 0.85 * Math.cos(CAMERA_ELEV) / 2.4 + 0.0197;
 
 let charCanvas = null;
 let charRenderer = null;
@@ -73,7 +75,8 @@ function init3DCharacter() {
       frustum / 2, -frustum / 2,
       0.1, 50
     );
-    charCamera.position.set(0, 2.5, 5.0);
+    // Камера смотрит под тем же углом, что и земля (CAMERA_ELEV из ground.js).
+    charCamera.position.set(0, 5.6 * Math.sin(CAMERA_ELEV), 5.6 * Math.cos(CAMERA_ELEV));
     charCamera.lookAt(0, 0.85, 0);
 
     // Освещение: свет сверху-слева (согласован с деревьями и тенями мира)
