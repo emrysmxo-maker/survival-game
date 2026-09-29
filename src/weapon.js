@@ -7,9 +7,10 @@
 // (charMuzzle / charPort), а тут пуля стартует ровно оттуда.
 
 const FIRE_INTERVAL = 0.11;   // с между выстрелами (~540 выстр/мин, как у штурмового карабина)
-const BULLET_SPEED = 45;      // тайлов/с (настоящая пуля ещё быстрее, но так видно трассер)
-const BULLET_LIFE = 0.45;     // с полёта (~20 тайлов)
+const BULLET_SPEED = 30;      // тайлов/с (настоящая пуля быстрее, но так глаз успевает увидеть трассер)
+const BULLET_LIFE = 0.55;     // с полёта (~16 тайлов)
 const BULLET_SPREAD = 0.02;   // рад, разброс
+const TRACER_LEN_PX = 34;     // длина светящегося следа пули на экране
 const BULLET_HIT_R = 0.28;    // тайлов: пуля, попавшая в ствол дерева, гасится
 const WEAPON_WALK_FACTOR = 0.6; // при стрельбе боец идёт медленнее (шагом)
 
@@ -193,18 +194,27 @@ function drawBullets(ctx) {
   ctx.save();
   ctx.lineCap = 'round';
   for (const b of weapon.bullets) {
-    // Не рисуем хвост «за дулом»: он начинается не раньше точки выстрела.
-    const back = Math.min(0.9, Math.hypot(b.x - b.sx, b.y - b.sy));
+    // Длина следа берётся в ЭКРАННЫХ пикселях, а не в тайлах: по вертикали
+    // экрана тайл вдвое короче, и при стрельбе вниз/вверх след раньше
+    // сжимался в едва заметную точку.
     const head = toScreen(b.x, b.y);
-    const tail = toScreen(b.x - b.dx * back, b.y - b.dy * back);
-    const g = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
-    g.addColorStop(0, 'rgba(255, 240, 200, 0)');
-    g.addColorStop(1, 'rgba(255, 245, 215, 0.55)');
+    const flown = toScreen(b.sx, b.sy);
+    const hx = head.x - flown.x, hy = head.y - flown.y;
+    const flownPx = Math.hypot(hx, hy);
+    if (flownPx < 1) continue;
+    const ux = hx / flownPx, uy = hy / flownPx;
+    const len = Math.min(TRACER_LEN_PX, flownPx);
+    const tx = head.x - ux * len, ty = head.y - uy * len;
+    const y0 = b.lift;
+    const g = ctx.createLinearGradient(tx, ty - y0, head.x, head.y - y0);
+    g.addColorStop(0, 'rgba(255, 210, 120, 0)');
+    g.addColorStop(0.7, 'rgba(255, 225, 150, 0.55)');
+    g.addColorStop(1, 'rgba(255, 250, 225, 0.95)');
     ctx.strokeStyle = g;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(tail.x, tail.y - b.lift);
-    ctx.lineTo(head.x, head.y - b.lift);
+    ctx.moveTo(tx, ty - y0);
+    ctx.lineTo(head.x, head.y - y0);
     ctx.stroke();
   }
 
