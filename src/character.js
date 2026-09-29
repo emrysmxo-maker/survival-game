@@ -51,6 +51,8 @@ let charFlashT = 0;
 // корпус доворачивается до ±57°, дальше — руки выносят автомат вбок/назад.
 // charBackFire: 0 — обычная стрельба, 1 — стрельба назад от бедра на бегу.
 let charAimLocal = 0;
+let charHipOffset = 0;  // доворот бёдер к цели при стрельбе на бегу (рад)
+let charAimSide = 0;    // через какое плечо целимся назад (-1/1), чтобы не дёргало
 let charBackFire = 0;
 
 // Инициализация Three.js и персонажа
@@ -310,24 +312,43 @@ function updateCharacter(dt, isMoving, angle, speed) {
   // При движении вверх (angle = -PI/2): atan2(cos, sin) = atan2(0, -1) = PI (смотрит вверх).
   // При движении вниз (angle = PI/2): atan2(cos, sin) = atan2(0, 1) = 0 (смотрит вниз).
   const targetYaw = Math.atan2(Math.cos(angle), Math.sin(angle));
-  // Прицел: угол между ногами (куда бежим) и направлением стрельбы.
+  // Прицел. Как у живого человека, стреляющего назад на бегу: ноги бегут
+  // вперёд, бёдра доворачиваются к цели частично (до ~63°), остальное —
+  // скручивание корпуса (до ~69°) и руки с автоматом у плеча.
   const firingNow = typeof weapon !== 'undefined' && weapon.firing;
+  let bodyYaw = targetYaw;
+  let relMove = 0;
   if (firingNow) {
     const aimYaw = Math.atan2(Math.cos(weapon.aimAngle), Math.sin(weapon.aimAngle));
-    let rel = aimYaw - charYaw;
+    relMove = aimYaw - targetYaw;
+    while (relMove < -Math.PI) relMove += Math.PI * 2;
+    while (relMove > Math.PI) relMove -= Math.PI * 2;
+    // Строго назад: не перескакивать между «через левое» и «через правое» плечо.
+    if (Math.abs(relMove) > 2.8 && charAimSide !== 0 && Math.sign(relMove) !== charAimSide) {
+      relMove = charAimSide * Math.PI;
+    }
+    if (Math.abs(relMove) > 0.2) charAimSide = Math.sign(relMove);
+    if (isMoving) {
+      const hip = Math.sign(relMove) * Math.min(Math.abs(relMove) * 0.35, 1.1);
+      charHipOffset += (hip - charHipOffset) * Math.min(1, 10 * dt);
+    } else {
+      charHipOffset += (0 - charHipOffset) * Math.min(1, 10 * dt);
+    }
+    bodyYaw = targetYaw + charHipOffset;
+    // угол прицела относительно корпуса (бёдер)
+    let rel = aimYaw - (charYaw);
     while (rel < -Math.PI) rel += Math.PI * 2;
     while (rel > Math.PI) rel -= Math.PI * 2;
-    // Строго назад: не перескакивать между «через левое» и «через правое» плечо.
-    if (Math.abs(rel) > 2.9 && Math.abs(charAimLocal) > 1.5 && Math.sign(rel) !== Math.sign(charAimLocal)) {
-      rel = Math.sign(charAimLocal) * Math.PI * 0.98;
-    }
+    if (Math.abs(rel) > 2.8 && Math.sign(rel) !== charAimSide) rel = charAimSide * Math.PI;
     charAimLocal += (rel - charAimLocal) * Math.min(1, 14 * dt);
   } else {
+    charHipOffset += (0 - charHipOffset) * Math.min(1, 10 * dt);
     charAimLocal += (0 - charAimLocal) * Math.min(1, 10 * dt);
+    charAimSide = 0;
   }
-  const a = Math.abs(charAimLocal);
-  charBackFire = Math.max(0, Math.min(1, (a - 1.55) / 0.55)); // от ~90° до ~120°
-  let diff = targetYaw - charYaw;
+  // 0 — стреляет вперёд/вбок, 1 — назад (от ~100° до ~150° от направления бега)
+  charBackFire = firingNow && isMoving ? Math.max(0, Math.min(1, (Math.abs(relMove) - 1.75) / 0.85)) : 0;
+  let diff = bodyYaw - charYaw;
   while (diff < -Math.PI) diff += Math.PI * 2;
   while (diff > Math.PI) diff -= Math.PI * 2;
   charYaw += diff * Math.min(1, 24 * dt);
@@ -744,30 +765,28 @@ function applyRiflePose(dt, wantAim) {
   const chest = soldierRoot.worldToLocal(B.Spine2.getWorldPosition(_v1.clone()));
   const sideR = Math.sign(soldierRoot.worldToLocal(B.RightArm.getWorldPosition(_v2.clone())).x) || 1;
 
-  // Поворот корпуса к цели: три позвонка делят доворот до ±57°.
-  const twist = Math.max(-1.0, Math.min(1.0, charAimLocal));
+  // Поворот корпуса к цели: три позвонка делят скручивание до ±69°.
+  const twist = Math.max(-1.2, Math.min(1.2, charAimLocal));
   B.Spine.rotateY(twist * 0.3);
   if (B.Spine1) B.Spine1.rotateY(twist * 0.35);
   B.Spine2.rotateY(twist * 0.35);
   soldierRoot.updateMatrixWorld(true);
   const chest2 = soldierRoot.worldToLocal(B.Spine2.getWorldPosition(new THREE.Vector3()));
 
-  // Позы (в системе бойца, относительно груди): готовность и стрельба.
-  // Всё поворачиваем на угол прицела вокруг груди. Стрельба назад (bf):
-  // автомат ниже, у бедра, вынесен вбок, чуть стволом вниз — так человек
-  // на бегу отстреливается назад через плечо.
+  // Позы (в системе бойца, относительно груди): «наготове» и «к плечу».
+  // Автомат поворачиваем вокруг груди на угол прицела — всегда в обеих
+  // руках у плеча. При стрельбе назад на бегу чуть ниже и с сильной отдачей.
   const k = charAimBlend;
   const bf = charBackFire;
-  const cx = sideR * (0.05 + 0.04 * k) * (1 - bf);
-  const cy = -0.21 + 0.31 * k - 0.2 * bf;
-  const cz = (0.26 + 0.07 * k - 0.035 * charRecoil) * (1 - 0.35 * bf);
+  const cx = sideR * (0.05 + 0.04 * k);
+  const cy = -0.21 + 0.31 * k - 0.05 * bf;
+  const cz = 0.26 + 0.07 * k - 0.035 * charRecoil * (1 + bf);
   const ay = charAimLocal;
-  const lateral = Math.sign(Math.sin(ay) || ay || 1) * 0.24 * bf;
-  const px = cx * Math.cos(ay) + cz * Math.sin(ay) + lateral * Math.cos(ay);
-  const pz = -cx * Math.sin(ay) + cz * Math.cos(ay) - lateral * Math.sin(ay);
+  const px = cx * Math.cos(ay) + cz * Math.sin(ay);
+  const pz = -cx * Math.sin(ay) + cz * Math.cos(ay);
   rifleRig.position.set(chest2.x + px, chest2.y + cy, chest2.z + pz);
-  const pitch = 0.42 * (1 - k) - 0.03 * charRecoil * (1 + 2 * bf) + 0.12 * bf; // + = ствол вниз
-  const yaw = -sideR * 0.22 * (1 - k) * (1 - bf) + ay;
+  const pitch = 0.42 * (1 - k) - 0.03 * charRecoil * (1 + 1.5 * bf) + 0.05 * bf; // + = ствол вниз
+  const yaw = -sideR * 0.22 * (1 - k) + ay;
   rifleRig.rotation.set(pitch, yaw, 0, 'YXZ');
   rifleRig.updateMatrixWorld(true);
 
@@ -780,7 +799,5 @@ function applyRiflePose(dt, wantAim) {
     .add(soldierRoot.localToWorld(new THREE.Vector3(-sideR * 0.5, -1, -0.3)).sub(soldierRoot.localToWorld(new THREE.Vector3())));
 
   solveArmIK(B.RightArm, B.RightForeArm, B.RightHand, gripW, poleR);
-  // Назад одной рукой: левая рука не тянется к цевью (не достанет) —
-  // остаётся как в анимации бега.
-  if (bf < 0.5) solveArmIK(B.LeftArm, B.LeftForeArm, B.LeftHand, guardW, poleL);
+  solveArmIK(B.LeftArm, B.LeftForeArm, B.LeftHand, guardW, poleL);
 }
