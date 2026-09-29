@@ -148,3 +148,8 @@
 }
 .style-btn.active { background: rgba(46, 204, 113, 0.75); }
 #style-name { font: 10px sans-serif; color: #f1c40f; text-align: center; }
+
+#style-bar { width: 84px; }
+#style-bar .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+#style-bar .style-btn { height: 30px; line-height: 30px; font-size: 13px; }
+#style-name { font-size: 10px; line-height: 1.2; }
