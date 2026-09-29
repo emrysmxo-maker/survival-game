@@ -23,6 +23,7 @@ const FIRE_AIM_RADIUS = 40;   // px — насколько далеко увод
 const FIRE_AIM_DEAD = 12;     // px — меньше этого считаем «просто нажал»
 let fireCX = 0, fireCY = 0;
 function setFire(on) {
+  weapon.manualFire = on;
   weapon.firing = on;
   fireBtn.classList.toggle('pressed', on);
   if (on) weapon.aimAngle = player.angle;
@@ -46,6 +47,12 @@ function selectFireStyle(n) {
 }
 selectFireStyle(fireStyle);
 document.getElementById('zombie-btn').addEventListener('click', () => spawnZombie());
+// Автострельба: вкл/выкл. Сама цель и огонь — в weapon.js (updateAutoFire).
+function toggleAutoFire() {
+  weapon.auto = !weapon.auto;
+  document.getElementById('auto-btn').classList.toggle('on', weapon.auto);
+}
+document.getElementById('auto-btn').addEventListener('click', toggleAutoFire);
 document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
 
 window.addEventListener('touchstart', (e) => {
@@ -53,6 +60,7 @@ window.addEventListener('touchstart', (e) => {
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     if (t.target.closest && t.target.closest('#zombie-btn')) { spawnZombie(); continue; }
+    if (t.target.closest && t.target.closest('#auto-btn')) { toggleAutoFire(); continue; }
     const sb = t.target.closest && t.target.closest('.style-btn');
     if (sb) { selectFireStyle(Number(sb.dataset.style)); continue; }
     if (fireBtn.contains(t.target)) {

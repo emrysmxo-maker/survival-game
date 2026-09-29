@@ -21,6 +21,8 @@ const CASING_MAX = 80;
 
 const weapon = {
   firing: false,
+  manualFire: false, // игрок держит кнопку огня
+  auto: false,       // автострельба по зомби (кнопка «АВТО ОГОНЬ»)
   aimAngle: 0,   // экранный угол прицела (кнопка огня как стик)
   cooldown: 0,
   bullets: [],
@@ -41,11 +43,39 @@ function playerAimDir() {
   return { x: wx / l, y: wy / l };
 }
 
+// Автострельба: ближайший живой зомби в радиусе — боец сам поворачивается
+// к нему и стреляет. Держит кнопку огня игрок — управляет он (приоритет).
+const AUTO_FIRE_RANGE = 11;   // тайлов
+function updateAutoFire() {
+  if (!weapon.auto || weapon.manualFire) {
+    if (!weapon.manualFire) weapon.firing = false;
+    return;
+  }
+  let best = null, bd = AUTO_FIRE_RANGE;
+  if (typeof zombies !== 'undefined') {
+    for (const z of zombies) {
+      if (z.state === 'dead') continue;
+      const d = Math.hypot(z.x - player.x, z.y - player.y);
+      if (d < bd) { bd = d; best = z; }
+    }
+  }
+  if (!best) { weapon.firing = false; return; }
+  const dx = best.x - player.x, dy = best.y - player.y;
+  weapon.aimAngle = Math.atan2((dx + dy) * TILE_H / 2, (dx - dy) * TILE_W / 2);
+  weapon.firing = true;
+}
+
 function updateWeapon(dt) {
+  updateAutoFire();
   weapon.cooldown -= dt;
   // Стреляем, когда автомат поднят к плечу (см. charAimBlend в character.js).
   const ready = typeof charAimBlend === 'undefined' || charAimBlend > 0.75;
-  if (weapon.firing && ready && weapon.cooldown <= 0) {
+  // автострельба: не палить в воздух, пока ствол не довёрнут на цель (~10°)
+  let onTarget = true;
+  if (weapon.auto && !weapon.manualFire && typeof charAimWorld !== 'undefined' && charAimWorld !== null) {
+    onTarget = Math.abs(wrapAngle(charAimWorld - screenAngleToYaw(weapon.aimAngle))) < 0.18;
+  }
+  if (weapon.firing && ready && onTarget && weapon.cooldown <= 0) {
     shootBullet();
     weapon.cooldown = FIRE_INTERVAL;
   }

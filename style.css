@@ -167,3 +167,23 @@
   border-radius: 8px;
   pointer-events: auto;
 }
+
+/* Автострельба по зомби: над кнопкой огня */
+#auto-btn {
+  position: absolute;
+  right: 36px;
+  bottom: 166px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font: bold 11px/1.15 sans-serif;
+  color: #fff;
+  background: rgba(30, 30, 30, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  pointer-events: auto;
+}
+#auto-btn.on { background: rgba(220, 150, 30, 0.8); border-color: #fff; }
