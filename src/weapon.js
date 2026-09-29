@@ -188,52 +188,57 @@ function drawCasings(ctx) {
   }
 }
 
-// Трассер как в реальной съёмке: едва заметная тонкая светлая полоска,
-// короткая, без «лазеров». Плюс дым, пыль и щепки.
-function drawBullets(ctx) {
+// Трассеры, дым, щепки и пыль рисуются В ОБЩЕЙ ОЧЕРЕДИ с деревьями и бойцом
+// (render.js кладёт их в renderQueue по глубине x+y): пуля перед деревом
+// видна поверх него, а пуля за деревом скрыта кроной — как в жизни. Раньше
+// они рисовались поверх всего, и пуля «летела над деревом».
+//
+// Трассер как в реальной съёмке: тонкая светлая полоска, короткая, без
+// «лазеров».
+function drawBullet(ctx, b) {
+  // Длина следа берётся в ЭКРАННЫХ пикселях, а не в тайлах: по вертикали
+  // экрана тайл вдвое короче, и при стрельбе вниз/вверх след раньше
+  // сжимался в едва заметную точку.
+  const head = toScreen(b.x, b.y);
+  const flown = toScreen(b.sx, b.sy);
+  const hx = head.x - flown.x, hy = head.y - flown.y;
+  const flownPx = Math.hypot(hx, hy);
+  if (flownPx < 1) return;
+  const ux = hx / flownPx, uy = hy / flownPx;
+  const len = Math.min(TRACER_LEN_PX, flownPx);
+  const tx = head.x - ux * len, ty = head.y - uy * len;
+  const y0 = b.lift;
+  const g = ctx.createLinearGradient(tx, ty - y0, head.x, head.y - y0);
+  g.addColorStop(0, 'rgba(255, 210, 120, 0)');
+  g.addColorStop(0.7, 'rgba(255, 225, 150, 0.55)');
+  g.addColorStop(1, 'rgba(255, 250, 225, 0.95)');
   ctx.save();
   ctx.lineCap = 'round';
-  for (const b of weapon.bullets) {
-    // Длина следа берётся в ЭКРАННЫХ пикселях, а не в тайлах: по вертикали
-    // экрана тайл вдвое короче, и при стрельбе вниз/вверх след раньше
-    // сжимался в едва заметную точку.
-    const head = toScreen(b.x, b.y);
-    const flown = toScreen(b.sx, b.sy);
-    const hx = head.x - flown.x, hy = head.y - flown.y;
-    const flownPx = Math.hypot(hx, hy);
-    if (flownPx < 1) continue;
-    const ux = hx / flownPx, uy = hy / flownPx;
-    const len = Math.min(TRACER_LEN_PX, flownPx);
-    const tx = head.x - ux * len, ty = head.y - uy * len;
-    const y0 = b.lift;
-    const g = ctx.createLinearGradient(tx, ty - y0, head.x, head.y - y0);
-    g.addColorStop(0, 'rgba(255, 210, 120, 0)');
-    g.addColorStop(0.7, 'rgba(255, 225, 150, 0.55)');
-    g.addColorStop(1, 'rgba(255, 250, 225, 0.95)');
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(tx, ty - y0);
-    ctx.lineTo(head.x, head.y - y0);
-    ctx.stroke();
-  }
+  ctx.strokeStyle = g;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty - y0);
+  ctx.lineTo(head.x, head.y - y0);
+  ctx.stroke();
+  ctx.restore();
+}
 
-  for (const p of weapon.puffs) {
-    const s = toScreen(p.x, p.y);
-    const t = p.age / p.life;
-    if (p.kind === 'chip') {
-      ctx.globalAlpha = 1 - t;
-      ctx.fillStyle = '#6b5236';
-      ctx.fillRect(s.x - p.size / 2, s.y - p.z - p.size / 2, p.size, p.size);
-      continue;
-    }
+// Дымок у дула, щепки при попадании в дерево, пыль от пули в землю.
+function drawPuff(ctx, p) {
+  const s = toScreen(p.x, p.y);
+  const t = p.age / p.life;
+  ctx.save();
+  if (p.kind === 'chip') {
+    ctx.globalAlpha = 1 - t;
+    ctx.fillStyle = '#6b5236';
+    ctx.fillRect(s.x - p.size / 2, s.y - p.z - p.size / 2, p.size, p.size);
+  } else {
     const r = p.size * (1 + t * 2.5);
     const a = (p.kind === 'smoke' ? 0.22 : 0.3) * (1 - t);
     const col = p.kind === 'smoke' ? '200, 200, 195' : '150, 130, 100';
     const grad = ctx.createRadialGradient(s.x, s.y - p.z, 0, s.x, s.y - p.z, r);
     grad.addColorStop(0, `rgba(${col}, ${a})`);
     grad.addColorStop(1, `rgba(${col}, 0)`);
-    ctx.globalAlpha = 1;
     ctx.fillStyle = grad;
     ctx.fillRect(s.x - r, s.y - p.z - r, r * 2, r * 2);
   }

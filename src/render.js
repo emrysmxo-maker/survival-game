@@ -121,11 +121,19 @@ function render() {
     }
   }
 
+  // Пули и дым — в той же очереди по глубине: перед деревом видны, за ним скрыты.
+  for (const b of weapon.bullets) renderQueue.push({ isBullet: true, obj: b, depth: b.x + b.y });
+  for (const p of weapon.puffs) renderQueue.push({ isPuff: true, obj: p, depth: p.x + p.y });
+
   renderQueue.push({ isPlayer: true, obj: player, depth: player.x + player.y });
   renderQueue.sort((a, b) => a.depth - b.depth);
 
   renderQueue.forEach(item => {
-    if (item.isPlayer) {
+    if (item.isBullet) {
+      drawBullet(ctx, item.obj);
+    } else if (item.isPuff) {
+      drawPuff(ctx, item.obj);
+    } else if (item.isPlayer) {
       const pos = toScreen(player.x, player.y);
       drawCharacter(ctx, pos.x, pos.y);
     } else if (item.isClutter) {
@@ -168,8 +176,6 @@ function render() {
       }
     }
   });
-
-  drawBullets(ctx);
 
   // Сенсорный джойстик
   if (joystick.active) {
