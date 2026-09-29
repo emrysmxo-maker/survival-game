@@ -1,0 +1,251 @@
+{
+ "sh_00_pine": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_16_ponderosa_pine.glb",
+  "height": 14,
+  "maxW": 5.0,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_01_oak": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_12_oak_green.glb",
+  "height": 11,
+  "maxW": 5.2,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_02_birch": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_07_birch_cluster.glb",
+  "height": 12,
+  "maxW": 4.8,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_03_maple": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_10_red_maple.glb",
+  "height": 10.5,
+  "maxW": 5.2,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_04_deadwood": {
+  "preset": "Ash Medium",
+  "height": 9.5,
+  "seed": 13,
+  "maxW": 5.2,
+  "opts": {
+   "leaves.count": 0,
+   "bark.tint": 14209224,
+   "branch.radius.1": 1.1,
+   "branch.radius.2": 0.9,
+   "leaves.size": 0.01
+  },
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_05_bluespruce": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_02_colorado_blue_spruce.glb",
+  "height": 12,
+  "maxW": 4.6,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_06_willow": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_12_oak_green.glb",
+  "height": 10.5,
+  "maxW": 5.6,
+  "rot": 1.9,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_07_aspen": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_08_columnar_green.glb",
+  "height": 12,
+  "maxW": 4.4,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_08_rowan": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_14_autumn_rust.glb",
+  "height": 10,
+  "maxW": 5.0,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_09_cedar": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_22_black_spruce.glb",
+  "height": 14,
+  "maxW": 4.2,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_10_larch": {
+  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_43_sitka_spruce.glb",
+  "height": 14,
+  "maxW": 4.8,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "sh_11_linden": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_09_round_green.glb",
+  "height": 10.5,
+  "maxW": 5.0,
+  "shadowOnly": true,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "cw": 1000,
+  "ch": 700,
+  "top": 0.45,
+  "ox": 5.5
+ },
+ "rock_boulder_01": {
+  "glb": "rocks/boulder_01/boulder_01.gltf",
+  "height": 1.4,
+  "maxW": 2.2,
+  "cw": 260,
+  "ch": 220,
+  "top": 0.62,
+  "withShadow": 0.45,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "ox": 0.35
+ },
+ "rock_namaqualand_boulder_02": {
+  "glb": "rocks/namaqualand_boulder_02/namaqualand_boulder_02.gltf",
+  "height": 1.3,
+  "maxW": 2.2,
+  "cw": 260,
+  "ch": 220,
+  "top": 0.62,
+  "withShadow": 0.45,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "ox": 0.35
+ },
+ "rock_rock_09": {
+  "glb": "rocks/rock_09/rock_09.gltf",
+  "height": 0.9,
+  "maxW": 1.8,
+  "cw": 260,
+  "ch": 220,
+  "top": 0.62,
+  "withShadow": 0.45,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "ox": 0.35
+ },
+ "rock_stone_01": {
+  "glb": "rocks/stone_01/stone_01.gltf",
+  "height": 1.0,
+  "maxW": 1.8,
+  "cw": 260,
+  "ch": 220,
+  "top": 0.62,
+  "withShadow": 0.45,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "ox": 0.35
+ }
+}

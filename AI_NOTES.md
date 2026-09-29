@@ -37,6 +37,9 @@
 | `src/minimap.js` | Мини-карта (круг справа вверху) и большая карта по нажатию: рисуется из функций рельефа. |
 | `src/zombie.js` | Зомби: вызов кнопкой, здоровье, переломы/отрывы, ползание, кровь, автоприцел. |
 | `assets/rocks/` | Валуны: рендеры 3D-моделей Poly Haven (CC0) под угол камеры, 200x200, земля на 72%. |
+| `src/cover.js` | Покров земли (трава, кусты, ветки, корни), тени деревьев и тени под ногами (`drawGroundLayer`, `footShadow`). |
+| `src/sprites-data.js` | Автогенерация (`tools/treegen/export_sprites.py`): размеры/якоря картинок покрова, теней, валунов. |
+| `assets/cover/`, `assets/shadows/` | Картинки покрова и теней деревьев (рендеры 3D под угол камеры). |
 | `src/render.js` | Вся отрисовка. |
 | `src/main.js` | Холст под размер экрана телефона, игровой цикл. |
 | `assets/trees/` | 12 пород деревьев, PNG 360x500 (`00_pine` … `11_linden`). Это рендеры реалистичных 3D-моделей (Polyy.AI, CC0; сухостой — EZ-Tree, MIT) под угол камеры игры; в игре кроны качаются от ветра (`drawSwaying`, render.js), основание ствола в 86% высоты. Как пересобрать — `tools/treegen/README.md`. |
@@ -46,7 +49,7 @@
 | `assets/clutter/` | Лесной мусор: только `broken_trunk.png`, `broken_trunk_b.png`, `broken_trunk_c.png`. |
 | `assets/character/` | `Soldier.glb` (Mixamo Vanguard, примеры three.js), `Rifle_Assault.glb` (CC0, OpenGameArt «Flat Guns West»). |
 | `assets/vendor/` | three.min.js r128, GLTFLoader.js (свои копии, без CDN). |
-| `assets/ground/` | Бесшовные фототекстуры земли 192x192: `grass`, `light`, `path`, `dark`, `ash` (Poly Haven, CC0). |
+| `assets/ground/` | Бесшовные фототекстуры земли 384x384 с запечённым микрорельефом (`tools/treegen/bake_ground.py`): `grass`, `light`, `path`, `dark`, `ash` (Poly Haven, CC0). |
 
 Новую логику клади в подходящий файл или в новый файл `src/…`. Не сваливай всё в один.
 

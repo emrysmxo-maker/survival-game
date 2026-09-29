@@ -110,6 +110,7 @@ function render() {
   ctx.clearRect(0, 0, view.w, view.h);
   const renderQueue = [];
   drawGround();
+  drawGroundLayer(ctx);
   drawBloodDecals(ctx);
   drawCasings(ctx);
 
@@ -117,6 +118,11 @@ function render() {
     // Лесной мусор (пни, сломанные стволы, камни)
     for (const c of chunk.clutter) {
       renderQueue.push({ isPlayer: false, isClutter: true, obj: c, depth: c.x + c.y });
+    }
+
+    // Подлесок, который стоит (трава, папоротники, кусты, ёлочки)
+    for (const o of chunk.cover || []) {
+      if (!COVER_KINDS[o.kind].flat) renderQueue.push({ isCover: true, obj: o, depth: o.x + o.y });
     }
 
     // Валуны
@@ -139,18 +145,13 @@ function render() {
   renderQueue.sort((a, b) => a.depth - b.depth);
 
   renderQueue.forEach(item => {
-    if (item.isRock) {
+    if (item.isCover) {
+      drawCoverItem(ctx, item.obj);
+    } else if (item.isRock) {
       const o = item.obj;
       const pos = toScreen(o.x, o.y, heightOf(o));
-      const d = ROCK_DRAW * (o.scale || 1);
-      if (pos.x < -d || pos.x > view.w + d || pos.y < -d || pos.y > view.h + d) return;
-      const sp = rockSprites[o.type];
-      if (!sp.complete || !sp.naturalWidth) return;
-      ctx.save();
-      ctx.translate(pos.x, pos.y);
-      if (o.flip) ctx.scale(-1, 1);
-      ctx.drawImage(sp, -d / 2, -d * ROCK_BASE_FRAC, d, d);
-      ctx.restore();
+      if (!onScreen(pos, 140)) return;
+      drawDataSprite(ctx, 'rock', ROCK_TYPES[o.type].key, pos.x, pos.y, o.scale || 1, o.flip);
     } else if (item.isZombie) {
       drawZombie(ctx, item.obj);
     } else if (item.isBullet) {

@@ -73,10 +73,10 @@ const WIND_SLICES = 16;
 // точка земли — 72% высоты картинки по центру. w — ширина камня (доля
 // картинки), по ней считается радиус упора.
 const ROCK_TYPES = [
-  { file: 'boulder_a.png', w: 0.49 },
-  { file: 'boulder_b.png', w: 0.70 },
-  { file: 'boulder_c.png', w: 0.29 },
-  { file: 'boulder_d.png', w: 0.57 }
+  { key: 'boulder_01', w: 0.49 },
+  { key: 'namaqualand_boulder_02', w: 0.70 },
+  { key: 'rock_09', w: 0.29 },
+  { key: 'stone_01', w: 0.57 }
 ];
 const ROCK_DRAW = 119;          // px на экране при масштабе 1 (как деревья: 200 px картинки × 0.594)
 const ROCK_BASE_FRAC = 0.72;

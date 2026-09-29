@@ -20,7 +20,7 @@ const CAMERA_ELEV = Math.asin(TILE_H / TILE_W); // угол камеры над 
 // CC0), рисуются canvas-паттерном в изометрической проекции.
 // 0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел, 5 болото, 6 дно ручья, 7 камни.
 const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клеток занимает одно повторение текстуры
-const GROUND_TEX_PX = 192; // ассеты assets/ground/*.jpg приведены к этому размеру
+const GROUND_TEX_PX = 384; // ассеты assets/ground/*.jpg приведены к этому размеру (фото + свет из карты нормалей, tools/treegen/bake_ground.py)
 const GROUND_MASK_STEP = 8;
 const GROUND_LAYER_ORDER = [1, 3, 4, 7, 5, 2, 6]; // …камни, болото, тропа, дно ручья (сверху)
 const GROUND_BAKE_MARGIN = 2;

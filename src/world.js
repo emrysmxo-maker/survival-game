@@ -215,6 +215,8 @@ function generateChunk(cx, cy) {
     });
   }
 
+  generateCover(chunk, startX, startY, seed + 7777);
+
   loadedChunks.set(key, chunk);
   return chunk;
 }

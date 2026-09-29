@@ -22,6 +22,18 @@ window.renderTree=function(spec){
   const sc=new THREE.Scene();
   let tree;
   if(spec.glb){
+    if(spec.scatter){
+      // набор из отдельных узлов модели: [имя, x, z, поворот, масштаб]
+      tree=new THREE.Group();
+      for(const [nm,x,z,rot,sc2] of spec.scatter){
+        const src=gltfCache[spec.glb].getObjectByName(nm);
+        if(!src) continue;
+        const c=src.clone(true); c.position.set(0,0,0); c.rotation.set(0,0,0); c.updateMatrixWorld(true);
+        const bb1=new THREE.Box3().setFromObject(c); const cc=bb1.getCenter(new THREE.Vector3());
+        const w=new THREE.Group(); c.position.set(-cc.x,-bb1.min.y,-cc.z); w.add(c);
+        w.position.set(x,0,z); w.rotation.y=rot||0; w.scale.setScalar(sc2||1); tree.add(w);
+      }
+    } else
     tree=gltfCache[spec.glb].clone(true);
     const bb0=new THREE.Box3().setFromObject(tree); const c0=bb0.getCenter(new THREE.Vector3());
     tree.position.set(-c0.x,-bb0.min.y,-c0.z);
@@ -42,7 +54,7 @@ window.renderTree=function(spec){
   const bb=new THREE.Box3().setFromObject(tree);
   const size=bb.getSize(new THREE.Vector3());
   const maxW=(spec.maxW||5.2);
-  const s=Math.min(spec.height/size.y, maxW/Math.max(size.x,size.z));
+  const s=spec.natural ? (spec.scale||1) : Math.min(spec.height/size.y, maxW/Math.max(size.x,size.z));
   tree.scale.setScalar(s);
   bb.setFromObject(tree);
   tree.position.set(-(bb.min.x+bb.max.x)/2*0 , -bb.min.y, 0); // основание на y=0
@@ -50,12 +62,26 @@ window.renderTree=function(spec){
   holder.rotation.y=spec.rot||0;
   sc.add(new THREE.HemisphereLight(0xdfe9ff,0x6b5a3a,spec.hemi??1.15));
   const dl=new THREE.DirectionalLight(0xfff2d8,spec.sun??3.2);
-  dl.position.set(-6,10,5); dl.castShadow=true; dl.shadow.mapSize.set(2048,2048);
-  Object.assign(dl.shadow.camera,{left:-12,right:12,top:14,bottom:-4,near:1,far:40}); dl.shadow.bias=-0.0006;
+  const sunP=spec.sunPos||[-6,10,5];
+  dl.position.set(sunP[0],sunP[1],sunP[2]); dl.castShadow=true; dl.shadow.mapSize.set(4096,4096);
+  Object.assign(dl.shadow.camera,{left:-16,right:16,top:16,bottom:-16,near:0.5,far:60}); dl.shadow.bias=-0.0006;
+  if(spec.withShadow){
+    // тень прямо в картинке: полупрозрачная тень на невидимой земле
+    const gp=new THREE.Mesh(new THREE.PlaneGeometry(80,80), new THREE.ShadowMaterial({color:0x000000,opacity:spec.withShadow}));
+    gp.rotation.x=-Math.PI/2; gp.position.y=0.003; gp.receiveShadow=true; sc.add(gp);
+  }
+  if(spec.shadowOnly){
+    // только тень: сам объект невидим, но отбрасывает тень на землю
+    tree.traverse(n=>{ if(n.isMesh){ const m=n.material.clone(); m.colorWrite=false; m.depthWrite=false; n.material=m; n.receiveShadow=false; }});
+    const gp=new THREE.Mesh(new THREE.PlaneGeometry(80,80), new THREE.ShadowMaterial({color:0x000000,opacity:1}));
+    gp.rotation.x=-Math.PI/2; gp.position.y=0.005; gp.receiveShadow=true; sc.add(gp);
+    r.clippingPlanes=[];
+  }
   sc.add(dl);
   const R=30;
   const wM=CW*SS/(PPM*SS)/1, hM=CH/PPM;
-  const cam=new THREE.OrthographicCamera(-wM/2,wM/2, TOP*hM, -(1-TOP)*hM, 0.1, 100);
+  const ox=spec.ox||0;
+  const cam=new THREE.OrthographicCamera(-wM/2+ox,wM/2+ox, TOP*hM, -(1-TOP)*hM, 0.1, 100);
   cam.position.set(0,R*Math.sin(elev),R*Math.cos(elev)); cam.lookAt(0,0,0);
   r.render(sc,cam);
   const url=r.domElement.toDataURL('image/png');
