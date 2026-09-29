@@ -1,0 +1,156 @@
+{
+ "b_00_pine": {
+  "preset": "Pine Medium",
+  "height": 12,
+  "seed": 2,
+  "maxW": 3.0,
+  "opts": {
+   "bark.tint": 14262384,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.tint": 13164720,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.6
+ },
+ "b_01_oak": {
+  "preset": "Oak Medium",
+  "height": 9.5,
+  "seed": 3,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.tint": 15790304,
+   "branch.levels": 1
+  },
+  "clipTop": 3.8
+ },
+ "b_02_birch": {
+  "preset": "Aspen Medium",
+  "height": 11,
+  "seed": 7,
+  "maxW": 3.0,
+  "opts": {
+   "bark.type": "birch",
+   "bark.tint": 16777215,
+   "leaves.tint": 9424960,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.levels": 1
+  },
+  "clipTop": 4.6
+ },
+ "b_03_maple": {
+  "preset": "Oak Medium",
+  "height": 9.5,
+  "seed": 11,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 15265984,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.levels": 1
+  },
+  "clipTop": 3.8
+ },
+ "b_05_bluespruce": {
+  "preset": "Pine Medium",
+  "height": 11,
+  "seed": 5,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 10537192,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "bark.tint": 11577496,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.6
+ },
+ "b_06_willow": {
+  "preset": "Ash Medium",
+  "height": 9,
+  "seed": 17,
+  "maxW": 3.0,
+  "opts": {
+   "bark.type": "willow",
+   "leaves.tint": 14741664,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.force.strength": -0.25,
+   "branch.levels": 1
+  },
+  "clipTop": 3.8
+ },
+ "b_07_aspen": {
+  "preset": "Aspen Medium",
+  "height": 10.5,
+  "seed": 4,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 9490496,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.levels": 1
+  },
+  "clipTop": 4.6
+ },
+ "b_08_rowan": {
+  "preset": "Ash Small",
+  "height": 7.5,
+  "seed": 19,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 15792336,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.levels": 1
+  },
+  "clipTop": 3.8
+ },
+ "b_09_cedar": {
+  "preset": "Pine Medium",
+  "height": 11.5,
+  "seed": 23,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 8956032,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "bark.tint": 10514512,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.6
+ },
+ "b_10_larch": {
+  "preset": "Pine Medium",
+  "height": 12,
+  "seed": 29,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 14741664,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.6
+ },
+ "b_11_linden": {
+  "preset": "Ash Medium",
+  "height": 9.5,
+  "seed": 31,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 14217384,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.levels": 1
+  },
+  "clipTop": 3.8
+ }
+}
