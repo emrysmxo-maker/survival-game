@@ -52,7 +52,7 @@ function update(dt) {
   const prevX = player.x, prevY = player.y;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
-  collidePlayer();
+  collidePlayer(prevX, prevY);
   // Реальная скорость после столкновений: у дерева боец не «бежит на месте».
   const realSpeed = dt > 0 ? Math.hypot(player.x - prevX, player.y - prevY) / dt : 0;
 

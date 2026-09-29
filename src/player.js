@@ -40,15 +40,35 @@ function toScreen(gx, gy) {
 
 // Выталкивает игрока из стволов деревьев и сломанных стволов рядом.
 // Смещение идёт по нормали к препятствию, поэтому вдоль него игрок скользит.
-function collidePlayer() {
+// Между двумя близкими стволами круги перекрываются и выталкивание одного
+// толкает в другой — тогда возвращаем игрока на прошлую позицию (prevX/prevY),
+// чтобы он не протискивался в щель, где ему физически нет места.
+function collidePlayer(prevX, prevY) {
+  for (let pass = 0; pass < 3; pass++) {
+    forNearbyObstacles(pushOut);
+  }
+  let stuck = false;
+  forNearbyObstacles((list, radiusOf) => {
+    for (const o of list) {
+      const r = radiusOf(o) - 0.02;
+      if (Math.hypot(player.x - o.x, player.y - o.y) < r) stuck = true;
+    }
+  });
+  if (stuck) {
+    player.x = prevX;
+    player.y = prevY;
+  }
+}
+
+function forNearbyObstacles(fn) {
   const pcx = Math.floor(player.x / CHUNK_SIZE);
   const pcy = Math.floor(player.y / CHUNK_SIZE);
   for (let cx = pcx - 1; cx <= pcx + 1; cx++) {
     for (let cy = pcy - 1; cy <= pcy + 1; cy++) {
       const chunk = loadedChunks.get(`${cx},${cy}`);
       if (!chunk) continue;
-      pushOut(chunk.trees, (t) => TREE_COLLIDE_R * Math.min(1.15, t.scale || 1));
-      pushOut(chunk.clutter, (c) => CLUTTER_COLLIDE_R * Math.min(1.05, c.scale || 1));
+      fn(chunk.trees, (t) => TREE_COLLIDE_R * Math.min(1.15, t.scale || 1));
+      fn(chunk.clutter, (c) => CLUTTER_COLLIDE_R * Math.min(1.05, c.scale || 1));
     }
   }
 }
