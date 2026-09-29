@@ -37,6 +37,7 @@
 | `src/main.js` | Холст под размер экрана телефона, игровой цикл. |
 | `assets/trees/` | 12 пород деревьев, PNG 360x500 (`00_pine` … `11_linden`). Это рендеры реалистичных 3D-моделей (Polyy.AI, CC0; сухостой — EZ-Tree, MIT) под угол камеры игры; в игре кроны качаются от ветра (`drawSwaying`, render.js), основание ствола в 86% высоты. Как пересобрать — `tools/treegen/README.md`. |
 | `assets/trees/broken/` | Сломанные версии тех же пород (кроме `04_deadwood`): срезанный ствол. |
+| `camera-test.html`, `src/test3d.js`, `test3d.css`, `assets/test3d/` | Тестовая 3D-сцена для подбора угла камеры (владелец крутит камеру пальцем, видит наклон/поворот в градусах). Сжатые модели деревьев (gltf-transform: quantize + webp 512 + simplify). В игру не подключена. |
 | `tools/treegen/` | Генератор деревьев: 3D (EZ-Tree) → PNG под угол камеры. |
 | `assets/clutter/` | Лесной мусор: только `broken_trunk.png`, `broken_trunk_b.png`, `broken_trunk_c.png`. |
 | `assets/character/` | `Soldier.glb` (Mixamo Vanguard, примеры three.js), `Rifle_Assault.glb` (CC0, OpenGameArt «Flat Guns West»). |

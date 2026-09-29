@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Тест камеры 3D</title>
+  <link rel="stylesheet" href="test3d.css">
+</head>
+<body>
+  <!-- Тестовая 3D-сцена: те же деревья и боец, но в настоящем 3D. Камеру можно
+       крутить пальцем, чтобы подобрать угол для игры. Логика — src/test3d.js. -->
+  <div id="loading">Загрузка моделей…</div>
+
+  <div id="angle-box">
+    <div id="angle-text"></div>
+    <div class="hint">1 палец — вращать · 2 пальца — приближать</div>
+  </div>
+
+  <div id="panel">
+    <label>Наклон <span id="v-pitch"></span>
+      <input type="range" id="pitch" min="5" max="90" step="1">
+    </label>
+    <label>Поворот <span id="v-yaw"></span>
+      <input type="range" id="yaw" min="0" max="359" step="1">
+    </label>
+    <label>Расстояние <span id="v-dist"></span>
+      <input type="range" id="dist" min="4" max="60" step="1">
+    </label>
+    <label>Угол обзора <span id="v-fov"></span>
+      <input type="range" id="fov" min="0" max="90" step="1">
+    </label>
+    <div class="row">
+      <button id="btn-game">Как в игре</button>
+      <button id="btn-walk">Боец: стоит</button>
+      <button id="btn-panel">Скрыть</button>
+    </div>
+  </div>
+  <button id="btn-show">Настройки</button>
+
+  <script src="assets/vendor/three.min.js"></script>
+  <script src="assets/vendor/GLTFLoader.js"></script>
+  <script>
+    document.write(`<script src="src/test3d.js?v=${Date.now()}"><\/script>`);
+  </script>
+</body>
+</html>
