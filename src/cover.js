@@ -66,6 +66,20 @@ function generateCover(chunk, startX, startY, seedStart) {
     const def = COVER_KINDS[kind];
     cover.push({ x, y, kind, key: def.keys[Math.floor(rnd() * def.keys.length)], flip: rnd() > 0.5, scale: 0.85 + rnd() * 0.3 });
   }
+  // кромки склонов (берега оврагов, края котловин): гуще трава, папоротник
+  // и корни, торчащие из обрыва — видно, где земля обрывается
+  for (let i = 0; i < 60; i++) {
+    const x = startX + rnd() * CHUNK_SIZE, y = startY + rnd() * CHUNK_SIZE;
+    const r1 = rnd(), r2 = rnd(), r3 = rnd();
+    const t = terrainAt(x, y, _ct);
+    if (t.water > 0.02 || pathDistAt(x, y) < 1.3) continue;
+    const h = t.h;
+    const slope = Math.hypot(terrainAt(x + 0.5, y, _ct).h - h, terrainAt(x, y + 0.5, _ct).h - h) / 0.5;
+    if (slope < 0.45 || r1 > Math.min(0.9, (slope - 0.45) * 1.6)) continue;
+    const kind = r2 < 0.22 ? 'roots' : r2 < 0.62 ? 'grass' : 'fern';
+    const def = COVER_KINDS[kind];
+    cover.push({ x, y, kind, key: def.keys[Math.floor(r3 * def.keys.length)], flip: r3 > 0.5, scale: kind === 'roots' ? 0.7 + r1 * 0.3 : 0.8 + r1 * 0.35 });
+  }
   // корни у основания больших деревьев
   for (const tr of chunk.trees) {
     if (!tr.isGiant || rnd() > 0.5) continue;

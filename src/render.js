@@ -111,6 +111,7 @@ function render() {
   const renderQueue = [];
   drawGround();
   drawGroundLayer(ctx);
+  drawEffects(ctx);
   drawBloodDecals(ctx);
   drawCasings(ctx);
 
