@@ -28,6 +28,8 @@ window.addEventListener('resize', resize);
 resize();
 
 let lastTime = performance.now();
+// Резкость разгона при старте (1/с): 14 — около 0.1 с до полной скорости.
+const PLAYER_START_ACCEL = 14;
 
 function update(dt) {
   let wantX = 0, wantY = 0;
@@ -36,10 +38,12 @@ function update(dt) {
     wantY = (joystick.dy - joystick.dx) * player.speed;
     player.angle = Math.atan2(joystick.dy, joystick.dx);
     player.isMoving = true;
-    player.vx = wantX;
-    player.vy = wantY;
+    // Короткий разгон (~0.1 с): человек не стартует сразу на полной скорости.
+    // Остановка, наоборот, мгновенная — никакого скольжения после отпускания.
+    const k = 1 - Math.exp(-PLAYER_START_ACCEL * dt);
+    player.vx += (wantX - player.vx) * k;
+    player.vy += (wantY - player.vy) * k;
   } else {
-    // Мгновенная остановка: убираем скольжение «на коньках»
     player.isMoving = false;
     player.vx = 0;
     player.vy = 0;

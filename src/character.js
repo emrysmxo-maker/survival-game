@@ -3,6 +3,20 @@
 // Поворачивается на 360° во все стороны вслед за джойстиком, анимирует бег/ходьбу.
 // Размер: ~78px (отлично видна экипировка, пропорционален деревьям ~250px).
 
+// Тайл мира ≈ 1.4 м: так считаем реальную скорость бойца в м/с, чтобы шаги
+// попадали в такт с землёй, уходящей из-под ног (иначе «катание на коньках»).
+const METERS_PER_TILE = 1.39;
+// Скорость, с которой стопа идёт назад по земле при обычном темпе клипов
+// Soldier.glb (в клипах нет движения вперёд — они играют «на месте»).
+// ИЗМЕРЕНО на модели (стопа в фазе опоры): ходьба ≈ 1.32 м/с, бег ≈ 2.83 м/с
+// (клип бега — скорее трусца). Скорость игры подгоняется через timeScale.
+const WALK_CLIP_MPS = 1.32;
+const RUN_CLIP_MPS = 2.83;
+// Порог переключения ходьба/бег с гистерезисом, чтобы не дёргалось на границе.
+const RUN_ENTER_MPS = 2.6;
+const RUN_EXIT_MPS = 2.1;
+let charIsRunning = false;
+
 const CHARACTER_DRAW_W = 78;
 const CHARACTER_DRAW_H = 78;
 // Доля высоты до подошв берцев в 3D (ортографическая камера, frustum 2.4, y=0)
@@ -285,14 +299,32 @@ function updateCharacter(dt, isMoving, angle, speed) {
 
   // 2. Анимация бега и ходьбы
   if (isMoving) {
-    charRunPhase += dt * 16; // Чёткий, энергичный шаг без «катания на коньках»
+    // Реальная скорость по земле, м/с. Темп шагов считается из неё:
+    // подошва, стоящая на земле, должна уходить назад ровно с той же
+    // скоростью, с какой земля уходит из-под бойца.
+    const mps = speed * METERS_PER_TILE;
+    if (charIsRunning) { if (mps < RUN_EXIT_MPS) charIsRunning = false; }
+    else if (mps > RUN_ENTER_MPS) charIsRunning = true;
+
+    // Длина полного цикла шага (обе ноги), м: ходьба ~1.45, бег ~3.4,
+    // между ними — плавно.
+    const cycleLen = Math.min(3.4, Math.max(1.45, 1.45 + (mps - 1.4) * (3.4 - 1.45) / (4.8 - 1.4)));
+    charRunPhase += (mps * dt / cycleLen) * Math.PI * 2;
 
     if (charMixer) {
-      fadeToAction(speed > 4.5 ? 'Run' : 'Walk', 0.12);
+      const clip = charIsRunning ? 'Run' : 'Walk';
+      fadeToAction(clip, 0.12);
+      const act = charActions[clip];
+      if (act) {
+        const ts = mps / (charIsRunning ? RUN_CLIP_MPS : WALK_CLIP_MPS);
+        act.setEffectiveTimeScale(Math.min(charIsRunning ? 1.6 : 1.7, Math.max(charIsRunning ? 0.7 : 0.4, ts)));
+      }
       charMixer.update(dt);
     } else if (proceduralSoldier) {
-      // Анимация ног и рук процедурного бойца
-      const swing = Math.sin(charRunPhase) * 0.75;
+      // Размах ноги из условия «стопа стоит на земле»: в середине опоры
+      // скорость стопы назад = скорости бега (A = длина цикла / (2π · длина ноги)).
+      const amp = Math.min(0.9, cycleLen / (2 * Math.PI * 0.68));
+      const swing = Math.sin(charRunPhase) * amp;
       proceduralSoldier.leftLeg.rotation.x = swing;
       proceduralSoldier.rightLeg.rotation.x = -swing;
       proceduralSoldier.leftArm.rotation.x = -swing * 0.7;
@@ -300,6 +332,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
       proceduralSoldier.group.position.y = Math.abs(Math.sin(charRunPhase * 2)) * 0.04;
     }
   } else {
+    charIsRunning = false;
     // В покое (Idle): ноги мгновенно упираются в землю, никакого скольжения
     charRunPhase = 0;
     if (charMixer) {
