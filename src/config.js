@@ -43,11 +43,11 @@ const GROUND_MAX_IN_FLIGHT = 2;
 // кромка картинки = точка касания земли.
 // tilt — максимальный случайный наклон (рад), scale — разброс размера.
 const CLUTTER_TYPES = {
-  broken_trunk: { files: ['broken_trunk.png', 'broken_trunk_b.png', 'broken_trunk_c.png'], h: 92, tilt: 0.14, scale: [0.7, 1.1] }
+  broken_trunk: { files: ['broken_trunk.png', 'broken_trunk_b.png', 'broken_trunk_c.png'], h: 62, tilt: 0.14, scale: [0.7, 1.05] }
 };
 
 // Столкновения: радиус ствола в тайлах (тайл ≈ 1.4 м) уже вместе с телом
 // бойца. Сломанный лежачий ствол — круг побольше. Игрок скользит вдоль
 // препятствия, а не упирается в него намертво.
-const TREE_COLLIDE_R = 0.3;
-const CLUTTER_COLLIDE_R = 0.5;
+const TREE_COLLIDE_R = 0.7;
+const CLUTTER_COLLIDE_R = 0.55;

@@ -48,7 +48,7 @@ function collidePlayer() {
       const chunk = loadedChunks.get(`${cx},${cy}`);
       if (!chunk) continue;
       pushOut(chunk.trees, (t) => TREE_COLLIDE_R * Math.min(1.15, t.scale || 1));
-      pushOut(chunk.clutter, () => CLUTTER_COLLIDE_R);
+      pushOut(chunk.clutter, (c) => CLUTTER_COLLIDE_R * Math.min(1.05, c.scale || 1));
     }
   }
 }
