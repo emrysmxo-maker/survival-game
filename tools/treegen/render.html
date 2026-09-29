@@ -1,8 +1,11 @@
 <!doctype html><meta charset="utf-8"><body style="margin:0;background:#789">
-<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","@dgreenheck/ez-tree":"./node_modules/@dgreenheck/ez-tree/build/ez-tree.es.js"}}</script>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","@dgreenheck/ez-tree":"./node_modules/@dgreenheck/ez-tree/build/ez-tree.es.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { Tree, TreePreset } from '@dgreenheck/ez-tree';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const gltfCache={};
+window.loadGlb=(url)=>new Promise((res,rej)=>new GLTFLoader().load(url,g=>{gltfCache[url]=g.scene;res(true)},undefined,rej));
 window.THREE=THREE; window.Tree=Tree; window.TreePreset=TreePreset;
 window.ready=true;
 // Рендер одного дерева под камеру игры. spec: {preset, opts:{path:value}, height (м), seed}
@@ -16,7 +19,15 @@ window.renderTree=function(spec){
   r.localClippingEnabled=true; r.clippingPlanes=[new THREE.Plane(new THREE.Vector3(0,1,0),1.2)]; if(spec.clipTop) r.clippingPlanes.push(new THREE.Plane(new THREE.Vector3(0,-1,0),spec.clipTop));
   r.shadowMap.enabled=true; r.shadowMap.type=THREE.PCFShadowMap;
   const sc=new THREE.Scene();
-  const tree=new Tree();
+  let tree;
+  if(spec.glb){
+    tree=gltfCache[spec.glb].clone(true);
+    const bb0=new THREE.Box3().setFromObject(tree); const c0=bb0.getCenter(new THREE.Vector3());
+    tree.position.set(-c0.x,-bb0.min.y,-c0.z);
+    const g=new THREE.Group(); g.add(tree); tree=g;
+    tree.traverse(n=>{ if(n.isMesh&&n.material){ n.material.side=THREE.DoubleSide; if(spec.tint) n.material.color.multiply(new THREE.Color(spec.tint)); }});
+  } else {
+  tree=new Tree();
   const o=TreePreset[spec.preset] ? structuredClone(TreePreset[spec.preset]) : tree.options;
   Object.assign(tree.options,o);
   tree.options.seed=spec.seed??1;
@@ -24,6 +35,7 @@ window.renderTree=function(spec){
     const ks=p.split('.'); let t=tree.options; for(let i=0;i<ks.length-1;i++) t=t[ks[i]]; t[ks[ks.length-1]]=v;
   }
   tree.generate();
+  }
   tree.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; if(spec.clipTop&&n.material){ n.material.side=THREE.DoubleSide; } }});
   // масштаб под нужную высоту
   const bb=new THREE.Box3().setFromObject(tree);

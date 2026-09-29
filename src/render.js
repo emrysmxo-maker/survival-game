@@ -182,9 +182,10 @@ function render() {
           pp.y - 30 > top && pp.y < pos.y + 6;
         obj.fade = (obj.fade || 0) + ((covers ? 1 : 0) - (obj.fade || 0)) * 0.2;
         if (obj.fade > 0.02) {
+          treeHoleObj = obj;
           drawTreeWithHole(sprite, left, top, dw, dh, pp.x - left, pp.y - 42 - top, obj.fade);
         } else {
-          ctx.drawImage(sprite, left, top, dw, dh);
+          drawSwaying(ctx, sprite, left, top, dw, dh, obj);
         }
       }
     }
@@ -237,7 +238,7 @@ function drawTreeWithHole(sprite, left, top, dw, dh, hx, hy, strength) {
   tc.globalCompositeOperation = 'source-over';
   tc.clearRect(0, 0, treeHoleCanvas.width, treeHoleCanvas.height);
   tc.setTransform(dpr, 0, 0, dpr, 0, 0);
-  tc.drawImage(sprite, 0, 0, dw, dh);
+  drawSwaying(tc, sprite, 0, 0, dw, dh, treeHoleObj);
   tc.globalCompositeOperation = 'destination-out';
   tc.save();
   tc.translate(hx, hy);
@@ -250,4 +251,39 @@ function drawTreeWithHole(sprite, left, top, dw, dh, hx, hy, strength) {
   tc.fillRect(-r, -r, r * 2, r * 2);
   tc.restore();
   ctx.drawImage(treeHoleCanvas, 0, 0, w, h, left, top, dw, dh);
+}
+
+// Ветер. Картинка дерева режется на горизонтальные полоски, и каждая
+// сдвигается вбок тем сильнее, чем выше она над землёй (∝ высота^1.6):
+// ствол у корней стоит на месте, крона гнётся. Покачивание — сумма двух
+// синусов (медленная волна + порыв), фаза зависит от места дерева, поэтому
+// по лесу идёт «волна» ветра, а не качаются все деревья в такт. Плюс мелкая
+// дрожь листвы в верхней части.
+let treeHoleObj = null;
+function windOffset(obj, hn, t) {
+  const ph = obj.x * 0.55 + obj.y * 0.35;
+  const w = 2 * Math.PI * WIND_FREQ;
+  const gust = 0.65 + 0.35 * Math.sin(t * 0.21 + ph * 0.15);
+  const sway = Math.sin(w * t + ph) * 0.7 + Math.sin(w * 2.3 * t + ph * 1.7) * 0.3;
+  const flutter = Math.sin(t * 9.0 + ph * 3.1) * 0.12 + Math.sin(t * 13.0 + ph * 5.3) * 0.08;
+  const k = obj.type === 4 ? 0.45 : 1; // сухостой без листвы качается меньше
+  return WIND_AMPLITUDE * (obj.scale || 1) * k * (Math.pow(hn, 1.6) * sway * gust + hn * flutter);
+}
+
+function drawSwaying(c, sprite, left, top, dw, dh, obj) {
+  if (!obj) { c.drawImage(sprite, left, top, dw, dh); return; }
+  const t = performance.now() / 1000;
+  const sw = sprite.naturalWidth || sprite.width, sh = sprite.naturalHeight || sprite.height;
+  const baseY = TREE_BASE_FRAC;           // доля высоты картинки, где земля
+  const n = WIND_SLICES;
+  const bandSrc = (sh * baseY) / n;       // полоски от верха до земли
+  const bandDst = (dh * baseY) / n;
+  for (let i = 0; i < n; i++) {
+    const hn = 1 - (i + 0.5) / n;         // 1 у верхушки, 0 у земли
+    const dx = windOffset(obj, hn, t);
+    // +0.6 px перекрытия, чтобы между полосками не было щелей
+    c.drawImage(sprite, 0, i * bandSrc, sw, bandSrc + 1, left + dx, top + i * bandDst, dw, bandDst + 0.6);
+  }
+  // низ картинки ниже земли (корни, свисающие ветви) — без сдвига
+  c.drawImage(sprite, 0, sh * baseY, sw, sh * (1 - baseY), left, top + dh * baseY, dw, dh * (1 - baseY));
 }

@@ -35,7 +35,7 @@
 | `src/character.js` | 3D-боец (Three.js). Автомат в руках: `loadRifle`, `applyRiflePose`, двухсуставный IK рук `solveArmIK`; перекраска формы `recolorSoldier`. |
 | `src/render.js` | Вся отрисовка. |
 | `src/main.js` | Холст под размер экрана телефона, игровой цикл. |
-| `assets/trees/` | 12 пород деревьев, PNG 360x500 (`00_pine` … `11_linden`). Это 3D-рендеры (EZ-Tree, MIT) под угол камеры игры, основание ствола в 86% высоты. Как пересобрать — `tools/treegen/README.md`. |
+| `assets/trees/` | 12 пород деревьев, PNG 360x500 (`00_pine` … `11_linden`). Это рендеры реалистичных 3D-моделей (Polyy.AI, CC0; сухостой — EZ-Tree, MIT) под угол камеры игры; в игре кроны качаются от ветра (`drawSwaying`, render.js), основание ствола в 86% высоты. Как пересобрать — `tools/treegen/README.md`. |
 | `assets/trees/broken/` | Сломанные версии тех же пород (кроме `04_deadwood`): срезанный ствол. |
 | `tools/treegen/` | Генератор деревьев: 3D (EZ-Tree) → PNG под угол камеры. |
 | `assets/clutter/` | Лесной мусор: только `broken_trunk.png`, `broken_trunk_b.png`, `broken_trunk_c.png`. |

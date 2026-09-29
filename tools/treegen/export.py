@@ -1,7 +1,7 @@
 import numpy as np, colorsys, os
 from PIL import Image
 OUT="/home/user/survival-game/assets/trees"
-HUE={'02_birch':0.075,'07_aspen':0.075}   # сдвиг оттенка листвы к зелёному (доля круга)
+HUE={'06_willow':0.09,'07_aspen':0.04}   # сдвиг оттенка листвы к зелёному (доля круга)
 def grade(im,k):
     im=im.convert('RGBA'); a=np.array(im).astype(np.float32)
     if k in HUE:
@@ -20,7 +20,7 @@ def grade(im,k):
         a[:,:,:3]=np.stack([R,G,B],2)*255
     # общая цветокоррекция под фон: чуть приглушить насыщенность и яркость
     rgb=a[:,:,:3]/255.0; g=rgb.mean(2,keepdims=True)
-    rgb=(g+(rgb-g)*0.85)*0.93
+    rgb=(g+(rgb-g)*1.0)*0.97
     a[:,:,:3]=rgb*255
     return Image.fromarray(a.clip(0,255).astype(np.uint8),'RGBA')
 for f in sorted(os.listdir('out')):

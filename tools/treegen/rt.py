@@ -9,6 +9,7 @@ async def run(specs):
         await page.goto('http://localhost:8791/render.html')
         await page.wait_for_function('window.ready===true',timeout=60000)
         for name,spec in specs.items():
+            if spec.get('glb'): await page.evaluate("u=>window.loadGlb(u)",spec['glb'])
             url=await page.evaluate("s=>window.renderTree(s)",spec)
             open(f'out/{name}.png','wb').write(base64.b64decode(url.split(',')[1])); print('ok',name)
         await b.close()
