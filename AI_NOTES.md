@@ -30,12 +30,16 @@
 | `src/assets.js` | Загрузка картинок. |
 | `src/world.js` | Биомы, генерация чанков, расстановка деревьев и мусора. |
 | `src/player.js` | Игрок, камера, перевод координат «мир → экран» (`toScreen`). |
-| `src/input.js` | Сенсорный джойстик. |
+| `src/weapon.js` | Стрельба: пули (трассеры), темп огня, разброс, звук выстрела (синтез WebAudio). |
+| `src/input.js` | Сенсорный джойстик и кнопка огня (`#fire-btn`, Space на клавиатуре). |
+| `src/character.js` | 3D-боец (Three.js). Автомат в руках: `loadRifle`, `applyRiflePose`, двухсуставный IK рук `solveArmIK`; перекраска формы `recolorSoldier`. |
 | `src/render.js` | Вся отрисовка. |
 | `src/main.js` | Холст под размер экрана телефона, игровой цикл. |
 | `assets/trees/` | 12 пород деревьев, PNG 360x500 (`00_pine` … `11_linden`). |
 | `assets/trees/broken/` | Сломанные версии тех же пород (кроме `04_deadwood`). |
 | `assets/clutter/` | Лесной мусор: только `broken_trunk.png`, `broken_trunk_b.png`, `broken_trunk_c.png`. |
+| `assets/character/` | `Soldier.glb` (Mixamo Vanguard, примеры three.js), `Rifle_Assault.glb` (CC0, OpenGameArt «Flat Guns West»). |
+| `assets/vendor/` | three.min.js r128, GLTFLoader.js (свои копии, без CDN). |
 | `assets/ground/` | Бесшовные фототекстуры земли 192x192: `grass`, `light`, `path`, `dark`, `ash` (Poly Haven, CC0). |
 
 Новую логику клади в подходящий файл или в новый файл `src/…`. Не сваливай всё в один.

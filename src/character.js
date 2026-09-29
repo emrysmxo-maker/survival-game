@@ -37,6 +37,15 @@ let charYaw = 0;
 let charRunPhase = 0;
 let is3DInitialized = false;
 
+// Оружие в руках (модель CC0: OpenGameArt «Flat Guns West» — Rifle_Assault).
+// charAimBlend: 0 — автомат в положении «наготове» (у груди, стволом вниз-вперёд),
+// 1 — приклад в плече, ствол горизонтально (стрельба).
+let rifleRig = null;
+let muzzleFlash = null;
+let charAimBlend = 0;
+let charRecoil = 0;
+let charFlashT = 0;
+
 // Инициализация Three.js и персонажа
 function init3DCharacter() {
   if (typeof THREE === 'undefined') return false;
@@ -255,6 +264,8 @@ function loadGLTFSoldier() {
           soldierRoot.remove(proceduralSoldier.group);
         }
         soldierRoot.add(gltfSoldier);
+        recolorSoldier(gltfSoldier);
+        loadRifle();
       },
       undefined,
       () => {
@@ -324,6 +335,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
         act.setEffectiveTimeScale(Math.min(1.3, Math.max(0.5, ts)));
       }
       charMixer.update(dt);
+      applyRiflePose(dt, weapon.firing);
     } else if (proceduralSoldier) {
       // Размах ноги из условия «стопа стоит на земле»: в середине опоры
       // скорость стопы назад = скорости бега (A = длина цикла / (2π · длина ноги)).
@@ -342,6 +354,7 @@ function updateCharacter(dt, isMoving, angle, speed) {
     if (charMixer) {
       fadeToAction('Idle', 0.15);
       charMixer.update(dt);
+      applyRiflePose(dt, weapon.firing);
     } else if (proceduralSoldier) {
       proceduralSoldier.leftLeg.rotation.x = 0;
       proceduralSoldier.rightLeg.rotation.x = 0;
@@ -427,4 +440,176 @@ function drawFallback2DSoldier(ctx, screenX, screenY, angle, isMoving) {
   ctx.fillRect(-5, 4, 10, 3);
 
   ctx.restore();
+}
+
+
+// Мixamo Vanguard приходит в ярко-оранжевой «скафандровой» текстуре. Сдвигаем
+// оттенок в оливково-хаки, чтобы был похож на военную форму.
+function recolorSoldier(root) {
+  root.traverse((child) => {
+    if (!child.isMesh || !child.material || !child.material.map) return;
+    const img = child.material.map.image;
+    if (!img || !img.width) return;
+    try {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d');
+      g.filter = 'hue-rotate(58deg) saturate(0.55) brightness(0.8)';
+      g.drawImage(img, 0, 0);
+      const tex = new THREE.CanvasTexture(c);
+      tex.flipY = child.material.map.flipY;
+      tex.encoding = child.material.map.encoding;
+      tex.anisotropy = child.material.map.anisotropy;
+      child.material.map = tex;
+      child.material.needsUpdate = true;
+    } catch (e) { /* остаётся исходная текстура */ }
+  });
+}
+
+// ---------- Автомат в руках ----------
+// Система координат «rifleRig»: +Z — куда смотрит боец, ствол вдоль +Z,
+// начало — центр автомата. Размеры (м) измерены по модели:
+const RIFLE_GRIP = new THREE.Vector3(0, -0.10, -0.125);   // пистолетная рукоятка
+const RIFLE_HANDGUARD = new THREE.Vector3(0, -0.035, 0.15); // цевьё
+const RIFLE_MUZZLE = new THREE.Vector3(0, 0.02, 0.37);
+
+function loadRifle() {
+  if (typeof THREE.GLTFLoader === 'undefined' || !soldierRoot) return;
+  new THREE.GLTFLoader().load('assets/character/Rifle_Assault.glb', (gltf) => {
+    rifleRig = new THREE.Group();
+    const model = gltf.scene;
+    model.rotation.y = Math.PI; // в файле ствол смотрит в -Z
+    model.traverse((n) => {
+      if (n.isMesh && n.material) {
+        // Материалы модели почти чёрные («плоские» цвета) — чуть светлим,
+        // иначе автомат сливается в пятно.
+        n.material.color.offsetHSL(0, 0, 0.09);
+      }
+    });
+    rifleRig.add(model);
+
+    // Вспышка выстрела на дульном срезе: две пересекающиеся светящиеся плоскости.
+    const fc = document.createElement('canvas');
+    fc.width = fc.height = 64;
+    const fg = fc.getContext('2d');
+    const grad = fg.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255,250,220,1)');
+    grad.addColorStop(0.35, 'rgba(255,190,80,0.85)');
+    grad.addColorStop(1, 'rgba(255,120,20,0)');
+    fg.fillStyle = grad;
+    fg.fillRect(0, 0, 64, 64);
+    const fmat = new THREE.MeshBasicMaterial({
+      map: new THREE.CanvasTexture(fc), transparent: true,
+      blending: THREE.NormalBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide
+    });
+    muzzleFlash = new THREE.Group();
+    const p1 = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), fmat);
+    const p2 = p1.clone();
+    p2.rotation.z = Math.PI / 2;
+    const p3 = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), fmat);
+    p3.rotation.y = Math.PI / 2;
+    muzzleFlash.add(p1, p2, p3);
+    muzzleFlash.position.copy(RIFLE_MUZZLE);
+    muzzleFlash.position.z += 0.02;
+    muzzleFlash.visible = false;
+    rifleRig.add(muzzleFlash);
+
+    soldierRoot.add(rifleRig);
+  }, undefined, () => { /* без автомата бойцу просто нечего держать */ });
+}
+
+// Вызывается из weapon.js при каждом выстреле: отдача и вспышка.
+function characterShotFired() {
+  charRecoil = 1;
+  charFlashT = 0.05;
+}
+
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+
+// Двухсуставный IK руки: плечо -> локоть -> кисть дотягивается до target
+// (мировые координаты), локоть уходит в сторону pole. Кости Mixamo смотрят
+// вдоль своей оси Y, поэтому достаточно довернуть кость на кратчайший угол.
+function solveArmIK(upper, fore, hand, target, pole) {
+  upper.updateWorldMatrix(true, true);
+  const a = upper.getWorldPosition(new THREE.Vector3());
+  const e0 = fore.getWorldPosition(new THREE.Vector3());
+  const h0 = hand.getWorldPosition(new THREE.Vector3());
+  const l1 = a.distanceTo(e0), l2 = e0.distanceTo(h0);
+
+  const toT = target.clone().sub(a);
+  const dist = Math.min(Math.max(toT.length(), 0.05), l1 + l2 - 1e-4);
+  const dir = toT.normalize();
+  const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist);
+  const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+  const pv = pole.clone().sub(a);
+  pv.addScaledVector(dir, -pv.dot(dir));
+  if (pv.lengthSq() < 1e-8) pv.set(0, -1, 0);
+  pv.normalize();
+  const elbow = a.clone().addScaledVector(dir, l1 * cosA).addScaledVector(pv, l1 * sinA);
+  const handPos = a.clone().addScaledVector(dir, dist);
+
+  const rotateBoneTo = (bone, from, toDir) => {
+    bone.updateWorldMatrix(true, false);
+    const curDir = fromDirOfBone(bone, from);
+    const wq = bone.getWorldQuaternion(new THREE.Quaternion());
+    const delta = new THREE.Quaternion().setFromUnitVectors(curDir, toDir);
+    wq.premultiply(delta);
+    const pq = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+    bone.quaternion.copy(pq.invert().multiply(wq));
+    bone.updateWorldMatrix(false, true);
+  };
+  const fromDirOfBone = (bone, childBone) =>
+    childBone.getWorldPosition(new THREE.Vector3()).sub(bone.getWorldPosition(new THREE.Vector3())).normalize();
+
+  rotateBoneTo(upper, fore, elbow.clone().sub(a).normalize());
+  rotateBoneTo(fore, hand, handPos.clone().sub(fore.getWorldPosition(new THREE.Vector3())).normalize());
+}
+
+let _bones = null;
+function findBones() {
+  if (_bones || !gltfSoldier) return _bones;
+  const b = {};
+  gltfSoldier.traverse((n) => { if (n.isBone) b[n.name.replace('mixamorig', '')] = n; });
+  _bones = b;
+  return b;
+}
+
+// Кладёт автомат в позу и тянет к нему обе руки. Вызывается после
+// charMixer.update(): анимация ног/корпуса остаётся от клипа, руки — IK.
+function applyRiflePose(dt, wantAim) {
+  if (!rifleRig || !gltfSoldier) return;
+  const B = findBones();
+  if (!B.Spine2 || !B.RightArm || !B.LeftArm) return;
+
+  charAimBlend += ((wantAim ? 1 : 0) - charAimBlend) * Math.min(1, 9 * dt);
+  charRecoil = Math.max(0, charRecoil - dt * 14);
+  charFlashT = Math.max(0, charFlashT - dt);
+  if (muzzleFlash) muzzleFlash.visible = charFlashT > 0;
+
+  soldierRoot.updateMatrixWorld(true);
+  const chest = soldierRoot.worldToLocal(B.Spine2.getWorldPosition(_v1.clone()));
+  const sideR = Math.sign(soldierRoot.worldToLocal(B.RightArm.getWorldPosition(_v2.clone())).x) || 1;
+
+  // Позы (в системе бойца, относительно груди): готовность и стрельба
+  const k = charAimBlend;
+  const cx = sideR * (0.05 + 0.04 * k) * 1;
+  const cy = -0.21 + 0.31 * k;
+  const cz = 0.26 + 0.07 * k - 0.035 * charRecoil;
+  rifleRig.position.set(chest.x + cx, chest.y + cy, chest.z + cz);
+  const pitch = 0.42 * (1 - k) - 0.03 * charRecoil;   // + = ствол вниз
+  const yaw = -sideR * 0.22 * (1 - k);                 // «наготове» ствол чуть в сторону
+  rifleRig.rotation.set(pitch, yaw, 0, 'YXZ');
+  rifleRig.updateMatrixWorld(true);
+
+  const gripW = rifleRig.localToWorld(RIFLE_GRIP.clone());
+  const guardW = rifleRig.localToWorld(RIFLE_HANDGUARD.clone());
+  const down = new THREE.Vector3(0, -1, 0);
+  const poleR = B.RightArm.getWorldPosition(new THREE.Vector3())
+    .add(soldierRoot.localToWorld(new THREE.Vector3(sideR * 0.5, -1, -0.5)).sub(soldierRoot.localToWorld(new THREE.Vector3())));
+  const poleL = B.LeftArm.getWorldPosition(new THREE.Vector3())
+    .add(soldierRoot.localToWorld(new THREE.Vector3(-sideR * 0.5, -1, -0.3)).sub(soldierRoot.localToWorld(new THREE.Vector3())));
+
+  solveArmIK(B.RightArm, B.RightForeArm, B.RightHand, gripW, poleR);
+  solveArmIK(B.LeftArm, B.LeftForeArm, B.LeftHand, guardW, poleL);
 }

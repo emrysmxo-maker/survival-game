@@ -27,6 +27,8 @@
       <span style="font-size: 8px; color: #2ecc71;">ЭКОЛОГИЯ</span>
     </div>
 
+    <div id="fire-btn">ОГОНЬ</div>
+
     <div id="joystick-hint">Касание в левой нижней зоне для перемещения</div>
   </div>
 
@@ -46,7 +48,7 @@
     // main запускает игровой цикл и должен идти последним.
     // document.write гарантирует, что скрипты подключатся и выполнятся
     // строго по порядку, как обычные <script> теги.
-    ['ground', 'config', 'assets', 'character', 'world', 'player', 'input', 'render', 'main'].forEach((name) => {
+    ['ground', 'config', 'assets', 'character', 'world', 'player', 'weapon', 'input', 'render', 'main'].forEach((name) => {
       document.write(`<script src="src/${name}.js?v=${window.BUILD_VERSION}"><\/script>`);
     });
   </script>

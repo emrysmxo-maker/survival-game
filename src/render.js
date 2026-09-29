@@ -168,6 +168,8 @@ function render() {
     }
   });
 
+  drawBullets(ctx);
+
   // Сенсорный джойстик
   if (joystick.active) {
     ctx.beginPath();

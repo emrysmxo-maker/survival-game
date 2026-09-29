@@ -34,8 +34,10 @@ const PLAYER_START_ACCEL = 14;
 function update(dt) {
   let wantX = 0, wantY = 0;
   if (joystick.active && (joystick.dx !== 0 || joystick.dy !== 0)) {
-    wantX = (joystick.dx + joystick.dy) * player.speed;
-    wantY = (joystick.dy - joystick.dx) * player.speed;
+    // Во время стрельбы боец идёт шагом, а не бежит.
+    const spd = player.speed * (weapon.firing ? WEAPON_WALK_FACTOR : 1);
+    wantX = (joystick.dx + joystick.dy) * spd;
+    wantY = (joystick.dy - joystick.dx) * spd;
     player.angle = Math.atan2(joystick.dy, joystick.dx);
     player.isMoving = true;
     // Короткий разгон (~0.1 с): человек не стартует сразу на полной скорости.
@@ -64,6 +66,7 @@ function update(dt) {
   camera.x = (player.x - player.y) * (TILE_W / 2);
   camera.y = (player.x + player.y) * (TILE_H / 2);
 
+  updateWeapon(dt);
   updateWorldChunks();
 }
 

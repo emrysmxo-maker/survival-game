@@ -11,10 +11,26 @@ const joystick = {
   maxDist: 50, dx: 0, dy: 0
 };
 
+// Кнопка огня: отдельное касание, джойстик его не занимает. Можно
+// бежать одним пальцем и стрелять другим.
+const fireBtn = document.getElementById('fire-btn');
+let fireTouchId = null;
+function setFire(on) {
+  weapon.firing = on;
+  fireBtn.classList.toggle('pressed', on);
+}
+window.addEventListener('keydown', (e) => { if (e.code === 'Space') setFire(true); });
+window.addEventListener('keyup', (e) => { if (e.code === 'Space') setFire(false); });
+
 window.addEventListener('touchstart', (e) => {
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
+    if (fireBtn.contains(t.target)) {
+      fireTouchId = t.identifier;
+      setFire(true);
+      continue;
+    }
     if (!joystick.active) {
       joystick.active = true;
       joystick.touchId = t.identifier;
@@ -63,6 +79,7 @@ window.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 function stopJoy(id) {
+  if (fireTouchId === id) { fireTouchId = null; setFire(false); }
   if (joystick.touchId === id) {
     joystick.active = false; joystick.touchId = null;
     joystick.dx = 0; joystick.dy = 0;
