@@ -26,7 +26,7 @@ def grade(im,k):
 for f in sorted(os.listdir('out')):
     if not f.endswith('.png'): continue
     k=f[:-4]; broken=k.startswith('b_'); name=k[2:] if broken else k
-    im=grade(Image.open('out/'+f),name).resize((360,500),Image.LANCZOS)
+    im=grade(Image.open('out/'+f),name).resize((360,720),Image.LANCZOS)
     dst=(OUT+'/broken/' if broken else OUT+'/')+name+'.png'
     im.save(dst)
 print('exported')

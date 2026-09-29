@@ -22,8 +22,8 @@ const TREE_FILES = [
 ];
 // Размер дерева на экране при масштабе 1 (около 3–3.5 ростов человека).
 const TREE_DRAW_W = 185;
-const TREE_DRAW_H = 250;
-const TREE_BASE_FRAC = 0.86;
+const TREE_DRAW_H = 370;
+const TREE_BASE_FRAC = 0.9;
 // Доля деревьев, которая рисуется сломанной версией породы (assets/trees/broken/).
 const BROKEN_TREE_CHANCE = 0.03;
 

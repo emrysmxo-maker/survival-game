@@ -18,6 +18,6 @@ python3 export.py                      # цветокоррекция, 360x500, 
 Нужны `playwright` (Chromium) и `Pillow`. В `export.py` поправь путь `OUT`.
 
 - `s4.json` / `s5.json` — параметры пород (сгенерированы `mkspecs.py`): пресет EZ-Tree, высота (м), ширина, оттенки.
-- Основание ствола ставится в 86% высоты картинки (`TREE_BASE_FRAC = 0.86` в `src/config.js`), по центру.
+- Картинка 360x720, основание ствола в 90% высоты (`TREE_BASE_FRAC = 0.9`, `TREE_DRAW_H = 370` в `src/config.js`), по центру.
 - Если поменяешь наклон камеры (`TILE_H` в `src/ground.js`), деревья нужно перерендерить с тем же `elev` (см. `render.html`).
 - Ширины оснований для радиуса упора — `TREE_TRUNK_W` в `src/config.js`.
