@@ -67,7 +67,7 @@ function forNearbyObstacles(fn) {
     for (let cy = pcy - 1; cy <= pcy + 1; cy++) {
       const chunk = loadedChunks.get(`${cx},${cy}`);
       if (!chunk) continue;
-      fn(chunk.trees, (t) => TREE_COLLIDE_R * Math.min(1.15, t.scale || 1));
+      fn(chunk.trees, treeCollideRadius);
       fn(chunk.clutter, (c) => CLUTTER_COLLIDE_R * Math.min(1.05, c.scale || 1));
     }
   }
@@ -84,4 +84,12 @@ function pushOut(list, radiusOf) {
     player.x = o.x + dx / d * r;
     player.y = o.y + dy / d * r;
   }
+}
+
+// Радиус упора дерева (тайлы): полуширина основания ствола на экране,
+// переведённая в тайлы (полуось окружности тайла по горизонтали ≈ 45 px),
+// плюс запас на тело бойца.
+function treeCollideRadius(t) {
+  const halfPx = (TREE_TRUNK_W[t.type] || 0.1) * TREE_DRAW_W * (t.scale || 1) / 2;
+  return Math.max(TREE_COLLIDE_MIN, halfPx * 1.15 / 45 + TREE_COLLIDE_BODY);
 }
