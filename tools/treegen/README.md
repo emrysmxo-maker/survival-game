@@ -11,13 +11,13 @@
 cd tools/treegen
 npm init -y && npm i three@0.186 @dgreenheck/ez-tree --legacy-peer-deps
 python3 -m http.server 8791 &          # рендер-страница render.html
-python3 rt.py s4.json                  # живые деревья  -> out/*.png (720x1000)
-python3 rt.py s5.json                  # сломанные      -> out/b_*.png
+python3 rt.py s7.json                  # живые деревья  -> out/*.png (720x1440)
+python3 rt.py s8.json                  # сломанные      -> out/b_*.png
 python3 export.py                      # цветокоррекция, 360x500, в assets/trees
 ```
 Нужны `playwright` (Chromium) и `Pillow`. В `export.py` поправь путь `OUT`.
 
-- `s4.json` / `s5.json` — параметры пород (сгенерированы `mkspecs.py`): пресет EZ-Tree, высота (м), ширина, оттенки.
+- `s7.json` / `s8.json` — параметры пород: пресет EZ-Tree, высота (м), ширина, оттенки.
 - Картинка 360x720, основание ствола в 90% высоты (`TREE_BASE_FRAC = 0.9`, `TREE_DRAW_H = 370` в `src/config.js`), по центру.
 - Если поменяешь наклон камеры (`TILE_H` в `src/ground.js`), деревья нужно перерендерить с тем же `elev` (см. `render.html`).
 - Ширины оснований для радиуса упора — `TREE_TRUNK_W` в `src/config.js`.

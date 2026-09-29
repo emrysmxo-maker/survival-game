@@ -35,8 +35,8 @@ window.renderTree=function(spec){
   tree.position.set(-(bb.min.x+bb.max.x)/2*0 , -bb.min.y, 0); // основание на y=0
   const holder=new THREE.Group(); holder.add(tree); sc.add(holder);
   holder.rotation.y=spec.rot||0;
-  sc.add(new THREE.HemisphereLight(0xdfe9ff,0x6b5a3a,spec.hemi??1.5));
-  const dl=new THREE.DirectionalLight(0xfff2d8,spec.sun??2.6);
+  sc.add(new THREE.HemisphereLight(0xdfe9ff,0x6b5a3a,spec.hemi??1.15));
+  const dl=new THREE.DirectionalLight(0xfff2d8,spec.sun??3.2);
   dl.position.set(-6,10,5); dl.castShadow=true; dl.shadow.mapSize.set(2048,2048);
   Object.assign(dl.shadow.camera,{left:-12,right:12,top:14,bottom:-4,near:1,far:40}); dl.shadow.bias=-0.0006;
   sc.add(dl);

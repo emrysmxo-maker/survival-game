@@ -1,0 +1,206 @@
+{
+ "b_00_pine": {
+  "preset": "Pine Medium",
+  "height": 12,
+  "seed": 2,
+  "maxW": 3.0,
+  "opts": {
+   "bark.tint": 14262384,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.tint": 13164720,
+   "branch.force.strength": 0.035,
+   "branch.angle.1": 92,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.2
+ },
+ "b_01_oak": {
+  "preset": "Oak Large",
+  "height": 11,
+  "seed": 3,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "leaves.tint": 15265992,
+   "branch.length.1": 18,
+   "branch.length.2": 11,
+   "branch.angle.1": 40,
+   "branch.radius.0": 0.9,
+   "branch.levels": 1
+  },
+  "clipTop": 4.2
+ },
+ "b_02_birch": {
+  "preset": "Aspen Large",
+  "height": 12,
+  "seed": 7,
+  "maxW": 3.0,
+  "opts": {
+   "bark.type": "birch",
+   "bark.tint": 16777215,
+   "leaves.type": "ash",
+   "leaves.tint": 13168800,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "branch.children.1": 6,
+   "branch.children.2": 3,
+   "branch.levels": 1,
+   "branch.length.3": 3,
+   "branch.start.1": 0.3,
+   "branch.length.1": 12
+  },
+  "clipTop": 4.2
+ },
+ "b_03_maple": {
+  "preset": "Ash Large",
+  "height": 11,
+  "seed": 31,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.type": "oak",
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "leaves.tint": 14217384,
+   "branch.length.1": 18,
+   "branch.length.2": 10,
+   "branch.angle.1": 35,
+   "branch.radius.0": 1.0,
+   "branch.levels": 1
+  },
+  "clipTop": 4.2
+ },
+ "b_05_bluespruce": {
+  "preset": "Pine Medium",
+  "height": 11,
+  "seed": 5,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 10537192,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "bark.tint": 11577496,
+   "branch.force.strength": 0.035,
+   "branch.angle.1": 92,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.2
+ },
+ "b_06_willow": {
+  "preset": "Ash Large",
+  "height": 10,
+  "seed": 67,
+  "maxW": 3.0,
+  "opts": {
+   "bark.type": "willow",
+   "leaves.type": "ash",
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "leaves.tint": 14743728,
+   "branch.length.1": 18,
+   "branch.length.2": 12,
+   "branch.angle.1": 45,
+   "branch.force.strength": -0.12,
+   "branch.radius.0": 1.0,
+   "branch.levels": 1
+  },
+  "clipTop": 4.2
+ },
+ "b_07_aspen": {
+  "preset": "Aspen Large",
+  "height": 12,
+  "seed": 21,
+  "maxW": 3.0,
+  "opts": {
+   "bark.type": "birch",
+   "bark.tint": 14214352,
+   "leaves.type": "oak",
+   "leaves.tint": 13168800,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "branch.children.1": 6,
+   "branch.children.2": 3,
+   "branch.levels": 1,
+   "branch.length.3": 3,
+   "branch.start.1": 0.3,
+   "branch.length.1": 12
+  },
+  "clipTop": 4.2
+ },
+ "b_08_rowan": {
+  "preset": "Ash Medium",
+  "height": 8,
+  "seed": 41,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.type": "ash",
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "leaves.tint": 15268032,
+   "branch.radius.0": 1.2,
+   "branch.levels": 1
+  },
+  "clipTop": 4.2
+ },
+ "b_09_cedar": {
+  "preset": "Pine Medium",
+  "height": 11.5,
+  "seed": 23,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 8956032,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "bark.tint": 10514512,
+   "branch.force.strength": 0.035,
+   "branch.angle.1": 92,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.2
+ },
+ "b_10_larch": {
+  "preset": "Pine Medium",
+  "height": 12,
+  "seed": 29,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.tint": 14741664,
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "branch.force.strength": 0.035,
+   "branch.angle.1": 92,
+   "branch.levels": 0,
+   "branch.radius.0": 1.7
+  },
+  "clipTop": 4.2
+ },
+ "b_11_linden": {
+  "preset": "Ash Large",
+  "height": 11,
+  "seed": 41,
+  "maxW": 3.0,
+  "opts": {
+   "leaves.type": "ash",
+   "leaves.count": 0,
+   "leaves.size": 0.01,
+   "leaves.start": 0,
+   "leaves.tint": 13693088,
+   "branch.length.1": 17,
+   "branch.length.2": 10,
+   "branch.angle.1": 30,
+   "branch.radius.0": 1.0,
+   "branch.levels": 1
+  },
+  "clipTop": 4.2
+ }
+}
