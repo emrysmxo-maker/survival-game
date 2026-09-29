@@ -172,7 +172,20 @@ function render() {
       // В картинке дерева основание ствола стоит ровно по центру на 95% высоты
       // (так нарезаны assets/trees) — ставим эту точку в точку дерева на карте.
       if (sprite.complete) {
-        ctx.drawImage(sprite, pos.x - dw / 2, pos.y - dh * TREE_BASE_FRAC, dw, dh);
+        const left = pos.x - dw / 2, top = pos.y - dh * TREE_BASE_FRAC;
+        // Дерево ближе к камере, чем боец, и его крона накрывает бойца на
+        // экране — «прозрачное окошко» вокруг бойца, чтобы его форма и
+        // оружие оставались видны (как в играх с таким видом сверху).
+        const pp = toScreen(player.x, player.y);
+        const covers = (obj.x + obj.y) > (player.x + player.y) + 0.05 &&
+          pp.x > left + dw * 0.12 && pp.x < left + dw * 0.88 &&
+          pp.y - 30 > top && pp.y < pos.y + 6;
+        obj.fade = (obj.fade || 0) + ((covers ? 1 : 0) - (obj.fade || 0)) * 0.2;
+        if (obj.fade > 0.02) {
+          drawTreeWithHole(sprite, left, top, dw, dh, pp.x - left, pp.y - 42 - top, obj.fade);
+        } else {
+          ctx.drawImage(sprite, left, top, dw, dh);
+        }
       }
     }
   });
@@ -205,4 +218,36 @@ function render() {
   vignette.addColorStop(1, 'rgba(4, 7, 4, 0.55)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, view.w, view.h);
+}
+
+// Дерево с мягким «окошком» вокруг бойца: рисуем спрайт во временный
+// холст, вырезаем эллиптическую дыру с плавным краем и кладём на кадр.
+// Обычно окошко нужно 1–3 деревьям за раз, поэтому это дёшево.
+let treeHoleCanvas = null;
+function drawTreeWithHole(sprite, left, top, dw, dh, hx, hy, strength) {
+  const dpr = view.dpr;
+  const w = Math.ceil(dw * dpr), h = Math.ceil(dh * dpr);
+  if (!treeHoleCanvas) treeHoleCanvas = document.createElement('canvas');
+  if (treeHoleCanvas.width < w || treeHoleCanvas.height < h) {
+    treeHoleCanvas.width = Math.max(treeHoleCanvas.width, w);
+    treeHoleCanvas.height = Math.max(treeHoleCanvas.height, h);
+  }
+  const tc = treeHoleCanvas.getContext('2d');
+  tc.setTransform(1, 0, 0, 1, 0, 0);
+  tc.globalCompositeOperation = 'source-over';
+  tc.clearRect(0, 0, treeHoleCanvas.width, treeHoleCanvas.height);
+  tc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tc.drawImage(sprite, 0, 0, dw, dh);
+  tc.globalCompositeOperation = 'destination-out';
+  tc.save();
+  tc.translate(hx, hy);
+  tc.scale(0.75, 1);              // окошко вытянуто по вертикали: боец высокий
+  const r = 62;
+  const g = tc.createRadialGradient(0, 0, r * 0.45, 0, 0, r);
+  g.addColorStop(0, `rgba(0,0,0,${0.97 * strength})`);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  tc.fillStyle = g;
+  tc.fillRect(-r, -r, r * 2, r * 2);
+  tc.restore();
+  ctx.drawImage(treeHoleCanvas, 0, 0, w, h, left, top, dw, dh);
 }
