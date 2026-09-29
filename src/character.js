@@ -13,8 +13,9 @@ const METERS_PER_TILE = 1.39;
 const WALK_CLIP_MPS = 1.32;
 const RUN_CLIP_MPS = 2.83;
 // Порог переключения ходьба/бег с гистерезисом, чтобы не дёргалось на границе.
-const RUN_ENTER_MPS = 2.6;
-const RUN_EXIT_MPS = 2.1;
+const GAIT_TEMPO = 0.7;
+const RUN_ENTER_MPS = 2.4;
+const RUN_EXIT_MPS = 2.0;
 let charIsRunning = false;
 
 const CHARACTER_DRAW_W = 78;
@@ -316,8 +317,10 @@ function updateCharacter(dt, isMoving, angle, speed) {
       fadeToAction(clip, 0.12);
       const act = charActions[clip];
       if (act) {
-        const ts = mps / (charIsRunning ? RUN_CLIP_MPS : WALK_CLIP_MPS);
-        act.setEffectiveTimeScale(Math.min(charIsRunning ? 2.0 : 1.7, Math.max(charIsRunning ? 0.7 : 0.4, ts)));
+        // GAIT_TEMPO < 1: руки и ноги двигаются спокойнее, чем «по физике»,
+        // иначе выглядит как бег на тренажёре (немного скользит, но естественнее).
+        const ts = GAIT_TEMPO * mps / (charIsRunning ? RUN_CLIP_MPS : WALK_CLIP_MPS);
+        act.setEffectiveTimeScale(Math.min(1.3, Math.max(0.5, ts)));
       }
       charMixer.update(dt);
     } else if (proceduralSoldier) {
