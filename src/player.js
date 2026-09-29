@@ -91,5 +91,5 @@ function pushOut(list, radiusOf) {
 // плюс запас на тело бойца.
 function treeCollideRadius(t) {
   const halfPx = (TREE_TRUNK_W[t.type] || 0.1) * TREE_DRAW_W * (t.scale || 1) / 2;
-  return Math.max(TREE_COLLIDE_MIN, halfPx * 1.15 / 45 + TREE_COLLIDE_BODY);
+  return Math.max(TREE_COLLIDE_MIN, halfPx * 1.15 / (TILE_W * 0.7) + TREE_COLLIDE_BODY);
 }

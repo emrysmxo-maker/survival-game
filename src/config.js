@@ -21,8 +21,8 @@ const TREE_FILES = [
   '09_cedar.png', '10_larch.png', '11_linden.png'
 ];
 // Размер дерева на экране при масштабе 1 (около 3–3.5 ростов человека).
-const TREE_DRAW_W = 185;
-const TREE_DRAW_H = 370;
+const TREE_DRAW_W = 214;
+const TREE_DRAW_H = 428;
 const TREE_BASE_FRAC = 0.9;
 // Доля деревьев, которая рисуется сломанной версией породы (assets/trees/broken/).
 const BROKEN_TREE_CHANCE = 0; // сломанные — пока выключены (голые столбы выглядели недорисованными)

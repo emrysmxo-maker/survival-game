@@ -179,11 +179,11 @@ function render() {
         const pp = toScreen(player.x, player.y);
         const covers = (obj.x + obj.y) > (player.x + player.y) + 0.05 &&
           pp.x > left + dw * 0.12 && pp.x < left + dw * 0.88 &&
-          pp.y - 30 > top && pp.y < pos.y + 6;
+          pp.y - 35 > top && pp.y < pos.y + 6;
         obj.fade = (obj.fade || 0) + ((covers ? 1 : 0) - (obj.fade || 0)) * 0.2;
         if (obj.fade > 0.02) {
           treeHoleObj = obj;
-          drawTreeWithHole(sprite, left, top, dw, dh, pp.x - left, pp.y - 42 - top, obj.fade);
+          drawTreeWithHole(sprite, left, top, dw, dh, pp.x - left, pp.y - 48 - top, obj.fade);
         } else {
           drawSwaying(ctx, sprite, left, top, dw, dh, obj);
         }
@@ -243,7 +243,7 @@ function drawTreeWithHole(sprite, left, top, dw, dh, hx, hy, strength) {
   tc.save();
   tc.translate(hx, hy);
   tc.scale(0.75, 1);              // окошко вытянуто по вертикали: боец высокий
-  const r = 62;
+  const r = 72;
   const g = tc.createRadialGradient(0, 0, r * 0.45, 0, 0, r);
   g.addColorStop(0, `rgba(0,0,0,${0.97 * strength})`);
   g.addColorStop(1, 'rgba(0,0,0,0)');

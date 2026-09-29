@@ -12,7 +12,7 @@ window.ready=true;
 const CW=360, CH=720, SS=2;       // холст спрайта и суперсэмплинг
 const PPM=63.2;                  // px холста на метр (как у бойца: 32.5 px/м на экране)
 window.renderTree=function(spec){
-  const elev=spec.elev ?? Math.asin(48/64);
+  const elev=spec.elev ?? Math.asin(54/74);
   const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
   r.setSize(CW*SS,CH*SS); r.setClearColor(0x000000,0);
   r.outputColorSpace=THREE.SRGBColorSpace;

@@ -15,9 +15,9 @@ const TREE_MODELS = [
 const TREE_COUNT = 55;
 const FOREST_RADIUS = 30;      // м
 const CLEARING_RADIUS = 2.2;   // м — поляна вокруг бойца
-// «Как в игре»: наклон ~49° (asin(48/64)), поворот 45° (изометрия),
-// ортографическая камера, в кадре по ширине ~12.7 м (как на телефоне).
-const GAME_VIEW = { pitch: 49, yaw: 45, dist: 13, fov: 0 };
+// «Как в игре»: наклон ~47° (asin(54/74)), поворот 45° (изометрия),
+// ортографическая камера, в кадре по ширине ~11 м (как на телефоне).
+const GAME_VIEW = { pitch: 47, yaw: 45, dist: 11, fov: 0 };
 
 const cam = Object.assign({}, GAME_VIEW);
 const clock = new THREE.Clock();

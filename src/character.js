@@ -18,8 +18,8 @@ const RUN_ENTER_MPS = 2.4;
 const RUN_EXIT_MPS = 2.0;
 let charIsRunning = false;
 
-const CHARACTER_DRAW_W = 78;
-const CHARACTER_DRAW_H = 78;
+const CHARACTER_DRAW_W = 90;
+const CHARACTER_DRAW_H = 90;
 // Доля высоты до подошв берцев в 3D (ортографическая камера, frustum 2.4, y=0)
 // Точка земли под ногами в холсте бойца: центр кадра — точка (0, 0.85 м, 0),
 // земля на 0.85·cos(наклона) ниже, в кадре высотой 2.4 м (+0.02 — подошвы).
