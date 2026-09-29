@@ -12,7 +12,7 @@
 // Рисуется так же, как боец: своя 3D-сцена в закадровый холст, холст —
 // в общую очередь отрисовки по глубине.
 
-const ZOMBIE_HP = 160;
+const ZOMBIE_HP = 250;
 const ZOMBIE_WALK_TPS = 0.55;     // тайлов/с — медленный шаг (~0.8 м/с)
 const ZOMBIE_CRAWL_TPS = 0.22;    // ползком
 const ZOMBIE_HIT_R = 0.38;        // тайлов — радиус попадания
@@ -111,7 +111,7 @@ function createZombie(x, y) {
     x, y, hp: ZOMBIE_HP, state: 'walk', t: 0, yaw: 0,
     scene, root, tilt, model, bones, legRest, toeRest, mixer, actions, crawlK: 0,
     limbs: { armL: 28, armR: 28, legL: 30, legR: 30 },
-    lost: {}, broken: {},
+    lost: {}, broken: {}, labels: [],
     fall: 0, deadT: 0, attackT: 0, hitFlash: 0,
     phase: Math.random() * 10
   };
@@ -139,6 +139,10 @@ function updateZombies(dt) {
     const z = zombies[i];
     z.t += dt;
     z.hitFlash = Math.max(0, z.hitFlash - dt);
+    for (let k = z.labels.length - 1; k >= 0; k--) {
+      z.labels[k].age += dt;
+      if (z.labels[k].age > z.labels[k].life) z.labels.splice(k, 1);
+    }
     const dx = player.x - z.x, dy = player.y - z.y;
     const dist = Math.hypot(dx, dy);
 
@@ -172,7 +176,7 @@ function updateZombies(dt) {
   }
   for (let i = bloodDecals.length - 1; i >= 0; i--) {
     bloodDecals[i].age += dt;
-    if (bloodDecals[i].age > 25) bloodDecals.splice(i, 1);
+    if (bloodDecals[i].age > 14) bloodDecals.splice(i, 1);
   }
 }
 
@@ -200,7 +204,8 @@ function animateZombie(z, dt) {
   const B = z.bones;
   const moving = z.state !== 'dead' && z.attackT === 0;
   const walk = z.actions.Walk;
-  if (walk) walk.setEffectiveTimeScale(z.state === 'crawl' ? 0.05 : (moving ? 0.55 : 0.15));
+  // мёртвый — поза замирает (иначе ноги продолжали «шагать» лёжа)
+  if (walk) walk.setEffectiveTimeScale(z.state === 'dead' ? 0 : z.state === 'crawl' ? 0.05 : (moving ? 0.55 : 0.15));
   z.mixer.update(dt);
   for (const [n, q] of Object.entries(z.toeRest)) B[n].quaternion.copy(q);
 
@@ -287,7 +292,9 @@ function damageZombie(z, b) {
   if (z.lost[hit.part]) hit = ZOMBIE_PARTS[1];      // оторванная — пуля в корпус
   z.hp -= hit.dmg;
   z.hitFlash = 0.12;
-  spawnBlood(z.x, z.y, b.dx, b.dy, hit.part === 'head' ? 10 : 6);
+  spawnBlood(z.x, z.y, b.dx, b.dy, hit.part === 'head' ? 4 : 2);
+  const PART_RU = { head: 'ГОЛОВА', torso: 'КОРПУС', armL: 'РУКА', armR: 'РУКА', legL: 'НОГА', legR: 'НОГА' };
+  let label = PART_RU[hit.part];
 
   if (hit.hp) {
     z.limbs[hit.part] -= hit.dmg + 8;
@@ -296,17 +303,26 @@ function damageZombie(z, b) {
       // рука: 55% отрывается, иначе повисает; нога: 40% отрывается, иначе ломается
       if (Math.random() < (isLeg ? 0.4 : 0.55)) {
         z.lost[hit.part] = true;
-        spawnBlood(z.x, z.y, b.dx, b.dy, 16);
-        addBloodDecal(z.x, z.y, 1.4);
+        spawnBlood(z.x, z.y, b.dx, b.dy, 6);
+        addBloodDecal(z.x, z.y, 1.0);
+        label = isLeg ? 'НОГА ОТОРВАНА' : 'РУКА ОТОРВАНА';
       } else {
         z.broken[hit.part] = true;
+        label = isLeg ? 'НОГА СЛОМАНА' : 'РУКА СЛОМАНА';
       }
       if (isLeg && z.state === 'walk') z.state = 'crawl';
     }
   }
   if (z.hp <= 0 && z.state !== 'dead') {
     z.state = 'dead';
-    addBloodDecal(z.x, z.y, 1.8);
+    addBloodDecal(z.x, z.y, 1.2);
+    label = 'УБИТ';
+  }
+  // Подпись над зомби: куда попали (важные — крупнее и дольше).
+  const big = label.includes(' ') || label === 'УБИТ';
+  if (big || !z.labels.some((l) => l.age < 0.35)) {
+    z.labels.push({ text: label, age: 0, life: big ? 1.6 : 0.6, big });
+    if (z.labels.length > 4) z.labels.shift();
   }
 }
 
@@ -322,12 +338,12 @@ function spawnBlood(x, y, dx, dy, n) {
       age: 0, life: 0.5 + Math.random() * 0.3, size: 1.2 + Math.random() * 1.6
     });
   }
-  addBloodDecal(x + dx * 0.3, y + dy * 0.3, 0.6 + Math.random() * 0.5);
+  if (Math.random() < 0.25) addBloodDecal(x + dx * 0.3, y + dy * 0.3, 0.35 + Math.random() * 0.3);
 }
 
 function addBloodDecal(x, y, s) {
   bloodDecals.push({ x: x + (Math.random() - 0.5) * 0.3, y: y + (Math.random() - 0.5) * 0.3, s, rot: Math.random() * 6, age: 0 });
-  if (bloodDecals.length > 60) bloodDecals.shift();
+  if (bloodDecals.length > 25) bloodDecals.shift();
 }
 
 // Лужи крови — рисуются после земли, под всем остальным.
@@ -335,7 +351,7 @@ function drawBloodDecals(ctx) {
   for (const d of bloodDecals) {
     const p = toScreen(d.x, d.y);
     if (p.x < -40 || p.x > view.w + 40 || p.y < -40 || p.y > view.h + 40) continue;
-    const a = Math.min(0.75, 0.75 * (25 - d.age) / 5);
+    const a = Math.min(0.55, 0.55 * (14 - d.age) / 4);
     const r = 9 * d.s;
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -361,5 +377,30 @@ function drawZombie(ctx, z) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.drawImage(zRenderer.domElement, p.x - ZOMBIE_DRAW / 2, p.y - ZOMBIE_DRAW * ZOMBIE_BASE_FRAC, ZOMBIE_DRAW, ZOMBIE_DRAW);
+  ctx.restore();
+
+  // Полоска здоровья над головой (пока жив и уже ранен).
+  const top = p.y - (z.state === 'walk' ? 78 : 34);
+  if (z.state !== 'dead' && z.hp < ZOMBIE_HP) {
+    const w = 34, k = Math.max(0, z.hp / ZOMBIE_HP);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(p.x - w / 2 - 1, top - 1, w + 2, 6);
+    ctx.fillStyle = k > 0.5 ? '#6fcf4a' : k > 0.25 ? '#e0b030' : '#d04030';
+    ctx.fillRect(p.x - w / 2, top, w * k, 4);
+  }
+  // Подписи попаданий: всплывают и тают.
+  ctx.save();
+  ctx.textAlign = 'center';
+  z.labels.forEach((l, i) => {
+    const t = l.age / l.life;
+    ctx.globalAlpha = Math.max(0, 1 - t);
+    ctx.font = `bold ${l.big ? 12 : 9}px sans-serif`;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillStyle = l.big ? '#ffd24a' : '#ffffff';
+    const y = top - 6 - t * 14 - (z.labels.length - 1 - i) * 13;  // новые снизу, не налезают
+    ctx.strokeText(l.text, p.x, y);
+    ctx.fillText(l.text, p.x, y);
+  });
   ctx.restore();
 }
