@@ -2,7 +2,7 @@
 // переключателей. Каждый отключает один механизм игры. Значения запоминаются в браузере.
 const DBG = { noPieces: false, noWind: false, noSunShadow: false, noSlopeLight: true, loOnly: false, noHole: false, noZoom: false, noPlants: false };
 const DBG_LABELS = {
-  noPieces: 'Без отклонения кустов (стоят неподвижно)',
+  noPieces: 'Без раздвигания кустов (только целые)',
   noWind: 'Без ветра (кусты и деревья не качаются)',
   noSunShadow: 'Без теней от солнца (деревья, боец, кусты)',
   noSlopeLight: 'Без света/тени склонов (без тумана)',
@@ -15,9 +15,10 @@ const DBG_LABELS = {
   try {
     const saved = JSON.parse(localStorage.getItem('dbg') || '{}');
     Object.assign(DBG, saved);
-    // По умолчанию свет склонов отключен, чтобы не было серого тумана
+    // Возвращаем полноценную физику раздвигания кустов
+    DBG.noPieces = false;
+    // Свет склонов отключен по умолчанию, чтобы не было тумана
     if (saved.noSlopeLight === undefined) DBG.noSlopeLight = true;
-    if (saved.noPieces === undefined) DBG.noPieces = false;
   } catch (e) { /* нет хранилища */ }
   const save = () => { try { localStorage.setItem('dbg', JSON.stringify(DBG)); } catch (e) { /* ignore */ } };
   const box = document.createElement('div');
