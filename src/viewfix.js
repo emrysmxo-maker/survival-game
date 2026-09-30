@@ -1,8 +1,7 @@
-// Страховка размера холста и новое управление огнем (v5.5).
-// 1. Палец на стике огня: боец переходит в режим готовности (вскидывает ствол, целится, ходит).
-// 2. Внутри круга (радиус < 30px): только прицеливание, выстрелов нет.
-// 3. Выход за круг (радиус >= 30px): открывается огонь строго по направлению стика.
-// 4. Бег вперед + стик назад: боец разворачивается назад, после чего сразу открывает огонь назад.
+// Плавающий джойстик огня и прицеливания (v5.6).
+// Касание в любой точке правой половины экрана -> джойстик появляется прямо под пальцем.
+// Внутри круга (дистанция < 26px) -> боец вскидывает оружие и целится (без выстрелов).
+// За пределами круга (дистанция >= 26px) -> открывается непрерывная стрельба ровно по направлению пальца.
 (function () {
   function fix() {
     if (typeof resize !== 'function' || typeof canvas === 'undefined') return;
@@ -22,47 +21,62 @@
     window.drawGroundLight = function () { /* без серого тумана */ };
   }
 
-  function wrapA(a) {
-    while (a < -Math.PI) a += Math.PI * 2;
-    while (a > Math.PI) a -= Math.PI * 2;
-    return a;
+  // --- Плавающий джойстик огня ---
+  const fireBtn = document.getElementById('fire-btn');
+  const fireKnob = document.getElementById('fire-knob');
+  const R_FIRE_THRESHOLD = 26; // px: внутри этого радиуса — только прицел, снаружи — непрерывный огонь
+  const R_MAX_KNOB = 44;       // px: максимальный ход шляпки
+
+  const fireJoy = {
+    active: false,
+    touchId: null,
+    baseX: 0,
+    baseY: 0,
+    dist: 0
+  };
+
+  // Стили для плавающего джойстика
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    #fire-btn {
+      transition: opacity 0.15s ease;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #fire-btn.floating-idle {
+      opacity: 0.35 !important;
+    }
+    #fire-btn.floating-aim {
+      opacity: 0.95 !important;
+      border-color: rgba(255, 215, 0, 0.9) !important;
+      box-shadow: 0 0 16px rgba(255, 215, 0, 0.45);
+    }
+    #fire-btn.floating-shoot {
+      opacity: 1 !important;
+      border-color: #ff3333 !important;
+      background: rgba(255, 40, 40, 0.35) !important;
+      box-shadow: 0 0 24px rgba(255, 50, 50, 0.8);
+    }
+    #fire-knob {
+      pointer-events: none;
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  if (fireBtn) {
+    fireBtn.classList.add('floating-idle');
   }
 
-  // --- Переопределяем логику оружия: разделение зон «прицел» и «огонь» ---
-  const FIRE_ZONE_RADIUS = 30; // px: внутри этого радиуса — только прицел и стойка, за ним — стрельба
-
+  // Обновление оружия каждый кадр
   window.updateWeapon = function (dt) {
     if (typeof weapon === 'undefined') return;
     weapon.cooldown -= dt;
-    if (weapon._turnTimer > 0) weapon._turnTimer -= dt;
 
     const aimA = (typeof weapon.aimAngle === 'number') ? weapon.aimAngle : (typeof player !== 'undefined' ? player.angle : 0);
-    const moveA = (typeof joystick !== 'undefined' && joystick.active && (joystick.dx || joystick.dy))
-      ? Math.atan2(joystick.dy, joystick.dx)
-      : (typeof player !== 'undefined' ? player.angle : aimA);
 
-    const diff = Math.abs(wrapA(aimA - moveA));
-    const isAimingBack = diff > 0.85; // угол больше ~49° (целимся назад или сильно вбок относительно бега)
-
-    if (isAimingBack) {
-      if (weapon._lastAim !== aimA) {
-        weapon._turnTimer = 0.16; // 160 мс на разворот корпуса/модели назад перед выстрелами
-        weapon._lastAim = aimA;
-      }
-    } else {
-      weapon._turnTimer = 0;
-      weapon._lastAim = aimA;
-    }
-
-    const waitingTurn = isAimingBack && weapon._turnTimer > 0;
-    const ready = typeof charAimBlend === 'undefined' || charAimBlend > 0.6;
-
-    // Стреляем ТОЛЬКО если:
-    // 1. Палец на кнопке (weapon.firing)
-    // 2. Палец вытянут ЗА пределы круга (weapon._outsideCircle)
-    // 3. Боец завершил разворот назад (не waitingTurn)
-    // 4. Оружие готово к выстрелу
-    if (weapon.firing && weapon._outsideCircle && ready && !waitingTurn && weapon.cooldown <= 0) {
+    // Стрельба ведется непрерывно, пока палец за пределами круга
+    if (weapon.firing && weapon.shootAllowed && weapon.cooldown <= 0) {
       if (typeof player !== 'undefined') {
         const wx = Math.cos(aimA) + Math.sin(aimA);
         const wy = Math.sin(aimA) - Math.cos(aimA);
@@ -114,102 +128,131 @@
     }
   };
 
-  // --- Перехватываем сенсорное управление стиком огня ---
-  const fireBtn = document.getElementById('fire-btn');
-  const fireKnob = document.getElementById('fire-knob');
-  let fTouchId = null;
-  let fCX = 0, fCY = 0;
-
-  if (fireBtn) {
-    // Стили индикации зон
-    const styleEl = document.createElement('style');
-    styleEl.textContent = `
-      #fire-btn.aim-ready {
-        border-color: rgba(255, 215, 0, 0.9) !important;
-        box-shadow: 0 0 14px rgba(255, 215, 0, 0.4);
-      }
-      #fire-btn.fire-active {
-        border-color: #ff3333 !important;
-        background: rgba(255, 40, 40, 0.35) !important;
-        box-shadow: 0 0 20px rgba(255, 50, 50, 0.7);
-      }
-    `;
-    document.head.appendChild(styleEl);
-
-    function onTouchStart(e) {
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        if (fireBtn.contains(t.target)) {
-          fTouchId = t.identifier;
-          const r = fireBtn.getBoundingClientRect();
-          fCX = r.left + r.width / 2;
-          fCY = r.top + r.height / 2;
-
-          if (typeof weapon !== 'undefined') {
-            weapon.firing = true; // включает режим готовности в character.js
-            weapon._outsideCircle = false; // внутри круга: НЕ стрелять!
-            weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
-          }
-          fireBtn.classList.add('aim-ready');
-          fireBtn.classList.remove('fire-active');
-          updateKnob(t.clientX, t.clientY);
-        }
-      }
-    }
-
-    function onTouchMove(e) {
-      if (fTouchId === null) return;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        if (t.identifier === fTouchId) {
-          updateKnob(t.clientX, t.clientY);
-        }
-      }
-    }
-
-    function updateKnob(x, y) {
-      const dx = x - fCX, dy = y - fCY;
-      const d = Math.hypot(dx, dy);
-
-      if (typeof weapon !== 'undefined') {
-        if (d > 6) {
-          weapon.aimAngle = Math.atan2(dy, dx);
-        }
-        // Проверяем выход за круг:
-        if (d >= FIRE_ZONE_RADIUS) {
-          weapon._outsideCircle = true; // за кругом: СТРЕЛЬБА!
-          fireBtn.classList.add('fire-active');
-        } else {
-          weapon._outsideCircle = false; // внутри круга: ТОЛЬКО ПРИЦЕЛ!
-          fireBtn.classList.remove('fire-active');
-        }
-      }
-
-      if (fireKnob) {
-        const maxR = 44;
-        const k = Math.min(d, maxR) / (d || 1);
-        fireKnob.style.transform = 'translate(' + (dx * k) + 'px, ' + (dy * k) + 'px)';
-      }
-    }
-
-    function onTouchEnd(e) {
-      if (fTouchId === null) return;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === fTouchId) {
-          fTouchId = null;
-          if (typeof weapon !== 'undefined') {
-            weapon.firing = false;
-            weapon._outsideCircle = false;
-          }
-          fireBtn.classList.remove('aim-ready', 'fire-active');
-          if (fireKnob) fireKnob.style.transform = '';
-        }
-      }
-    }
-
-    window.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
-    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
-    window.addEventListener('touchend', onTouchEnd, { capture: true, passive: false });
-    window.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: false });
+  // Проверка: касается ли палец UI элементов (чтобы не блокировать кнопки)
+  function isUIElement(target) {
+    if (!target || !target.closest) return false;
+    return !!(
+      target.closest('#minimap') ||
+      target.closest('#bigmap') ||
+      target.closest('#style-bar') ||
+      target.closest('.style-btn') ||
+      target.closest('#rot-btn') ||
+      target.closest('#daynight') ||
+      target.closest('#dbg') ||
+      target.closest('#zombie-btn') ||
+      target.closest('#auto-btn')
+    );
   }
+
+  function handleTouchStart(e) {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (isUIElement(t.target)) continue;
+
+      // Если касание в правой половине экрана и плавающий джойстик еще не активен
+      if (!fireJoy.active && t.clientX > window.innerWidth * 0.48) {
+        fireJoy.active = true;
+        fireJoy.touchId = t.identifier;
+        fireJoy.baseX = t.clientX;
+        fireJoy.baseY = t.clientY;
+        fireJoy.dist = 0;
+
+        if (typeof weapon !== 'undefined') {
+          weapon.firing = true; // в character.js включает стойку боевой готовности и прицел
+          weapon.shootAllowed = false; // внутри круга — НЕ стрелять!
+          weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
+        }
+
+        // Перемещаем джойстик ровно в место касания пальца
+        if (fireBtn) {
+          const btnR = 45; // половина ширины 90px
+          fireBtn.style.left = (t.clientX - btnR) + 'px';
+          fireBtn.style.top = (t.clientY - btnR) + 'px';
+          fireBtn.style.right = 'auto';
+          fireBtn.style.bottom = 'auto';
+          fireBtn.classList.remove('floating-idle', 'floating-shoot');
+          fireBtn.classList.add('floating-aim');
+        }
+        if (fireKnob) fireKnob.style.transform = '';
+
+        e.stopPropagation();
+        e.preventDefault();
+        break;
+      }
+    }
+  }
+
+  function handleTouchMove(e) {
+    if (!fireJoy.active) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t.identifier === fireJoy.touchId) {
+        const dx = t.clientX - fireJoy.baseX;
+        const dy = t.clientY - fireJoy.baseY;
+        const dist = Math.hypot(dx, dy);
+        fireJoy.dist = dist;
+
+        if (typeof weapon !== 'undefined') {
+          if (dist > 6) {
+            weapon.aimAngle = Math.atan2(dy, dx);
+          }
+          if (dist >= R_FIRE_THRESHOLD) {
+            weapon.shootAllowed = true; // ВЫШЕЛ ЗА КРУГ: СТРЕЛЬБА!
+            if (fireBtn) {
+              fireBtn.classList.remove('floating-aim');
+              fireBtn.classList.add('floating-shoot');
+            }
+          } else {
+            weapon.shootAllowed = false; // ВНУТРИ КРУГА: ТОЛЬКО ПРИЦЕЛ!
+            if (fireBtn) {
+              fireBtn.classList.remove('floating-shoot');
+              fireBtn.classList.add('floating-aim');
+            }
+          }
+        }
+
+        if (fireKnob) {
+          const k = Math.min(dist, R_MAX_KNOB) / (dist || 1);
+          fireKnob.style.transform = 'translate(' + (dx * k) + 'px, ' + (dy * k) + 'px)';
+        }
+
+        e.stopPropagation();
+        e.preventDefault();
+        break;
+      }
+    }
+  }
+
+  function handleTouchEnd(e) {
+    if (!fireJoy.active) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t.identifier === fireJoy.touchId) {
+        fireJoy.active = false;
+        fireJoy.touchId = null;
+        fireJoy.dist = 0;
+
+        if (typeof weapon !== 'undefined') {
+          weapon.firing = false;
+          weapon.shootAllowed = false;
+        }
+
+        if (fireBtn) {
+          fireBtn.classList.remove('floating-aim', 'floating-shoot');
+          fireBtn.classList.add('floating-idle');
+          fireKnob.style.transform = '';
+        }
+
+        e.stopPropagation();
+        e.preventDefault();
+        break;
+      }
+    }
+  }
+
+  // Перехват событий в фазе capture для мгновенного и надежного отклика
+  window.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false });
+  window.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
+  window.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
+  window.addEventListener('touchcancel', handleTouchEnd, { capture: true, passive: false });
 })();
