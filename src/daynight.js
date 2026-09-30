@@ -9,6 +9,23 @@
 const DAY_REAL_MIN = 30;          // сколько реальных минут длятся игровые сутки (15 мин день, 15 мин ночь)
 const dayNight = { t: 10, auto: true };   // t — часы (0..24)
 
+// Шаг 1: Удаляем старую механику подмены текстур кустов при подходе (кусты больше не мерцают)
+if (typeof coverIsNear === 'function') coverIsNear = function () { return false; };
+if (typeof drawCoverItem === 'function') {
+  drawCoverItem = function (c, o, half) {
+    if (typeof DBG !== 'undefined' && DBG.noPlants) return;
+    if (half) return; // целая картинка — один раз, без подмены на пучки
+    const p = toScreen(o.x, o.y, heightOf(o));
+    if (!onScreen(p, 120)) return;
+    const def = COVER_KINDS[o.kind];
+    if (!def) return;
+    const ph = o.x * 0.55 + o.y * 0.35;
+    const H = (SPRITE_DATA.cover && SPRITE_DATA.cover[o.key]) ? SPRITE_DATA.cover[o.key].ay * o.scale : 40;
+    const wind = (typeof DBG !== 'undefined' && DBG.noWind) ? 0 : def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+    drawWindSprite(c, o, p.x, p.y, wind);
+  };
+}
+
 (function initDayNightUI() {
   const wrap = document.createElement('div');
   wrap.id = 'daynight';
@@ -140,12 +157,8 @@ function sunLight() {
   return { dx, dy, k: Math.max(0, k), sxs, sys, e };
 }
 
-// Единственные тени в игре — от солнца: деревья и боец/зомби. Направление —
+// Единственные тени в игре — от солнца: деревья, кусты и боец/зомби. Направление —
 // от солнца, длина — по его высоте (утром/вечером длинные), ночью их нет.
-// Картинки теней деревьев отрендерены с солнцем слева (тень вправо) под ~48°,
-// поэтому их поворачиваем и вытягиваем.
-// Картинки теней обрезаны по краю холста рендера (у ствола) — при повороте
-// тени этот срез становился резкой прямой линией. Края плавно гасим.
 const _feather = {};
 function featheredShadow(key) {
   if (_feather[key]) return _feather[key];
@@ -167,7 +180,7 @@ function featheredShadow(key) {
 }
 
 function drawSunShadows(c) {
-  if (DBG.noSunShadow) return;
+  if (typeof DBG !== 'undefined' && DBG.noSunShadow) return;
   const t = dayNight.t, e = sunElevation(t);
   if (e <= 0.02) return;
   const sun = sunLight();
@@ -177,6 +190,8 @@ function drawSunShadows(c) {
   const len = Math.max(0.6, Math.min(2.6, Math.tan(0.84) / Math.tan(Math.max(0.2, elev))));
   c.save();
   c.globalAlpha = alpha;
+
+  // Тени деревьев
   for (const chunk of loadedChunks.values()) {
     for (const tr of chunk.trees) {
       const key = TREE_FILES[tr.type].replace('.png', '');
@@ -198,6 +213,36 @@ function drawSunShadows(c) {
       c.restore();
     }
   }
+
+  // Шаг 2: Упрощенные динамические эллипсы теней кустов, привязанные к солнцу (без текстур и без мерцания)
+  if (typeof DBG === 'undefined' || !DBG.noPlants) {
+    for (const chunk of loadedChunks.values()) {
+      for (const o of chunk.cover || []) {
+        const d = SPRITE_DATA.cover && SPRITE_DATA.cover[o.key];
+        if (!d) continue;
+        const p = toScreen(o.x, o.y, heightOf(o));
+        if (p.x < -60 || p.x > view.w + 60 || p.y < -60 || p.y > view.h + 60) continue;
+        const sc = o.scale || 1;
+        const rad = Math.max(7, d.w * 0.25 * sc);
+        c.save();
+        c.translate(p.x, p.y);
+        c.scale(1, TILE_H / TILE_W);
+        c.rotate(ang);
+        const L = rad * 1.5 * len;
+        c.translate(L * 0.45, 0);
+        c.scale(L / rad, 0.7);
+        const g = c.createRadialGradient(0, 0, 0, 0, 0, rad);
+        g.addColorStop(0, `rgba(0,0,0,${(alpha * 0.7).toFixed(3)})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(0, 0, rad, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    }
+  }
+
   c.globalAlpha = 1;
   const who = [[player.x, player.y, player.h, 1]];
   if (typeof zombies !== 'undefined') for (const z of zombies) who.push([z.x, z.y, undefined, z.state === 'walk' ? 1 : 1.4]);
