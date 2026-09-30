@@ -39,6 +39,7 @@
 | `assets/rocks/` | Валуны: рендеры 3D-моделей Poly Haven (CC0) под угол камеры, 200x200, земля на 72%. |
 | `src/cover.js` | Покров земли (трава, кусты, ветки, корни), тени деревьев и тени под ногами (`drawGroundLayer`, `footShadow`). |
 | `src/effects.js` | Следы на мягкой земле, пыль при беге, брызги и круги на воде (`updateEffects`, `drawEffects`). |
+| `src/update.js` | Автообновление: раз в 15 с HEAD-запрос `index.html`, при смене Last-Modified — перезагрузка страницы. |
 | `src/sprites-data.js` | Автогенерация (`tools/treegen/export_sprites.py`): размеры/якоря картинок покрова, теней, валунов. |
 | `assets/cover/`, `assets/shadows/` | Картинки покрова и теней деревьев (рендеры 3D под угол камеры). |
 | `src/render.js` | Вся отрисовка. |
