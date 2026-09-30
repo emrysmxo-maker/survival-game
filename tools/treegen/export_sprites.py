@@ -46,8 +46,12 @@ for name,sp in specs.items():
             key=name; out=f'assets/cover/{key}.png'; group='cover'
         man[group][key]={'file':out,'w':round(w/2,1),'h':round(h/2,1),'ax':round(ax*k/2,1),'ay':round(ay*k/2,1)}
     im.save(GAME+'/'+out, optimize=True)
+import re
+prev=open(GAME+'/src/sprites-data.js').read() if os.path.exists(GAME+'/src/sprites-data.js') else ''
+keep=re.search(r'\nSPRITE_DATA\.coverPieces = .*',prev,flags=re.S)   # пучки растений пишет export_pieces.py — не терять
 open(GAME+'/src/sprites-data.js','w').write(
  "// Сгенерировано tools/treegen/export_sprites.py — размеры (w,h) и точка земли (ax,ay)\n"
  "// в экранных px при масштабе 1. Картинки подлеска и камней — x2 (чёткость на телефоне).\n"
  "const SPRITE_DATA = "+json.dumps(man,ensure_ascii=False,indent=1)+";\n")
 print({g:len(v) for g,v in man.items()})
+if keep: open(GAME+'/src/sprites-data.js','a').write(keep.group(0))
