@@ -440,7 +440,8 @@ function updateCharacter(dt, isMoving, angle, speed, slopeAlong) {
     const sl = isMoving ? (slopeAlong || 0) * (charBackpedal ? -1 : 1) : 0;   // пятится — уклон против взгляда
     charSlope += (sl - charSlope) * Math.min(1, 6 * dt);
     const ang = Math.atan(charSlope);
-    const leanT = ang > 0 ? Math.min(0.3, ang * 0.7) : Math.max(-0.16, ang * 0.45);
+    // плавно насыщается: 20% уклона ≈ 6°, 50% ≈ 12°, 80% ≈ 15° вперёд; с горы до −9°
+    const leanT = ang > 0 ? 0.3 * Math.tanh(ang * 1.4) : -0.17 * Math.tanh(-ang * 1.6);
     charLean += (leanT - charLean) * Math.min(1, 8 * dt);
     soldierRoot.rotation.x = charLean;
   }

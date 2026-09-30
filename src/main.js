@@ -42,7 +42,13 @@ function update(dt) {
     wantX = (joystick.dx + joystick.dy) * spd;
     wantY = (joystick.dy - joystick.dx) * spd;
     // местность: вода, болото, склон
-    const tk = terrainSpeed(player.x, player.y, wantX, wantY);
+    // Скорость от местности меняется не мгновенно: разгон под горку и его
+    // инерция (выбежал из ямы — первые шаги вверх ещё бодрые), усталость в
+    // гору нарастает за ~0.5 с.
+    const tkT = terrainSpeed(player.x, player.y, wantX, wantY);
+    player.tk = player.tk || 1;
+    player.tk += (tkT - player.tk) * Math.min(1, (tkT > player.tk ? 1.6 : 2.2) * dt);
+    const tk = player.tk;
     wantX *= tk;
     wantY *= tk;
     player.angle = Math.atan2(joystick.dy, joystick.dx);

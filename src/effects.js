@@ -39,8 +39,10 @@ function stepEffects(ent, x, y, dt, heavy) {
     fx.prints.push({ x: fxw, y: fyw, h, ang: Math.atan2((nx + ny) * TILE_H / 2, (nx - ny) * TILE_W / 2), mud: t.swamp > 0.3, age: 0, k: heavy ? 1.2 : 1 });
     if (fx.prints.length > FOOTPRINT_MAX) fx.prints.shift();
   }
-  const dry = ((_fw[2] || 0) + (_fw[4] || 0) + (_fw[7] || 0) * 0.6) * (1 - t.swamp);
-  if (dry > 0.35 && speed > 1.2) {
+  // уклон по ходу шага (м/м): на спуске из-под ног сыплется земля даже на траве
+  const hs = (terrainHeight(fxw + nx * 0.4, fyw + ny * 0.4) - terrainHeight(fxw - nx * 0.4, fyw - ny * 0.4)) / (0.8 * 1.39);
+  const dry = ((_fw[2] || 0) + (_fw[4] || 0) + (_fw[7] || 0) * 0.6) * (1 - t.swamp) + Math.max(0, -hs - 0.25) * 1.5;
+  if (dry > 0.35 && speed > 1.0) {
     const ash = (_fw[4] || 0) > 0.4;
     for (let i = 0; i < 2; i++) {
       fx.dust.push({ x: fxw, y: fyw, h, ox: (Math.random() - 0.5) * 6 - nx * 4, oy: (Math.random() - 0.5) * 3, age: 0, life: 0.8 + Math.random() * 0.5, ash });

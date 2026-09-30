@@ -120,8 +120,10 @@ function terrainSpeed(x, y, mx, my) {
     // уклон по ходу движения (м на тайл): вверх — медленнее, вниз — чуть быстрее
     const e = 0.5, ux = mx / l, uy = my / l;
     const slope = (terrainHeight(x + ux * e, y + uy * e) - terrainHeight(x - ux * e, y - uy * e)) / (2 * e);
-    // в гору заметно медленнее (25% уклона ≈ ×0.6), под гору чуть быстрее
-    k *= slope > 0 ? Math.max(0.4, 1 - slope * 1.1) : Math.min(1.15, 1 - slope * 0.3);
+    // плавная кривая без «упора»: в гору 20% → ×0.8, 50% → ×0.62, 80% → ×0.5;
+    // под гору до ×1.22 (уклон считаем в м на м)
+    const sm = slope / METERS_PER_TILE;
+    k *= sm > 0 ? 1 / (1 + sm * 0.75) : 1 + 0.22 * Math.tanh(-sm * 1.6);
   }
   return k;
 }
