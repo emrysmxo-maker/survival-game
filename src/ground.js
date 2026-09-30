@@ -66,6 +66,18 @@ function hillHeight(wx, wy) {
   );
 }
 
+// Бугры и впадины «под ногами»: волны 10–30 тайлов, перепад до ~±2 м на
+// 10–15 тайлов (уклон 10–20%) — их чувствуешь при ходьбе (в гору медленнее,
+// земля и деревья поднимаются на экране); крупные холмы этого не дают.
+function bumpHeight(wx, wy) {
+  return (
+    0.9 * Math.sin(wx * 0.23 + wy * 0.11 + 1.2 * Math.sin(wy * 0.09)) +
+    0.85 * Math.sin(wx * 0.13 - wy * 0.27 + 0.8 * Math.sin(wx * 0.11) + 2) +
+    0.55 * Math.sin(wx * 0.31 - wy * 0.19 + 4) +
+    0.3 * Math.sin(wx * 0.47 + wy * 0.41 + 1)
+  );
+}
+
 // Ручьи: линии, где плавное поле F = 0. Расстояние до ручья ≈ |F| / |∇F|.
 function streamField(wx, wy) {
   return (
@@ -111,7 +123,9 @@ function terrainAt(wx, wy, out) {
   const swamp = smoothstep(0.5, 0.72, wet - hill * 0.16) * (1 - ravine);
   // болото плоское и низкое, овраг — глубокий
   const bowl = smoothstep(0.5, 0.85, bowlNoise(wx, wy)) * (1 - ravine);
-  const h = hill * 0.5 * (1 - 0.8 * swamp) - swamp * 0.8 - ravine * 3.4 - bowl * 3.0;
+  // бугры не в овраге и у воды; на болоте — вполовину слабее (плоское, но не ровное)
+  const bump = bumpHeight(wx, wy) * 0.5 * (1 - ravine) * (1 - water) * (1 - 0.5 * swamp);
+  const h = hill * 0.5 * (1 - 0.8 * swamp) + bump - swamp * 0.8 - ravine * 3.4 - bowl * 3.0;
   out.h = h;
   out.bowl = bowl;
   out.water = water;
@@ -205,11 +219,14 @@ function createGroundBaker(makeCanvas, textures) {
         const h = weights.t.h;
         const hx = terrainAt(wx + 0.6, wy, tt).h - h;
         const hy = terrainAt(wx, wy + 0.6, tt).h - h;
-        const lightK = -(hx + hy) * 1.2;
+        // вогнутость (впадина темнее, бугор светлее): среднее по соседям на 1.5 тайла
+        const lap = (terrainAt(wx + 1.5, wy, tt).h + terrainAt(wx - 1.5, wy, tt).h +
+                     terrainAt(wx, wy + 1.5, tt).h + terrainAt(wx, wy - 1.5, tt).h) / 4 - h;
+        const lightK = -(hx + hy) * 1.9 - lap * 0.55;
         const extra = {
           water: weights.t.water * 0.82,
-          lit: Math.min(0.32, Math.max(0, lightK)),
-          shade: Math.min(0.5, Math.max(0, -lightK)),
+          lit: Math.min(0.4, Math.max(0, lightK)),
+          shade: Math.min(0.62, Math.max(0, -lightK)),
           puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8
         };
         for (const t in extra) {
