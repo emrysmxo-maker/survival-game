@@ -71,7 +71,14 @@ function update(dt) {
   const realSpeed = dt > 0 ? Math.hypot(player.x - prevX, player.y - prevY) / dt : 0;
 
   if (typeof updateCharacter === 'function') {
-    updateCharacter(dt, player.isMoving, player.angle, realSpeed);
+    // уклон по ходу движения (м на м): вверх +, вниз −; персонаж от него наклоняется
+    let slopeAlong = 0;
+    const vsp = Math.hypot(player.vx, player.vy);
+    if (vsp > 0.05) {
+      const ux = player.vx / vsp, uy = player.vy / vsp, e = 0.6;
+      slopeAlong = (terrainHeight(player.x + ux * e, player.y + uy * e) - terrainHeight(player.x - ux * e, player.y - uy * e)) / (2 * e * METERS_PER_TILE);
+    }
+    updateCharacter(dt, player.isMoving, player.angle, realSpeed, slopeAlong);
   }
 
   // Камера жёстко привязана к игроку

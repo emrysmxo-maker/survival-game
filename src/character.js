@@ -359,7 +359,9 @@ function fadeToAction(name, duration = 0.15) {
 }
 
 // Обновление состояния персонажа каждый кадр (поворот на 360°, анимация бега)
-function updateCharacter(dt, isMoving, angle, speed) {
+let charSlope = 0;          // сглаженный уклон по ходу движения (м/м): вверх +, вниз −
+let charLean = 0;           // наклон корпуса вперёд (рад): в гору вперёд, с горы назад
+function updateCharacter(dt, isMoving, angle, speed, slopeAlong) {
   if (!is3DInitialized) {
     if (!init3DCharacter()) return;
   }
@@ -432,6 +434,15 @@ function updateCharacter(dt, isMoving, angle, speed) {
   charAimLocal += (aimRel - charAimLocal) * Math.min(1, (firingNow ? 12 : 8) * dt);
   if (soldierRoot) {
     soldierRoot.rotation.y = charYaw;
+    // Наклон от рельефа: в гору корпус вперёд (до ~17°), с горы отклоняется
+    // назад (до ~9°), на месте — ровно. Поворот вокруг ног, порядок Y→X.
+    soldierRoot.rotation.order = 'YXZ';
+    const sl = isMoving ? (slopeAlong || 0) * (charBackpedal ? -1 : 1) : 0;   // пятится — уклон против взгляда
+    charSlope += (sl - charSlope) * Math.min(1, 6 * dt);
+    const ang = Math.atan(charSlope);
+    const leanT = ang > 0 ? Math.min(0.3, ang * 0.7) : Math.max(-0.16, ang * 0.45);
+    charLean += (leanT - charLean) * Math.min(1, 8 * dt);
+    soldierRoot.rotation.x = charLean;
   }
 
   // 2. Анимация бега и ходьбы
@@ -456,7 +467,9 @@ function updateCharacter(dt, isMoving, angle, speed) {
       if (act) {
         // GAIT_TEMPO < 1: руки и ноги двигаются спокойнее, чем «по физике»,
         // иначе выглядит как бег на тренажёре (немного скользит, но естественнее).
-        const ts = GAIT_TEMPO * mps / (charIsRunning ? RUN_CLIP_MPS : WALK_CLIP_MPS);
+        // Рельеф: в гору шаги короче и чаще (×1.1..1.18), с горы длиннее и реже (×0.9)
+        const gaitK = charSlope > 0 ? 1 + Math.min(0.18, charSlope * 0.5) : 1 + Math.max(-0.1, charSlope * 0.35);
+        const ts = GAIT_TEMPO * gaitK * mps / (charIsRunning ? RUN_CLIP_MPS : WALK_CLIP_MPS);
         // Пятится — тот же шаг, проигранный назад.
         act.setEffectiveTimeScale(Math.min(1.3, Math.max(0.5, ts)) * (charBackpedal ? -1 : 1));
       }
