@@ -10,7 +10,7 @@ const ctx = canvas.getContext('2d');
 // каждый кадр пересчитывается по-разному — вся карта мелко «дрожит».
 // Все координаты в игре остаются в CSS-пикселях (view.w/view.h).
 const view = { w: 0, h: 0, dpr: 1 };
-const MAX_DPR = 2;
+const MAX_DPR = 3.3;   // полная плотность экрана телефона (было 2 — картинка растягивалась и «мылила»)
 
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
