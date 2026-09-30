@@ -10,7 +10,7 @@ const DAY_REAL_MIN = 30;          // сколько реальных минут 
 const dayNight = { t: 10, auto: true };   // t — часы (0..24)
 
 // Идея владельца: кусты ВСЕГДА рисуются из 12 пучков (общий спрайт убран — нет переключения и мерцания!)
-// Старая встроенная тень пучков убрана, вместо неё — простая динамическая тень от солнца на земле.
+// Старая встроенная тень пучков убрана, вместо неё — выразительная динамическая тень от солнца на земле.
 if (typeof coverIsNear === 'function') coverIsNear = function () { return false; };
 if (typeof drawCoverItem === 'function') {
   drawCoverItem = function (c, o, half) {
@@ -245,25 +245,28 @@ function drawSunShadows(c) {
     }
   }
 
-  // Упрощенные динамические эллипсы теней кустов от солнца (без тяжелых текстур)
+  // Динамические тени кустов от солнца (мягкие, выразительные, увеличенные под размер куста)
+  c.globalAlpha = 1;
+  const bushAlpha = Math.min(0.38, alpha * 1.05);
   if (typeof DBG === 'undefined' || !DBG.noPlants) {
     for (const chunk of loadedChunks.values()) {
       for (const o of chunk.cover || []) {
         const d = SPRITE_DATA.cover && SPRITE_DATA.cover[o.key];
         if (!d) continue;
         const p = toScreen(o.x, o.y, heightOf(o));
-        if (p.x < -60 || p.x > view.w + 60 || p.y < -60 || p.y > view.h + 60) continue;
+        if (p.x < -80 || p.x > view.w + 80 || p.y < -80 || p.y > view.h + 80) continue;
         const sc = o.scale || 1;
-        const rad = Math.max(7, d.w * 0.25 * sc);
+        const rad = Math.max(11, d.w * 0.36 * sc);
         c.save();
         c.translate(p.x, p.y);
         c.scale(1, TILE_H / TILE_W);
         c.rotate(ang);
-        const L = rad * 1.5 * len;
-        c.translate(L * 0.45, 0);
-        c.scale(L / rad, 0.7);
+        const L = rad * 1.8 * len;
+        c.translate(L * 0.5, 0);
+        c.scale(L / rad, 0.85);
         const g = c.createRadialGradient(0, 0, 0, 0, 0, rad);
-        g.addColorStop(0, `rgba(0,0,0,${(alpha * 0.7).toFixed(3)})`);
+        g.addColorStop(0, `rgba(0,0,0,${bushAlpha.toFixed(3)})`);
+        g.addColorStop(0.65, `rgba(0,0,0,${(bushAlpha * 0.45).toFixed(3)})`);
         g.addColorStop(1, 'rgba(0,0,0,0)');
         c.fillStyle = g;
         c.beginPath();
@@ -274,7 +277,6 @@ function drawSunShadows(c) {
     }
   }
 
-  c.globalAlpha = 1;
   const who = [[player.x, player.y, player.h, 1]];
   if (typeof zombies !== 'undefined') for (const z of zombies) who.push([z.x, z.y, undefined, z.state === 'walk' ? 1 : 1.4]);
   for (const [x, y, h, k] of who) {
