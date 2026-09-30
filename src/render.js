@@ -181,8 +181,14 @@ function render() {
     for (const o of chunk.cover || []) {
       // две записи: части позади ног (до бойца) и впереди (после)
       if (!COVER_KINDS[o.kind].flat) {
-        renderQueue.push({ isCover: true, half: 0, obj: o, depth: o.x + o.y - 0.3 });
-        renderQueue.push({ isCover: true, half: 1, obj: o, depth: o.x + o.y + 0.3 });
+        // Глубина растения одна и та же в режиме «целое» и «пучки» — иначе при подходе
+        // соседи вплотную (в лесу их полно) внезапно меняются местами. Передняя
+        // половина пучков поднимается выше бойца только когда он рядом.
+        const dd = o.x + o.y;
+        renderQueue.push({ isCover: true, half: 0, obj: o, depth: dd });
+        if (o._act > 0.05) {
+          renderQueue.push({ isCover: true, half: 1, obj: o, depth: Math.max(dd + 0.02, player.x + player.y + 0.01) });
+        }
       }
     }
 

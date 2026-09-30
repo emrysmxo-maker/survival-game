@@ -36,6 +36,12 @@ for key in plants:
         im=im.resize((w,h),Image.LANCZOS)
         arr=np.array(im).astype(np.float32)
         arr[:,:,:3]*=np.array([1.22,1.3,1.05]) if key.startswith('grass') else 0.93
+        # каждый пучок освещён отдельно (нет самозатенения соседними листьями) и
+        # выходит темнее целого растения на 3–10% — выравниваем по piece_gain.json
+        # (отношение цвета целого к сумме пучков, считает тот же прогон), иначе при
+        # подходе куст «темнеет и теряет объём»
+        if os.path.exists('piece_gain.json'):
+            arr[:,:,:3]*=np.array(json.load(open('piece_gain.json')).get(key,[1,1,1]))
         items.append({'img':Image.fromarray(arr.clip(0,255).astype(np.uint8),'RGBA'),'w':w,'h':h,
           'ax':round(ax,1),'ay':round(ay,1),'D':D,'pvx':round(pvx,1),'pvy':round(pvy,1),'cx':round(cx,1),'cy':round(cy,1)})
     # атлас: полки шириной 512, отступ 2 px
