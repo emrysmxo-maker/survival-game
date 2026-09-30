@@ -27,9 +27,9 @@ const GROUND_BAKE_MARGIN = 2;
 // Рельеф: 1 м высоты сдвигает точку на экране вверх на RELIEF_PX_PER_M px
 // (метр на экране по вертикали ≈ 37.7 px/м × cos(наклона камеры)).
 // Запечённая земля чанка «морщится» по сетке WARP_CELLS × WARP_CELLS, и в
-// холсте оставлен запас RELIEF_MARGIN сверху и снизу под перепад высот.
-const RELIEF_PX_PER_M = 26;
-const RELIEF_MARGIN = 176;
+// холсте оставлен запас RELIEF_MARGIN сверху и снизу под перепад высот внутри чанка.
+const RELIEF_PX_PER_M = 48;
+const RELIEF_MARGIN = 260;
 const GROUND_WARP_CELLS = 16;
 const CHUNK_PX_W = CHUNK_SIZE * TILE_W;
 const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
@@ -181,9 +181,15 @@ function groundWeights(wx, wy, out) {
 // (экранные координаты без учёта камеры).
 // Где рисовать запечённую (с рельефом) землю чанка: та же точка, но на
 // RELIEF_MARGIN выше — сверху запас под холмы.
+// Высоты в картинке чанка считаются от chunkHBase (целых метров в его центре),
+// а не от нуля: запас RELIEF_MARGIN нужен только под перепад внутри чанка, и
+// высокие/низкие места мира не вылезают за холст.
+function chunkHBase(cx, cy) {
+  return Math.round(terrainHeight(cx * CHUNK_SIZE + CHUNK_SIZE / 2, cy * CHUNK_SIZE + CHUNK_SIZE / 2));
+}
 function chunkBakeOrigin(cx, cy) {
   const o = chunkPixelOrigin(cx, cy);
-  return { x: o.x, y: o.y - RELIEF_MARGIN };
+  return { x: o.x, y: o.y - RELIEF_MARGIN - chunkHBase(cx, cy) * RELIEF_PX_PER_M };
 }
 
 function chunkPixelOrigin(cx, cy) {
@@ -207,7 +213,7 @@ function createGroundBaker(makeCanvas, textures) {
   const maskData = {};
   for (const t of GROUND_LAYER_ORDER) maskData[t] = mctx.createImageData(mw, mh);
   // Вода (поверх дна), светотень рельефа (свет/тень) и лужи болота.
-  for (const t of ['water', 'lit', 'shade', 'puddle']) maskData[t] = mctx.createImageData(mw, mh);
+  for (const t of ['water', 'lit', 'shade', 'puddle', 'low', 'hi']) maskData[t] = mctx.createImageData(mw, mh);
   const layer = makeCanvas(W, H);
   const lctx = layer.getContext('2d');
   const patterns = textures.map((tex) => lctx.createPattern(tex, 'repeat'));
@@ -254,6 +260,9 @@ function createGroundBaker(makeCanvas, textures) {
         const lightK = -(hx + hy) * 1.6 - (hx - hy) * 0.7 - lap * 0.6;
         const extra = {
           water: weights.t.water * 0.82,
+          // высота места: низины темнее и холоднее (сыро, тень), возвышенности светлее
+          low: smoothstep(0.2, -2.6, h) * 0.38 + smoothstep(1.5, 4.5, h) * 0,
+          hi: smoothstep(1.2, 4.2, h) * 0.5,
           lit: Math.min(0.4, Math.max(0, lightK)),
           shade: Math.min(0.62, Math.max(0, -lightK) + smoothstep(0.1, 0.45, slope) * 0.08),
           puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8
@@ -304,7 +313,9 @@ function createGroundBaker(makeCanvas, textures) {
     overlay('puddle', 'rgb(38, 46, 36)');
     overlay('water', 'rgb(46, 66, 64)');
     overlay('shade', 'rgb(20, 24, 16)');
+    overlay('low', 'rgb(10, 24, 30)');
     overlay('lit', 'rgb(255, 244, 205)', 'soft-light');
+    overlay('hi', 'rgb(255, 244, 205)', 'soft-light');
 
     // Рельеф: плоская картинка `out` режется на сетку клеток мира, каждая
     // клетка (два треугольника) сдвигается по вертикали на высоту своих
@@ -316,12 +327,13 @@ function createGroundBaker(makeCanvas, textures) {
     const startX = cx * CHUNK_SIZE, startY = cy * CHUNK_SIZE;
     const vx = new Float32Array((G + 1) * (G + 1)), vy = new Float32Array((G + 1) * (G + 1));
     const vh = new Float32Array((G + 1) * (G + 1));
+    const hBase = chunkHBase(cx, cy);
     for (let j = 0; j <= G; j++) {
       for (let i = 0; i <= G; i++) {
         const wx = startX + i * cs, wy = startY + j * cs, k = j * (G + 1) + i;
         vx[k] = (wx - wy) * (TILE_W / 2) - o.x;
         vy[k] = (wx + wy) * (TILE_H / 2) - o.y;
-        vh[k] = terrainHeight(wx, wy) * RELIEF_PX_PER_M;
+        vh[k] = (terrainHeight(wx, wy) - hBase) * RELIEF_PX_PER_M;
       }
     }
     const tri = (a, b, c) => {
