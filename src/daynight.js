@@ -9,6 +9,57 @@
 const DAY_REAL_MIN = 30;          // сколько реальных минут длятся игровые сутки (15 мин день, 15 мин ночь)
 const dayNight = { t: 10, auto: true };   // t — часы (0..24)
 
+// Идея владельца: кусты ВСЕГДА рисуются из 12 пучков (общий спрайт убран — нет переключения и мерцания!)
+// Старая встроенная тень пучков убрана, вместо неё — простая динамическая тень от солнца на земле.
+if (typeof coverIsNear === 'function') coverIsNear = function () { return false; };
+if (typeof drawCoverItem === 'function') {
+  drawCoverItem = function (c, o, half) {
+    if (typeof DBG !== 'undefined' && DBG.noPlants) return;
+    const p = toScreen(o.x, o.y, heightOf(o));
+    if (!onScreen(p, 120)) return;
+    updateCoverPhysics(o);
+    const def = COVER_KINDS[o.kind];
+    if (!def) return;
+    const ph = o.x * 0.55 + o.y * 0.35;
+    const cp = SPRITE_DATA.coverPieces && SPRITE_DATA.coverPieces[o.key];
+
+    // Если у объекта нет нарезки на пучки (бревна, ветки, корни, валуны) — рисуем целым
+    if (!cp) {
+      if (half) return;
+      const H = (SPRITE_DATA.cover && SPRITE_DATA.cover[o.key]) ? SPRITE_DATA.cover[o.key].ay * o.scale : 40;
+      const wind = (typeof DBG !== 'undefined' && DBG.noWind) ? 0 : def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+      drawWindSprite(c, o, p.x, p.y, wind);
+      return;
+    }
+
+    // Растения с пучками ВСЕГДА рисуются из 12 пучков за один проход на глубине куста
+    // (без деления на половины, без переключения картинки издалека/вблизи — мерцать нечему!)
+    if (half) return;
+    const atlas = partImage(cp.file);
+    if (!atlas.complete || !atlas.naturalWidth) return;
+
+    const sc = o.scale || 1, dpr = view.dpr || 1;
+    const Hs = (SPRITE_DATA.cover && SPRITE_DATA.cover[o.key]) ? SPRITE_DATA.cover[o.key].ay * sc : 40;
+    const windTip = (typeof DBG !== 'undefined' && DBG.noWind) ? 0 : def.sway * 0.07 * Hs * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+
+    c.save();
+    c.translate(Math.round(p.x * dpr) / dpr, Math.round(p.y * dpr) / dpr);
+    if (o.flip) c.scale(-1, 1);
+    if (windTip) c.transform(1, 0, windTip / Math.max(Hs, 1), 1, 0, 0);
+
+    const P = cp.pieces;
+    for (let j = 0; j < P.length; j++) {
+      const pc = P[j];
+      c.save();
+      c.translate(pc.pvx * sc, pc.pvy * sc);
+      c.rotate(o._ang ? o._ang[j] : 0);
+      c.drawImage(atlas, pc.sx, pc.sy, pc.sw, pc.sh, (-pc.ax - pc.pvx) * sc, (-pc.ay - pc.pvy) * sc, pc.w * sc, pc.h * sc);
+      c.restore();
+    }
+    c.restore();
+  };
+}
+
 (function initDayNightUI() {
   const wrap = document.createElement('div');
   wrap.id = 'daynight';
