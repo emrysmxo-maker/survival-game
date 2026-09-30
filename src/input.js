@@ -1,146 +1,216 @@
-// Сенсорное управление: виртуальный джойстик в левой нижней зоне экрана.
-// render.js рисует его по этим же полям (joystick.startX/currX/...).
-
-// Доля радиуса джойстика у центра, где движение не засчитывается (~10px).
-const JOYSTICK_DEAD_ZONE = 0.2;
+// Управление: джойстик ходьбы (левая половина экрана) и плавающий джойстик огня (правая половина экрана).
 
 const joystick = {
-  active: false, touchId: null,
-  startX: 0, startY: 0,
-  currX: 0, currY: 0,
-  maxDist: 50, dx: 0, dy: 0
+  active: false,
+  touchId: null,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0,
+  maxDist: 50,
+  dx: 0,
+  dy: 0
 };
 
-// Кнопка огня: отдельное касание, джойстик его не занимает. Можно
-// бежать одним пальцем и стрелять другим.
-const fireBtn = document.getElementById('fire-btn');
-let fireTouchId = null;
-// Кнопка огня работает как второй джойстик: нажал — стреляет туда, куда
-// смотрит боец; повёл пальцем — боец поворачивается и стреляет в ту
-// сторону (weapon.aimAngle — экранный угол, как у джойстика движения).
-const fireKnob = document.getElementById('fire-knob');
-const FIRE_AIM_RADIUS = 40;   // px — насколько далеко уводится точка прицела
-const FIRE_AIM_DEAD = 12;     // px — меньше этого считаем «просто нажал»
-let fireCX = 0, fireCY = 0;
-function setFire(on) {
-  weapon.manualFire = on;
-  weapon.firing = on;
-  fireBtn.classList.toggle('pressed', on);
-  if (on) weapon.aimAngle = player.angle;
-  else fireKnob.style.transform = '';
-}
-function aimFireTo(x, y) {
-  const dx = x - fireCX, dy = y - fireCY, d = Math.hypot(dx, dy);
-  if (d > FIRE_AIM_DEAD) weapon.aimAngle = Math.atan2(dy, dx);
-  const k = Math.min(d, FIRE_AIM_RADIUS) / (d || 1);
-  fireKnob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
-}
-window.addEventListener('keydown', (e) => { if (e.code === 'Space') setFire(true); });
-window.addEventListener('keyup', (e) => { if (e.code === 'Space') setFire(false); });
+const fireJoy = {
+  active: false,
+  touchId: null,
+  startX: 0,
+  startY: 0,
+  dist: 0
+};
 
-// Кнопки выбора стиля стрельбы (1–5), см. fireStyle в character.js.
+const fireBtn = document.getElementById('fire-btn');
+const fireKnob = document.getElementById('fire-knob');
+const FIRE_AIM_RADIUS = 44;   // px — максимальный ход шляпки
+const FIRE_SHOOT_RADIUS = 26; // px — внутри этого круга только прицел, за кругом — огонь
+
 function selectFireStyle(n) {
   fireStyle = n;
   try { localStorage.setItem('fireStyle', String(n)); } catch (e) { /* нет хранилища */ }
   document.querySelectorAll('.style-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.style) === n));
-  document.getElementById('style-name').textContent = FIRE_STYLE_NAMES[n];
+  const el = document.getElementById('style-name');
+  if (el) el.textContent = FIRE_STYLE_NAMES[n];
 }
 selectFireStyle(fireStyle);
-document.getElementById('zombie-btn').addEventListener('click', () => spawnZombie());
-// Автострельба: вкл/выкл. Сама цель и огонь — в weapon.js (updateAutoFire).
-function toggleAutoFire() {
-  weapon.auto = !weapon.auto;
-  document.getElementById('auto-btn').classList.toggle('on', weapon.auto);
-}
-document.getElementById('auto-btn').addEventListener('click', toggleAutoFire);
-document.getElementById('minimap').addEventListener('click', () => toggleBigMap(true));
-document.getElementById('bigmap').addEventListener('click', () => toggleBigMap(false));
+
+const zb = document.getElementById('zombie-btn');
+if (zb) zb.addEventListener('click', () => spawnZombie());
+
+const ab = document.getElementById('auto-btn');
+if (ab) ab.addEventListener('click', () => toggleAutoFire());
+
+const mm = document.getElementById('minimap');
+if (mm) mm.addEventListener('click', () => toggleBigMap(true));
+
+const bm = document.getElementById('bigmap');
+if (bm) bm.addEventListener('click', () => toggleBigMap(false));
+
 document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
 
+// Клавиатура (для ПК-тестов): пробел — огонь туда, куда смотрит боец
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    weapon.aiming = true;
+    weapon.firing = true;
+    weapon.aimAngle = player.angle;
+  }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') {
+    weapon.aiming = false;
+    weapon.firing = false;
+  }
+});
+
+function isUI(target) {
+  if (!target || !target.closest) return false;
+  return !!(
+    target.closest('#rot-btn') ||
+    target.closest('#zombie-btn') ||
+    target.closest('#auto-btn') ||
+    target.closest('#minimap') ||
+    target.closest('#bigmap') ||
+    target.closest('.style-btn') ||
+    target.closest('#daynight') ||
+    target.closest('#dbg')
+  );
+}
+
 window.addEventListener('touchstart', (e) => {
-  if (e.target.closest && (e.target.closest('#daynight') || e.target.closest('#dbg'))) return;   // ползунок времени, диагностика
-  e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
-    if (t.target.closest && t.target.closest('#rot-btn')) { goLandscape(); continue; }
-    if (t.target.closest && t.target.closest('#zombie-btn')) { spawnZombie(); continue; }
-    if (t.target.closest && t.target.closest('#auto-btn')) { toggleAutoFire(); continue; }
-    if (t.target.closest && t.target.closest('#minimap')) { toggleBigMap(true); continue; }
-    if (t.target.closest && t.target.closest('#bigmap')) { toggleBigMap(false); continue; }
-    const sb = t.target.closest && t.target.closest('.style-btn');
-    if (sb) { selectFireStyle(Number(sb.dataset.style)); continue; }
-    if (fireBtn.contains(t.target)) {
-      fireTouchId = t.identifier;
-      const r = fireBtn.getBoundingClientRect();
-      fireCX = r.left + r.width / 2;
-      fireCY = r.top + r.height / 2;
-      setFire(true);
+    if (isUI(t.target)) {
+      if (t.target.closest('#rot-btn')) goLandscape();
+      else if (t.target.closest('#zombie-btn')) spawnZombie();
+      else if (t.target.closest('#auto-btn')) toggleAutoFire();
+      else if (t.target.closest('#minimap')) toggleBigMap(true);
+      else if (t.target.closest('#bigmap')) toggleBigMap(false);
       continue;
     }
-    // горизонтально (две руки): джойстик — только в левой половине экрана
-    if (window.innerWidth > window.innerHeight && t.clientX > window.innerWidth * 0.55) continue;
-    if (!joystick.active) {
-      joystick.active = true;
-      joystick.touchId = t.identifier;
-      joystick.startX = t.clientX; joystick.startY = t.clientY;
-      joystick.currX = t.clientX; joystick.currY = t.clientY;
-      joystick.dx = 0; joystick.dy = 0;
-      document.getElementById('joystick-hint').style.display = 'none';
+
+    // ЛЕВАЯ ПОЛОВИНА ЭКРАНА: Джойстик ходьбы
+    if (t.clientX < window.innerWidth * 0.5) {
+      if (!joystick.active) {
+        joystick.active = true;
+        joystick.touchId = t.identifier;
+        joystick.startX = t.clientX;
+        joystick.startY = t.clientY;
+        joystick.currentX = t.clientX;
+        joystick.currentY = t.clientY;
+        joystick.dx = 0;
+        joystick.dy = 0;
+      }
+      continue;
+    }
+
+    // ПРАВАЯ ПОЛОВИНА ЭКРАНА: Плавающий джойстик огня
+    if (!fireJoy.active) {
+      fireJoy.active = true;
+      fireJoy.touchId = t.identifier;
+      fireJoy.startX = t.clientX;
+      fireJoy.startY = t.clientY;
+      fireJoy.dist = 0;
+
+      if (typeof weapon !== 'undefined') {
+        weapon.aiming = true;  // включает режим боевой готовности в character.js (вскидывает ствол)
+        weapon.firing = false; // внутри круга — НЕ стрелять!
+        weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
+      }
+
+      if (fireBtn) {
+        fireBtn.style.left = t.clientX + 'px';
+        fireBtn.style.top = t.clientY + 'px';
+        fireBtn.classList.remove('pressed');
+        fireBtn.classList.add('active');
+      }
+      if (fireKnob) fireKnob.style.transform = '';
     }
   }
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
-  if (e.target.closest && (e.target.closest('#daynight') || e.target.closest('#dbg'))) return;
-  e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
-    if (t.identifier === fireTouchId) { aimFireTo(t.clientX, t.clientY); continue; }
-    if (t.identifier === joystick.touchId) {
+
+    // Движение левого джойстика
+    if (joystick.active && t.identifier === joystick.touchId) {
       const diffX = t.clientX - joystick.startX;
       const diffY = t.clientY - joystick.startY;
       const dist = Math.hypot(diffX, diffY);
-
-      if (dist > joystick.maxDist) {
-        joystick.currX = joystick.startX + (diffX / dist) * joystick.maxDist;
-        joystick.currY = joystick.startY + (diffY / dist) * joystick.maxDist;
-      } else {
-        joystick.currX = t.clientX;
-        joystick.currY = t.clientY;
-      }
-
-      // Мёртвая зона у центра: палец на экране всегда чуть дрожит, и
-      // без неё при остановке игрок мелко ходил туда-сюда — камера
-      // привязана к нему, поэтому тряслась вся карта. Вне зоны скорость
-      // растёт плавно от нуля, без скачка на её границе.
-      const rx = (joystick.currX - joystick.startX) / joystick.maxDist;
-      const ry = (joystick.currY - joystick.startY) / joystick.maxDist;
-      const m = Math.hypot(rx, ry);
-      if (m < JOYSTICK_DEAD_ZONE) {
+      const angle = Math.atan2(diffY, diffX);
+      const clampedDist = Math.min(dist, joystick.maxDist);
+      joystick.currentX = joystick.startX + Math.cos(angle) * clampedDist;
+      joystick.currentY = joystick.startY + Math.sin(angle) * clampedDist;
+      const DEAD_ZONE = 10;
+      if (dist < DEAD_ZONE) {
         joystick.dx = 0;
         joystick.dy = 0;
       } else {
-        const s = (m - JOYSTICK_DEAD_ZONE) / (1 - JOYSTICK_DEAD_ZONE) / m;
-        joystick.dx = rx * s;
-        joystick.dy = ry * s;
+        const factor = (clampedDist - DEAD_ZONE) / (joystick.maxDist - DEAD_ZONE);
+        joystick.dx = Math.cos(angle) * factor;
+        joystick.dy = Math.sin(angle) * factor;
+      }
+      continue;
+    }
+
+    // Движение правого джойстика (прицел / огонь)
+    if (fireJoy.active && t.identifier === fireJoy.touchId) {
+      const dx = t.clientX - fireJoy.startX;
+      const dy = t.clientY - fireJoy.startY;
+      const dist = Math.hypot(dx, dy);
+      fireJoy.dist = dist;
+
+      if (typeof weapon !== 'undefined') {
+        if (dist > 8) {
+          weapon.aimAngle = Math.atan2(dy, dx);
+        }
+        if (dist >= FIRE_SHOOT_RADIUS) {
+          weapon.firing = true; // за кругом: ОГОНЬ!
+          if (fireBtn) fireBtn.classList.add('pressed');
+        } else {
+          weapon.firing = false; // внутри круга: ТОЛЬКО ПРИЦЕЛ!
+          if (fireBtn) fireBtn.classList.remove('pressed');
+        }
+      }
+
+      if (fireKnob) {
+        const k = Math.min(dist, FIRE_AIM_RADIUS) / (dist || 1);
+        fireKnob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
       }
     }
   }
 }, { passive: false });
 
 function stopJoy(id) {
-  if (fireTouchId === id) { fireTouchId = null; setFire(false); }
-  if (joystick.touchId === id) {
-    joystick.active = false; joystick.touchId = null;
-    joystick.dx = 0; joystick.dy = 0;
+  if (fireJoy.active && fireJoy.touchId === id) {
+    fireJoy.active = false;
+    fireJoy.touchId = null;
+    fireJoy.dist = 0;
+    if (typeof weapon !== 'undefined') {
+      weapon.aiming = false;
+      weapon.firing = false;
+    }
+    if (fireBtn) {
+      fireBtn.classList.remove('active', 'pressed');
+      if (fireKnob) fireKnob.style.transform = '';
+    }
+  }
+  if (joystick.active && joystick.touchId === id) {
+    joystick.active = false;
+    joystick.touchId = null;
+    joystick.dx = 0;
+    joystick.dy = 0;
   }
 }
-window.addEventListener('touchend', (e) => { for (const t of e.changedTouches) stopJoy(t.identifier); });
-window.addEventListener('touchcancel', (e) => { for (const t of e.changedTouches) stopJoy(t.identifier); });
 
-// Кнопка «две руки»: полный экран и блокировка горизонтали (Android Chrome
-// разрешает блокировку только в полноэкранном режиме). Если не вышло —
-// достаточно повернуть телефон, игра сама перестроится.
+window.addEventListener('touchend', (e) => {
+  for (let i = 0; i < e.changedTouches.length; i++) stopJoy(e.changedTouches[i].identifier);
+});
+window.addEventListener('touchcancel', (e) => {
+  for (let i = 0; i < e.changedTouches.length; i++) stopJoy(e.changedTouches[i].identifier);
+});
+
 function goLandscape() {
   const el = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
