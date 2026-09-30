@@ -234,3 +234,6 @@
   background: rgba(20, 30, 20, 0.7); border: 1px solid rgba(255,255,255,0.3); border-radius: 14px;
 }
 @media (orientation: landscape) { #rot-btn { display: none; } }
+
+/* Остался один стиль стрельбы (3) — панель выбора убрана */
+#style-bar { display: none !important; }

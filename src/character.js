@@ -86,6 +86,9 @@ const FIRE_STYLES = [
 let fireStyle = 1;
 try { fireStyle = Number(localStorage.getItem('fireStyle')) || 1; } catch (e) { /* нет хранилища */ }
 if (!FIRE_STYLES[fireStyle]) fireStyle = 1;
+// Остался только стиль 3 «Корпус 90° → пятится» (выбор владельца). Остальные
+// описания выше не используются; кнопки выбора скрыты (style.css).
+fireStyle = 3;
 const FIRE_STYLE_NAMES = FIRE_STYLES.map((st) => (st ? st.name : ''));
 // Скорость поворота всего тела при стрельбе (рад/с).
 const BODY_TURN_RATE = 5.5;
