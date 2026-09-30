@@ -170,10 +170,11 @@ function footShadow(c, x, y, h, k) {
 // или зомби, растение упруго отгибается от него и приминается, потом
 // качнувшись выпрямляется. Отгиб зависит от положения плавно (без прыжков).
 const COVER_PUSH_R = { grass: 0.7, fern: 0.9, nettle: 0.75, bush: 1.0, sapling: 0.7 };
-const COVER_PUSH_K = { grass: 1.3, fern: 1.0, nettle: 1.1, bush: 0.55, sapling: 0.45 };
+const COVER_PUSH_K = { grass: 0.9, fern: 0.7, nettle: 0.75, bush: 0.4, sapling: 0.3 };
 const COVER_SLICES = 6;
 let _frameT = 0, _frameDt = 0.016;
-const _pacc = { ax: 0, ay: 0, fx: 0, fy: 0, s: 0 };
+const _pacc = { ax: 0, ay: 0, fx: 0, fy: 0, s: 0, px: 0, near: 0 };
+const COVER_GAP = { grass: 1.0, fern: 1.0, nettle: 0.85, bush: 0.8, sapling: 0.35 };
 
 function coverFrame() {
   const t = performance.now() / 1000;
@@ -203,9 +204,12 @@ function coverPush(o, e, R, acc, vx, vy) {
     }
   }
   acc.s += w;
+  acc.px += -sx * w;                       // где идущий относительно растения (px экрана)
+  if (d < R * 0.6) acc.near += w;
 }
 
-function drawBendSprite(c, o, x, y, tip, tipY, squash) {
+const COVER_COLS = 8;
+function drawBendSprite(c, o, x, y, tip, tipY, squash, gap, px) {
   const d = SPRITE_DATA.cover[o.key];
   const img = spriteImage(o.key, 'cover');
   if (!img.complete || !img.naturalWidth) return;
@@ -219,14 +223,35 @@ function drawBendSprite(c, o, x, y, tip, tipY, squash) {
   c.save();
   c.translate(Math.round(x * dpr) / dpr, Math.round(y * dpr) / dpr);
   const ox = o.flip ? -tip : tip;                     // в зеркальной системе
+  const pxs = o.flip ? -px : px;                      // положение идущего в системе картинки
   if (o.flip) c.scale(-1, 1);
+  const parting = gap > 0.8;
+  const cw = w / COVER_COLS, sw = nw / COVER_COLS;
+  const sig = Math.max(8, w * 0.42);
   // границы полосок — по целым пикселям экрана и без перекрытия: иначе шов
   // либо светится, либо удваивает полупрозрачную тень из картинки
   let y0 = Math.round(-topH * dpr) / dpr;
   for (let i = 0; i < COVER_SLICES; i++) {
     const hn = 1 - (i + 0.5) / COVER_SLICES;         // 1 у верха, 0 у земли
     const y1 = i === COVER_SLICES - 1 ? 0 : Math.round((-topH + (i + 1) * dstBand) * dpr) / dpr;
-    if (y1 > y0) c.drawImage(img, 0, i * band, nw, band, -ax + ox * hn * hn, y0, w, y1 - y0);
+    if (y1 > y0) {
+      const sx = -ax + ox * hn * hn;
+      if (!parting) {
+        c.drawImage(img, 0, i * band, nw, band, sx, y0, w, y1 - y0);
+      } else {
+        // створки: части растения по обе стороны от идущего расходятся
+        // (у земли шире, к верхушке меньше), в проёме видна земля
+        const gk = gap * (1 - 0.45 * hn);
+        let prevEnd = null;
+        for (let j = 0; j < COVER_COLS; j++) {
+          const rel0 = j * cw - ax - pxs, rel1 = (j + 1) * cw - ax - pxs;
+          const disp = (rel) => Math.tanh(rel / 5) * gk * Math.exp(-Math.abs(rel) / sig);
+          const xs = Math.round((sx + j * cw + disp(rel0)) * dpr) / dpr;
+          const xe = Math.round((sx + (j + 1) * cw + disp(rel1)) * dpr) / dpr;
+          if (xe > xs) c.drawImage(img, j * sw, i * band, sw, band, xs, y0, xe - xs, y1 - y0);
+        }
+      }
+    }
     y0 = y1;
   }
   if (h > ay + 0.5) c.drawImage(img, 0, srcG, nw, nh - srcG, -ax, 0, w, h - ay);
@@ -243,20 +268,24 @@ function drawCoverItem(c, o) {
   const wind = def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
   const R = (COVER_PUSH_R[o.kind] || 0.7) * o.scale;
   const A = _pacc;
-  A.ax = A.ay = A.fx = A.fy = A.s = 0;
+  A.ax = A.ay = A.fx = A.fy = A.s = A.px = A.near = 0;
   coverPush(o, player, R, A, player.vx, player.vy);
   if (typeof zombies !== 'undefined') for (const z of zombies) coverPush(o, z, R, A, 0, 0);
   const K = COVER_PUSH_K[o.kind] || 0.5;
   // цель: в стороны от идущего + немного вперёд по ходу; по вертикали слабее
   const tx = (A.ax + A.fx * 0.55) * K * H;
   const ty = (A.ay + A.fy * 0.55) * K * H * 0.5;
-  const ts = Math.min(1, A.s) * 0.3;
-  if (o._pb === undefined) { o._pb = 0; o._pv = 0; o._py = 0; o._pw = 0; o._ps = 0; }
+  const ts = Math.min(1, A.s) * 0.12;
+  const tg = Math.min(1, A.near * 1.6) * 18 * o.scale * (COVER_GAP[o.kind] || 0.6);
+  const tp = A.s > 0.001 ? A.px / A.s : (o._pp || 0);
+  if (o._pb === undefined) { o._pb = 0; o._pv = 0; o._py = 0; o._pw = 0; o._ps = 0; o._pg = 0; o._pp = tp; }
   // пружина по каждой оси: быстро отгибается, возвращаясь слегка покачивается
   o._pv += ((tx - o._pb) * 120 - o._pv * 11) * _frameDt;
   o._pb += o._pv * _frameDt;
   o._pw += ((ty - o._py) * 120 - o._pw * 11) * _frameDt;
   o._py += o._pw * _frameDt;
   o._ps += (ts - o._ps) * Math.min(1, (ts > o._ps ? 16 : 5) * _frameDt);
-  drawBendSprite(c, o, p.x, p.y, wind + o._pb, o._py, o._ps);
+  o._pg += (tg - o._pg) * Math.min(1, (tg > o._pg ? 12 : 4) * _frameDt);
+  o._pp += (tp - o._pp) * Math.min(1, 25 * _frameDt);
+  drawBendSprite(c, o, p.x, p.y, wind + o._pb, o._py, o._ps, o._pg, o._pp);
 }
