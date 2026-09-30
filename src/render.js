@@ -250,7 +250,7 @@ function render() {
         // половина пучков поднимается выше бойца только когда он рядом.
         const dd = o.x + o.y;
         renderQueue.push({ isCover: true, half: 0, obj: o, depth: dd });
-        if (o._act > 0.05) {
+        if (o._act > 0.05 || coverIsNear(o)) {
           renderQueue.push({ isCover: true, half: 1, obj: o, depth: Math.max(dd + 0.02, player.x + player.y + 0.01) });
         }
       }

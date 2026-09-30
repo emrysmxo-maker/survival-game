@@ -142,7 +142,37 @@ function onScreen(p, m) {
 }
 
 // Слой на земле (под всем): плоский подлесок, тени деревьев, тени под ногами.
+// Предзагрузка: все картинки растений/пучков/камней грузятся и раскодируются при
+// старте, а не в момент первого подхода — иначе у куста при первом подходе кадр-два
+// рисуется «не так» (картинка ещё грузится), выглядит как мерцание.
+let _coverPreloaded = false, _coverAtlasOk = false;
+function preloadCover() {
+  if (_coverPreloaded) return;
+  _coverPreloaded = true;
+  const load = (img) => { if (img.decode) img.decode().catch(() => {}); };
+  for (const k in SPRITE_DATA.cover) load(spriteImage(k, 'cover'));
+  for (const k in SPRITE_DATA.rock) load(spriteImage(k, 'rock'));
+  const cp = SPRITE_DATA.coverPieces || {};
+  for (const k in cp) load(partImage(cp[k].file));
+}
+function coverAssetsReady() {
+  if (!_coverPreloaded) return false;
+  const cp = SPRITE_DATA.coverPieces || {};
+  for (const k in cp) { const im = partImage(cp[k].file); if (!im.complete || !im.naturalWidth) return false; }
+  return true;
+}
+// Растение «рядом с идущим» (режим пучков может включиться в этом кадре) — для очереди.
+function coverIsNear(o) {
+  const R = (COVER_ACT_R + 0.35) * o.scale;
+  let dx = player.x - o.x, dy = player.y - o.y;
+  if (dx * dx + dy * dy < R * R) return true;
+  if (typeof zombies !== 'undefined') for (const z of zombies) { dx = z.x - o.x; dy = z.y - o.y; if (dx * dx + dy * dy < R * R) return true; }
+  return false;
+}
+
 function drawGroundLayer(c) {
+  preloadCover();
+  _coverAtlasOk = coverAssetsReady();     // режим пучков — только когда все атласы загружены
   coverFrame();
   for (const chunk of loadedChunks.values()) {
     for (const o of chunk.cover || []) {
@@ -325,7 +355,7 @@ function drawCoverItem(c, o, half) {
   const def = COVER_KINDS[o.kind];
   const ph = o.x * 0.55 + o.y * 0.35;
   const cp = SPRITE_DATA.coverPieces && SPRITE_DATA.coverPieces[o.key];
-  if (!cp || o._act < 0.05) {
+  if (!cp || o._act < 0.05 || !_coverAtlasOk) {
     if (half) return;                                    // целая картинка — один раз
     const H = SPRITE_DATA.cover[o.key].ay * o.scale;
     const wind = def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
