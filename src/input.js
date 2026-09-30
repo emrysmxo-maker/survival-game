@@ -23,7 +23,7 @@ const fireJoy = {
 const fireBtn = document.getElementById('fire-btn');
 const fireKnob = document.getElementById('fire-knob');
 const FIRE_AIM_RADIUS = 44;   // px — максимальный ход шляпки
-const FIRE_SHOOT_RADIUS = 26; // px — внутри этого круга только прицел, за кругом — огонь
+const FIRE_SHOOT_RADIUS = 18; // px — внутри этого круга только прицел, за кругом — стрельба
 
 function selectFireStyle(n) {
   fireStyle = n;
@@ -37,6 +37,13 @@ selectFireStyle(fireStyle);
 const zb = document.getElementById('zombie-btn');
 if (zb) zb.addEventListener('click', () => spawnZombie());
 
+let autoFire = false;
+function toggleAutoFire() {
+  autoFire = !autoFire;
+  const b = document.getElementById('auto-btn');
+  if (b) b.classList.toggle('active', autoFire);
+  if (typeof weapon !== 'undefined') weapon.firing = autoFire;
+}
 const ab = document.getElementById('auto-btn');
 if (ab) ab.addEventListener('click', () => toggleAutoFire());
 
@@ -78,6 +85,8 @@ function isUI(target) {
 }
 
 window.addEventListener('touchstart', (e) => {
+  if (e.target.closest && (e.target.closest('#daynight') || e.target.closest('#dbg'))) return;
+  e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     if (isUI(t.target)) {
@@ -114,7 +123,7 @@ window.addEventListener('touchstart', (e) => {
 
       if (typeof weapon !== 'undefined') {
         weapon.aiming = true;  // включает режим боевой готовности в character.js (вскидывает ствол)
-        weapon.firing = false; // внутри круга — НЕ стрелять!
+        weapon.firing = false; // внутри круга — пока только прицел
         weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
       }
 
@@ -130,6 +139,8 @@ window.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
+  if (e.target.closest && (e.target.closest('#daynight') || e.target.closest('#dbg'))) return;
+  e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
 
@@ -162,7 +173,7 @@ window.addEventListener('touchmove', (e) => {
       fireJoy.dist = dist;
 
       if (typeof weapon !== 'undefined') {
-        if (dist > 8) {
+        if (dist > 6) {
           weapon.aimAngle = Math.atan2(dy, dx);
         }
         if (dist >= FIRE_SHOOT_RADIUS) {
@@ -189,7 +200,7 @@ function stopJoy(id) {
     fireJoy.dist = 0;
     if (typeof weapon !== 'undefined') {
       weapon.aiming = false;
-      weapon.firing = false;
+      weapon.firing = autoFire;
     }
     if (fireBtn) {
       fireBtn.classList.remove('active', 'pressed');
