@@ -173,7 +173,7 @@ const COVER_PUSH_R = { grass: 0.7, fern: 0.9, nettle: 0.75, bush: 1.0, sapling: 
 const COVER_PUSH_K = { grass: 1.3, fern: 1.0, nettle: 1.1, bush: 0.55, sapling: 0.45 };
 const COVER_SLICES = 6;
 let _frameT = 0, _frameDt = 0.016;
-const _pacc = { b: 0, s: 0 };
+const _pacc = { ax: 0, ay: 0, fx: 0, fy: 0, s: 0 };
 
 function coverFrame() {
   const t = performance.now() / 1000;
@@ -181,18 +181,31 @@ function coverFrame() {
   _frameT = t;
 }
 
-function coverPush(o, e, R, acc) {
+// Вклад одного идущего в отгиб растения: «от него» (по экрану, в обе стороны)
+// и «вперёд по ходу движения» (растение чуть уносит вслед за шагом).
+function coverPush(o, e, R, acc, vx, vy) {
   const dx = o.x - e.x, dy = o.y - e.y;
-  const sx = (dx - dy) * TILE_W / 2, sy = (dx + dy) * TILE_H / 2;
   const d = Math.hypot(dx, dy);
   if (d >= R) return;
+  const sx = (dx - dy) * TILE_W / 2, sy = (dx + dy) * TILE_H / 2;
   const k = 1 - d / R;
   const w = k * k * (3 - 2 * k);                       // мягкая кромка
-  acc.b += (sx / (Math.hypot(sx, sy) + 10)) * w;      // -1..1: куда отгибаться (по экрану)
+  const n = Math.hypot(sx, sy) + 10;
+  acc.ax += sx / n * w;
+  acc.ay += sy / n * w;
+  if (vx || vy) {
+    const vsx = (vx - vy) * TILE_W / 2, vsy = (vx + vy) * TILE_H / 2;
+    const vm = Math.hypot(vsx, vsy);
+    if (vm > 1) {
+      const f = Math.min(1, vm / 90) * w / vm;
+      acc.fx += vsx * f;
+      acc.fy += vsy * f;
+    }
+  }
   acc.s += w;
 }
 
-function drawBendSprite(c, o, x, y, tip, squash) {
+function drawBendSprite(c, o, x, y, tip, tipY, squash) {
   const d = SPRITE_DATA.cover[o.key];
   const img = spriteImage(o.key, 'cover');
   if (!img.complete || !img.naturalWidth) return;
@@ -207,8 +220,8 @@ function drawBendSprite(c, o, x, y, tip, squash) {
   if (o.flip) c.scale(-1, 1);
   for (let i = 0; i < COVER_SLICES; i++) {
     const hn = 1 - (i + 0.5) / COVER_SLICES;         // 1 у верха, 0 у земли
-    const dx = ox * hn * hn;
-    c.drawImage(img, 0, i * band, nw, band + 1, -ax + dx, -topH + i * dstBand, w, dstBand + 0.6);
+    const bend = hn * hn;
+    c.drawImage(img, 0, i * band, nw, band + 1, -ax + ox * bend, -topH + i * dstBand + tipY * bend, w, dstBand + 1.2);
   }
   if (h > ay + 0.5) c.drawImage(img, 0, srcG, nw, nh - srcG, -ax, 0, w, h - ay);
   c.restore();
@@ -223,16 +236,21 @@ function drawCoverItem(c, o) {
   const ph = o.x * 0.55 + o.y * 0.35;
   const wind = def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
   const R = (COVER_PUSH_R[o.kind] || 0.7) * o.scale;
-  _pacc.b = 0; _pacc.s = 0;
-  coverPush(o, player, R, _pacc);
-  if (typeof zombies !== 'undefined') for (const z of zombies) coverPush(o, z, R, _pacc);
+  const A = _pacc;
+  A.ax = A.ay = A.fx = A.fy = A.s = 0;
+  coverPush(o, player, R, A, player.vx, player.vy);
+  if (typeof zombies !== 'undefined') for (const z of zombies) coverPush(o, z, R, A, 0, 0);
   const K = COVER_PUSH_K[o.kind] || 0.5;
-  const tb = -Math.max(-1, Math.min(1, _pacc.b)) * K * H;   // цель: отгиб верхушки, px
-  const ts = Math.min(1, _pacc.s) * 0.3;                   // цель: примятость
-  if (o._pb === undefined) { o._pb = 0; o._pv = 0; o._ps = 0; }
-  // пружина: быстро отгибается, с лёгким покачиванием возвращается
-  o._pv += ((tb - o._pb) * 120 - o._pv * 11) * _frameDt;
+  // цель: в стороны от идущего + немного вперёд по ходу; по вертикали слабее
+  const tx = (A.ax + A.fx * 0.55) * K * H;
+  const ty = (A.ay + A.fy * 0.55) * K * H * 0.5;
+  const ts = Math.min(1, A.s) * 0.3;
+  if (o._pb === undefined) { o._pb = 0; o._pv = 0; o._py = 0; o._pw = 0; o._ps = 0; }
+  // пружина по каждой оси: быстро отгибается, возвращаясь слегка покачивается
+  o._pv += ((tx - o._pb) * 120 - o._pv * 11) * _frameDt;
   o._pb += o._pv * _frameDt;
+  o._pw += ((ty - o._py) * 120 - o._pw * 11) * _frameDt;
+  o._py += o._pw * _frameDt;
   o._ps += (ts - o._ps) * Math.min(1, (ts > o._ps ? 16 : 5) * _frameDt);
-  drawBendSprite(c, o, p.x, p.y, wind + o._pb, o._ps);
+  drawBendSprite(c, o, p.x, p.y, wind + o._pb, o._py, o._ps);
 }
