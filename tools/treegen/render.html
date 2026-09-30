@@ -60,6 +60,32 @@ window.renderTree=function(spec){
   tree.position.set(-(bb.min.x+bb.max.x)/2*0 , -bb.min.y, 0); // основание на y=0
   const holder=new THREE.Group(); holder.add(tree); sc.add(holder);
   holder.rotation.y=spec.rot||0;
+  if(spec.parts){
+    // растение режется на spec.parts секторов вокруг корня (по связным кускам
+    // сетки — листьям/стеблям); рисуется только сектор spec.part. В игре каждый
+    // сектор отклоняется поворотом вокруг корня целиком — без растяжения.
+    holder.updateMatrixWorld(true);
+    const N=spec.parts, K=spec.part, v=new THREE.Vector3();
+    const meshes=[]; holder.traverse(n=>{ if(n.isMesh) meshes.push(n); });
+    for(const m of meshes){
+      let g=m.geometry.clone();
+      const pos=g.attributes.position, nv=pos.count;
+      if(!g.index) g.setIndex([...Array(nv).keys()]);
+      const idx=g.index.array;
+      const par=new Int32Array(nv); for(let i=0;i<nv;i++) par[i]=i;
+      const find=i=>{ while(par[i]!==i){ par[i]=par[par[i]]; i=par[i]; } return i; };
+      const uni=(a,b)=>{ a=find(a); b=find(b); if(a!==b) par[a]=b; };
+      const seen=new Map();
+      for(let i=0;i<nv;i++){ v.fromBufferAttribute(pos,i); const k=Math.round(v.x*1e4)+','+Math.round(v.y*1e4)+','+Math.round(v.z*1e4); if(seen.has(k)) uni(i,seen.get(k)); else seen.set(k,i); }
+      for(let t=0;t<idx.length;t+=3){ uni(idx[t],idx[t+1]); uni(idx[t],idx[t+2]); }
+      const cs=new Map();
+      for(let i=0;i<nv;i++){ const r=find(i); v.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld); let c=cs.get(r); if(!c){ c=[0,0,0]; cs.set(r,c); } c[0]+=v.x; c[1]+=v.z; c[2]++; }
+      const sec=new Map();
+      for(const [r,c] of cs){ const a=Math.atan2(c[1]/c[2],c[0]/c[2]); sec.set(r, Math.floor((a+Math.PI)/(2*Math.PI)*N)%N); }
+      const keep=[]; for(let t=0;t<idx.length;t+=3) if(sec.get(find(idx[t]))===K) keep.push(idx[t],idx[t+1],idx[t+2]);
+      g.setIndex(keep); m.geometry=g;
+    }
+  }
   sc.add(new THREE.HemisphereLight(0xdfe9ff,0x6b5a3a,spec.hemi??1.15));
   const dl=new THREE.DirectionalLight(0xfff2d8,spec.sun??3.2);
   const sunP=spec.sunPos||[-6,10,5];

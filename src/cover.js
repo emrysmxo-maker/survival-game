@@ -164,17 +164,19 @@ function footShadow(c, x, y, h, k) {
   c.restore();
 }
 
-// Стоящий подлесок (трава, папоротник, куст, ёлочка) — в общей очереди по
-// глубине. Рисуется полосками сверху вниз (как ветер у деревьев): низ у земли
-// стоит на месте, верх изгибается плавной дугой. Когда рядом проходит боец
-// или зомби, растение упруго отгибается от него и приминается, потом
-// качнувшись выпрямляется. Отгиб зависит от положения плавно (без прыжков).
-const COVER_PUSH_R = { grass: 0.7, fern: 0.9, nettle: 0.75, bush: 1.0, sapling: 0.7 };
-const COVER_PUSH_K = { grass: 0.9, fern: 0.7, nettle: 0.75, bush: 0.4, sapling: 0.3 };
+// Стоящий подлесок (трава, папоротник, крапива, куст, ёлочка) — в общей
+// очереди по глубине.
+// • Издалека: одна картинка, качается от ветра (полоски сверху вниз, низ стоит).
+// • Когда рядом боец или зомби: растение рисуется из 6 частей-секторов
+//   (заранее разрезано в 3D, SPRITE_DATA.coverParts). Каждая часть — твёрдая:
+//   она поворачивается вокруг корня, отклоняясь от идущего (своя пружина),
+//   ничего не растягивается. Части позади ног рисуются до бойца, впереди — после.
+const COVER_PUSH_R = { grass: 0.75, fern: 0.95, nettle: 0.8, bush: 1.0, sapling: 0.7 };
+const COVER_PUSH_K = { grass: 1.0, fern: 0.8, nettle: 0.85, bush: 0.55, sapling: 0.3 };
+const COVER_PART_SHADOW = 0.42;
 const COVER_SLICES = 6;
 let _frameT = 0, _frameDt = 0.016;
-const _pacc = { ax: 0, ay: 0, fx: 0, fy: 0, s: 0, px: 0, near: 0 };
-const COVER_GAP = { grass: 1.0, fern: 1.0, nettle: 0.85, bush: 0.8, sapling: 0.35 };
+const _pacc = { s: 0, wx: 0, wy: 0 };
 
 function coverFrame() {
   const t = performance.now() / 1000;
@@ -182,110 +184,131 @@ function coverFrame() {
   _frameT = t;
 }
 
-// Вклад одного идущего в отгиб растения: «от него» (по экрану, в обе стороны)
-// и «вперёд по ходу движения» (растение чуть уносит вслед за шагом).
-function coverPush(o, e, R, acc, vx, vy) {
-  const dx = o.x - e.x, dy = o.y - e.y;
+// Вклад одного идущего: вес (ближе — сильнее) и его положение на экране
+// относительно корня растения.
+function coverPush(o, e, R, acc) {
+  const dx = e.x - o.x, dy = e.y - o.y;
   const d = Math.hypot(dx, dy);
   if (d >= R) return;
-  const sx = (dx - dy) * TILE_W / 2, sy = (dx + dy) * TILE_H / 2;
   const k = 1 - d / R;
-  const w = k * k * (3 - 2 * k);                       // мягкая кромка
-  const n = Math.hypot(sx, sy) + 10;
-  acc.ax += sx / n * w;
-  acc.ay += sy / n * w;
-  if (vx || vy) {
-    const vsx = (vx - vy) * TILE_W / 2, vsy = (vx + vy) * TILE_H / 2;
-    const vm = Math.hypot(vsx, vsy);
-    if (vm > 1) {
-      const f = Math.min(1, vm / 90) * w / vm;
-      acc.fx += vsx * f;
-      acc.fy += vsy * f;
-    }
-  }
+  const w = k * k * (3 - 2 * k);
   acc.s += w;
-  acc.px += -sx * w;                       // где идущий относительно растения (px экрана)
-  if (d < R * 0.6) acc.near += w;
+  acc.wx += (dx - dy) * TILE_W / 2 * w;
+  acc.wy += (dx + dy) * TILE_H / 2 * w;
 }
 
-const COVER_COLS = 8;
-function drawBendSprite(c, o, x, y, tip, tipY, squash, gap, px) {
+// Целая картинка, качается от ветра: полоски сверху вниз, низ у земли стоит.
+function drawWindSprite(c, o, x, y, tip) {
   const d = SPRITE_DATA.cover[o.key];
   const img = spriteImage(o.key, 'cover');
   if (!img.complete || !img.naturalWidth) return;
   const sc = o.scale, w = d.w * sc, h = d.h * sc, ay = d.ay * sc, ax = d.ax * sc;
   const nw = img.naturalWidth, nh = img.naturalHeight;
-  const srcG = nh * (d.ay / d.h), band = srcG / COVER_SLICES;
-  // наклон к камере/от неё — вытягивает/сжимает растение по высоте;
-  // вертикальный сдвиг полосок дал бы швы (тень в картинке удваивалась полосами)
-  const topH = ay * Math.max(0.5, 1 - squash + tipY / Math.max(ay, 1) * 0.5), dstBand = topH / COVER_SLICES;
+  const srcG = nh * (d.ay / d.h), band = srcG / COVER_SLICES, dstBand = ay / COVER_SLICES;
   const dpr = view.dpr || 1;
   c.save();
   c.translate(Math.round(x * dpr) / dpr, Math.round(y * dpr) / dpr);
-  const ox = o.flip ? -tip : tip;                     // в зеркальной системе
-  const pxs = o.flip ? -px : px;                      // положение идущего в системе картинки
   if (o.flip) c.scale(-1, 1);
-  const parting = gap > 0.8;
-  const cw = w / COVER_COLS, sw = nw / COVER_COLS;
-  const sig = Math.max(8, w * 0.42);
   // границы полосок — по целым пикселям экрана и без перекрытия: иначе шов
   // либо светится, либо удваивает полупрозрачную тень из картинки
-  let y0 = Math.round(-topH * dpr) / dpr;
+  let y0 = Math.round(-ay * dpr) / dpr;
   for (let i = 0; i < COVER_SLICES; i++) {
-    const hn = 1 - (i + 0.5) / COVER_SLICES;         // 1 у верха, 0 у земли
-    const y1 = i === COVER_SLICES - 1 ? 0 : Math.round((-topH + (i + 1) * dstBand) * dpr) / dpr;
-    if (y1 > y0) {
-      const sx = -ax + ox * hn * hn;
-      if (!parting) {
-        c.drawImage(img, 0, i * band, nw, band, sx, y0, w, y1 - y0);
-      } else {
-        // створки: части растения по обе стороны от идущего расходятся
-        // (у земли шире, к верхушке меньше), в проёме видна земля
-        const gk = gap * (1 - 0.45 * hn);
-        let prevEnd = null;
-        for (let j = 0; j < COVER_COLS; j++) {
-          const rel0 = j * cw - ax - pxs, rel1 = (j + 1) * cw - ax - pxs;
-          const disp = (rel) => Math.tanh(rel / 5) * gk * Math.exp(-Math.abs(rel) / sig);
-          const xs = Math.round((sx + j * cw + disp(rel0)) * dpr) / dpr;
-          const xe = Math.round((sx + (j + 1) * cw + disp(rel1)) * dpr) / dpr;
-          if (xe > xs) c.drawImage(img, j * sw, i * band, sw, band, xs, y0, xe - xs, y1 - y0);
-        }
-      }
-    }
+    const hn = 1 - (i + 0.5) / COVER_SLICES;
+    const y1 = i === COVER_SLICES - 1 ? 0 : Math.round((-ay + (i + 1) * dstBand) * dpr) / dpr;
+    if (y1 > y0) c.drawImage(img, 0, i * band, nw, band, -ax + tip * hn * hn, y0, w, y1 - y0);
     y0 = y1;
   }
   if (h > ay + 0.5) c.drawImage(img, 0, srcG, nw, nh - srcG, -ax, 0, w, h - ay);
   c.restore();
 }
 
-function drawCoverItem(c, o) {
-  const p = toScreen(o.x, o.y, heightOf(o));
-  if (!onScreen(p, 120)) return;
-  const def = COVER_KINDS[o.kind];
-  const d = SPRITE_DATA.cover[o.key];
-  const H = d.ay * o.scale;
-  const ph = o.x * 0.55 + o.y * 0.35;
-  const wind = def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+function partImage(file) {
+  let img = spriteImages[file];
+  if (!img) { img = new Image(); img.src = `${file}?v=${ASSET_VERSION}`; spriteImages[file] = img; }
+  return img;
+}
+
+// Раз в кадр на растение: кто рядом, пружины частей.
+function updateCoverPhysics(o) {
+  if (o._frame === _frameT) return;
+  o._frame = _frameT;
   const R = (COVER_PUSH_R[o.kind] || 0.7) * o.scale;
   const A = _pacc;
-  A.ax = A.ay = A.fx = A.fy = A.s = A.px = A.near = 0;
-  coverPush(o, player, R, A, player.vx, player.vy);
-  if (typeof zombies !== 'undefined') for (const z of zombies) coverPush(o, z, R, A, 0, 0);
-  const K = COVER_PUSH_K[o.kind] || 0.5;
-  // цель: в стороны от идущего + немного вперёд по ходу; по вертикали слабее
-  const tx = (A.ax + A.fx * 0.55) * K * H;
-  const ty = (A.ay + A.fy * 0.55) * K * H * 0.5;
-  const ts = Math.min(1, A.s) * 0.12;
-  const tg = Math.min(1, A.near * 1.6) * 18 * o.scale * (COVER_GAP[o.kind] || 0.6);
-  const tp = A.s > 0.001 ? A.px / A.s : (o._pp || 0);
-  if (o._pb === undefined) { o._pb = 0; o._pv = 0; o._py = 0; o._pw = 0; o._ps = 0; o._pg = 0; o._pp = tp; }
-  // пружина по каждой оси: быстро отгибается, возвращаясь слегка покачивается
-  o._pv += ((tx - o._pb) * 120 - o._pv * 11) * _frameDt;
-  o._pb += o._pv * _frameDt;
-  o._pw += ((ty - o._py) * 120 - o._pw * 11) * _frameDt;
-  o._py += o._pw * _frameDt;
-  o._ps += (ts - o._ps) * Math.min(1, (ts > o._ps ? 16 : 5) * _frameDt);
-  o._pg += (tg - o._pg) * Math.min(1, (tg > o._pg ? 12 : 4) * _frameDt);
-  o._pp += (tp - o._pp) * Math.min(1, 25 * _frameDt);
-  drawBendSprite(c, o, p.x, p.y, wind + o._pb, o._py, o._ps, o._pg, o._pp);
+  A.s = A.wx = A.wy = 0;
+  coverPush(o, player, R, A);
+  if (typeof zombies !== 'undefined') for (const z of zombies) coverPush(o, z, R, A);
+  const cp = SPRITE_DATA.coverParts && SPRITE_DATA.coverParts[o.key];
+  if (!cp) { o._act = 0; return; }
+  const infl = Math.min(1, A.s * 1.5);
+  if (o._ang === undefined) { o._ang = new Float32Array(cp.parts.length); o._vel = new Float32Array(cp.parts.length); o._act = 0; o._wx = 0; o._wy = 0; }
+  if (A.s > 0.001) {                                     // где идущий (в системе картинки)
+    const wx = (A.wx / A.s) * (o.flip ? -1 : 1), wy = A.wy / A.s;
+    if (o._act < 0.01) { o._wx = wx; o._wy = wy; }
+    const f = Math.min(1, 20 * _frameDt);
+    o._wx += (wx - o._wx) * f; o._wy += (wy - o._wy) * f;
+  }
+  const H = SPRITE_DATA.cover[o.key].ay * o.scale;
+  const K = (COVER_PUSH_K[o.kind] || 0.6) * infl;
+  let act = infl;
+  for (let j = 0; j < cp.parts.length; j++) {
+    const pt = cp.parts[j];
+    const rx = pt.cx * o.scale, ry = pt.cy * o.scale;
+    let target = 0;
+    if (K > 0) {
+      // часть уходит от идущего: сдвиг её центра вдоль (центр − идущий),
+      // переведённый в поворот вокруг корня
+      const axv = rx - o._wx, ayv = ry - o._wy;
+      const dist = Math.hypot(axv, ayv) + 1;
+      const m = K * H * 0.9 * Math.exp(-dist / (H * 1.2 + 10));
+      target = m * (axv * -ry + ayv * rx) / dist / (rx * rx + ry * ry + 80);
+      target = Math.max(-0.9, Math.min(0.9, target));
+    }
+    // пружина: быстро отклоняется, возвращаясь слегка покачивается
+    o._vel[j] += ((target - o._ang[j]) * 140 - o._vel[j] * 12) * _frameDt;
+    o._ang[j] += o._vel[j] * _frameDt;
+    act = Math.max(act, Math.abs(o._ang[j]) * 20);
+  }
+  o._act = act;
+}
+
+function drawCoverItem(c, o, half) {
+  const p = toScreen(o.x, o.y, heightOf(o));
+  if (!onScreen(p, 120)) return;
+  updateCoverPhysics(o);
+  const def = COVER_KINDS[o.kind];
+  const ph = o.x * 0.55 + o.y * 0.35;
+  const cp = SPRITE_DATA.coverParts && SPRITE_DATA.coverParts[o.key];
+  if (!cp || o._act < 0.02) {
+    if (half) return;                                    // целая картинка — один раз
+    const H = SPRITE_DATA.cover[o.key].ay * o.scale;
+    const wind = def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+    drawWindSprite(c, o, p.x, p.y, wind);
+    return;
+  }
+  const dpr = view.dpr || 1;
+  c.save();
+  c.translate(Math.round(p.x * dpr) / dpr, Math.round(p.y * dpr) / dpr);
+  if (o.flip) c.scale(-1, 1);
+  const sc = o.scale;
+  if (!half && cp.shadow) {
+    const sh = cp.shadow, img = partImage(sh.file);
+    if (img.complete && img.naturalWidth) {
+      c.globalAlpha = COVER_PART_SHADOW;
+      c.drawImage(img, -sh.ax * sc, -sh.ay * sc, sh.w * sc, sh.h * sc);
+      c.globalAlpha = 1;
+    }
+  }
+  for (let j = 0; j < cp.parts.length; j++) {
+    const pt = cp.parts[j];
+    const front = pt.cy * sc > o._wy;                    // часть ближе к камере, чем ноги
+    if (front !== !!half) continue;
+    const img = partImage(pt.file);
+    if (!img.complete || !img.naturalWidth) continue;
+    const wind = def.sway * 0.05 * Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph + j * 1.3);
+    c.save();
+    c.rotate(o._ang[j] + wind);
+    c.drawImage(img, -pt.ax * sc, -pt.ay * sc, pt.w * sc, pt.h * sc);
+    c.restore();
+  }
+  c.restore();
 }

@@ -123,7 +123,11 @@ function render() {
 
     // Подлесок, который стоит (трава, папоротники, кусты, ёлочки)
     for (const o of chunk.cover || []) {
-      if (!COVER_KINDS[o.kind].flat) renderQueue.push({ isCover: true, obj: o, depth: o.x + o.y });
+      // две записи: части позади ног (до бойца) и впереди (после)
+      if (!COVER_KINDS[o.kind].flat) {
+        renderQueue.push({ isCover: true, half: 0, obj: o, depth: o.x + o.y - 0.3 });
+        renderQueue.push({ isCover: true, half: 1, obj: o, depth: o.x + o.y + 0.3 });
+      }
     }
 
     // Валуны
@@ -147,7 +151,7 @@ function render() {
 
   renderQueue.forEach(item => {
     if (item.isCover) {
-      drawCoverItem(ctx, item.obj);
+      drawCoverItem(ctx, item.obj, item.half);
     } else if (item.isRock) {
       const o = item.obj;
       const pos = toScreen(o.x, o.y, heightOf(o));
