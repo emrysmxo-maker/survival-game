@@ -219,26 +219,19 @@ function coverFrame() {
 
 // Целая картинка, качается от ветра: полоски сверху вниз, низ у земли стоит.
 function drawWindSprite(c, o, x, y, tip) {
+  // Один вызов отрисовки на растение (раньше — 7 полосками: сотни вызовов за
+  // кадр тормозили телефон). Качание от ветра — лёгкий наклон верха (shear):
+  // размах всего несколько пикселей, растяжения не видно.
   const d = SPRITE_DATA.cover[o.key];
   const img = spriteImage(o.key, 'cover');
   if (!img.complete || !img.naturalWidth) return;
   const sc = o.scale, w = d.w * sc, h = d.h * sc, ay = d.ay * sc, ax = d.ax * sc;
-  const nw = img.naturalWidth, nh = img.naturalHeight;
-  const srcG = nh * (d.ay / d.h), band = srcG / COVER_SLICES, dstBand = ay / COVER_SLICES;
   const dpr = view.dpr || 1;
   c.save();
   c.translate(Math.round(x * dpr) / dpr, Math.round(y * dpr) / dpr);
   if (o.flip) c.scale(-1, 1);
-  // границы полосок — по целым пикселям экрана и без перекрытия: иначе шов
-  // либо светится, либо удваивает полупрозрачную тень из картинки
-  let y0 = Math.round(-ay * dpr) / dpr;
-  for (let i = 0; i < COVER_SLICES; i++) {
-    const hn = 1 - (i + 0.5) / COVER_SLICES;
-    const y1 = i === COVER_SLICES - 1 ? 0 : Math.round((-ay + (i + 1) * dstBand) * dpr) / dpr;
-    if (y1 > y0) c.drawImage(img, 0, i * band, nw, band, -ax + tip * hn * hn, y0, w, y1 - y0);
-    y0 = y1;
-  }
-  if (h > ay + 0.5) c.drawImage(img, 0, srcG, nw, nh - srcG, -ax, 0, w, h - ay);
+  if (tip) c.transform(1, 0, tip / Math.max(ay, 1), 1, 0, 0);
+  c.drawImage(img, -ax, -ay, w, h);
   c.restore();
 }
 
