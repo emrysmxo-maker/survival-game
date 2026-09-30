@@ -17,7 +17,7 @@ window.renderTree=function(spec){
   const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
   r.setSize(CW*SS,CH*SS); r.setClearColor(0x000000,0);
   r.outputColorSpace=THREE.SRGBColorSpace;
-  r.localClippingEnabled=true; r.clippingPlanes=[new THREE.Plane(new THREE.Vector3(0,1,0),1.2)]; if(spec.clipTop) r.clippingPlanes.push(new THREE.Plane(new THREE.Vector3(0,-1,0),spec.clipTop));
+  r.localClippingEnabled=true; r.clippingPlanes=[new THREE.Plane(new THREE.Vector3(0,1,0),spec.cutBase?0:1.2)]; if(spec.clipTop) r.clippingPlanes.push(new THREE.Plane(new THREE.Vector3(0,-1,0),spec.clipTop));
   r.shadowMap.enabled=true; r.shadowMap.type=THREE.PCFShadowMap;
   const sc=new THREE.Scene();
   let tree;
@@ -57,7 +57,7 @@ window.renderTree=function(spec){
   const s=spec.natural ? (spec.scale||1) : Math.min(spec.height/size.y, maxW/Math.max(size.x,size.z));
   tree.scale.setScalar(s);
   bb.setFromObject(tree);
-  tree.position.set(-(bb.min.x+bb.max.x)/2*0 , -bb.min.y, 0); // основание на y=0
+  tree.position.set(-(bb.min.x+bb.max.x)/2*0 , -bb.min.y-(spec.cutBase||0)*s, 0); // основание на y=0
   const holder=new THREE.Group(); holder.add(tree); sc.add(holder);
   holder.rotation.y=spec.rot||0;
   window.lastMeta=null; let pieceVerts=null;

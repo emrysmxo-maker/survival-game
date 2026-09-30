@@ -1,8 +1,18 @@
 {
  "sh_00_pine": {
-  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_16_ponderosa_pine.glb",
-  "height": 14,
-  "maxW": 5.0,
+  "glb": "plants/pine_tree_01/pine_tree_01.gltf",
+  "scatter": [
+   [
+    "pine_tree_01_b_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 15.5,
+  "maxW": 5.2,
+  "cutBase": 0.32,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -15,9 +25,19 @@
   "ox": 5.5
  },
  "sh_01_oak": {
-  "glb": "models/3D_deciduous_trees_pack/models/tree_12_oak_green.glb",
-  "height": 11,
-  "maxW": 5.2,
+  "glb": "plants/island_tree_02/island_tree_02.gltf",
+  "scatter": [
+   [
+    "island_tree_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 11.5,
+  "maxW": 5.6,
+  "cutBase": 0.0,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -45,9 +65,18 @@
   "ox": 5.5
  },
  "sh_03_maple": {
-  "glb": "models/3D_deciduous_trees_pack/models/tree_10_red_maple.glb",
+  "glb": "plants/tree_small_02/tree_small_02.gltf",
+  "scatter": [
+   [
+    "tree_small_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
   "height": 10.5,
-  "maxW": 5.2,
+  "maxW": 5.0,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -83,9 +112,19 @@
   "ox": 5.5
  },
  "sh_05_bluespruce": {
-  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_02_colorado_blue_spruce.glb",
-  "height": 12,
-  "maxW": 4.6,
+  "glb": "plants/pine_tree_01/pine_tree_01.gltf",
+  "scatter": [
+   [
+    "pine_tree_01_a_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 15,
+  "maxW": 5.0,
+  "cutBase": 0.32,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -98,9 +137,18 @@
   "ox": 5.5
  },
  "sh_06_willow": {
-  "glb": "models/3D_deciduous_trees_pack/models/tree_12_oak_green.glb",
+  "glb": "plants/jacaranda_tree/jacaranda_tree.gltf",
+  "scatter": [
+   [
+    "jacaranda_tree_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
   "height": 10.5,
-  "maxW": 5.6,
+  "maxW": 5.8,
   "rot": 1.9,
   "shadowOnly": true,
   "sunPos": [
@@ -114,9 +162,19 @@
   "ox": 5.5
  },
  "sh_07_aspen": {
-  "glb": "models/3D_deciduous_trees_pack/models/tree_08_columnar_green.glb",
+  "glb": "plants/tree_small_02/tree_small_02.gltf",
+  "scatter": [
+   [
+    "tree_small_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
   "height": 12,
-  "maxW": 4.4,
+  "maxW": 4.2,
+  "rot": 2.4,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -129,9 +187,19 @@
   "ox": 5.5
  },
  "sh_08_rowan": {
-  "glb": "models/3D_deciduous_trees_pack/models/tree_14_autumn_rust.glb",
-  "height": 10,
-  "maxW": 5.0,
+  "glb": "plants/tree_small_02/tree_small_02.gltf",
+  "scatter": [
+   [
+    "tree_small_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 9.5,
+  "maxW": 4.8,
+  "rot": 4.0,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -144,9 +212,19 @@
   "ox": 5.5
  },
  "sh_09_cedar": {
-  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_22_black_spruce.glb",
-  "height": 14,
-  "maxW": 4.2,
+  "glb": "plants/fir_tree_01/fir_tree_01.gltf",
+  "scatter": [
+   [
+    "fir_tree_01_a_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 15,
+  "maxW": 4.4,
+  "cutBase": 0.32,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -159,9 +237,19 @@
   "ox": 5.5
  },
  "sh_10_larch": {
-  "glb": "models/3D_Coniferous_Trees_Pack/models/tree_43_sitka_spruce.glb",
-  "height": 14,
+  "glb": "plants/fir_tree_01/fir_tree_01.gltf",
+  "scatter": [
+   [
+    "fir_tree_01_b_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 14.5,
   "maxW": 4.8,
+  "cutBase": 0.32,
   "shadowOnly": true,
   "sunPos": [
    -9,
@@ -174,9 +262,20 @@
   "ox": 5.5
  },
  "sh_11_linden": {
-  "glb": "models/3D_deciduous_trees_pack/models/tree_09_round_green.glb",
+  "glb": "plants/island_tree_02/island_tree_02.gltf",
+  "scatter": [
+   [
+    "island_tree_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
   "height": 10.5,
-  "maxW": 5.0,
+  "maxW": 5.2,
+  "rot": 3.3,
+  "cutBase": 0.35,
   "shadowOnly": true,
   "sunPos": [
    -9,
