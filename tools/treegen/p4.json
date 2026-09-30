@@ -1,0 +1,825 @@
+{
+ "grass_0": {
+  "natural": true,
+  "height": 1,
+  "cw": 300,
+  "ch": 300,
+  "top": 0.7,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/grass_medium_01/grass_medium_01.gltf",
+  "scatter": [
+   [
+    "grass_medium_01_mid_b_LOD0",
+    0.01,
+    -0.06,
+    4.61,
+    2.94
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    -0.05,
+    -0.11,
+    2.4,
+    2.9
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    -0.1,
+    -0.11,
+    1.45,
+    2.52
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    0.11,
+    0.28,
+    0.35,
+    2.39
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    -0.17,
+    -0.06,
+    2.8,
+    2.69
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.08,
+    -0.03,
+    4.72,
+    2.82
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.21,
+    -0.14,
+    4.53,
+    2.71
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.09,
+    0.21,
+    0.5,
+    2.65
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.09,
+    0.0,
+    3.35,
+    3.2
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    0.2,
+    -0.01,
+    3.75,
+    2.53
+   ],
+   [
+    "grass_medium_01_mid_b_LOD0",
+    -0.16,
+    0.03,
+    4.07,
+    2.8
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    0.03,
+    -0.26,
+    5.28,
+    2.68
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.25,
+    0.13,
+    2.35,
+    2.56
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.05,
+    -0.09,
+    2.51,
+    3.18
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    -0.09,
+    0.18,
+    4.94,
+    2.4
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    0.13,
+    -0.04,
+    0.63,
+    2.94
+   ]
+  ]
+ },
+ "grass_1": {
+  "natural": true,
+  "height": 1,
+  "cw": 300,
+  "ch": 300,
+  "top": 0.7,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/grass_medium_01/grass_medium_01.gltf",
+  "scatter": [
+   [
+    "grass_medium_01_large_b_LOD0",
+    -0.03,
+    -0.0,
+    3.61,
+    3.36
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.36,
+    0.09,
+    4.32,
+    2.13
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    0.17,
+    -0.12,
+    3.9,
+    2.45
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    -0.25,
+    0.03,
+    2.27,
+    2.23
+   ],
+   [
+    "grass_medium_01_mid_b_LOD0",
+    0.05,
+    0.31,
+    2.96,
+    2.07
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    -0.21,
+    0.03,
+    5.03,
+    2.59
+   ],
+   [
+    "grass_medium_01_mid_b_LOD0",
+    0.0,
+    -0.29,
+    5.95,
+    2.33
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.02,
+    -0.01,
+    2.04,
+    2.94
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.24,
+    -0.24,
+    2.54,
+    2.1
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.09,
+    0.21,
+    1.68,
+    2.45
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    0.02,
+    -0.04,
+    5.13,
+    3.04
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    -0.11,
+    -0.27,
+    2.07,
+    2.03
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    -0.24,
+    -0.19,
+    0.44,
+    2.0
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    0.19,
+    0.17,
+    3.52,
+    2.44
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    0.2,
+    0.23,
+    5.62,
+    2.55
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    0.11,
+    0.3,
+    1.09,
+    2.26
+   ]
+  ]
+ },
+ "grass_2": {
+  "natural": true,
+  "height": 1,
+  "cw": 300,
+  "ch": 300,
+  "top": 0.7,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/grass_medium_01/grass_medium_01.gltf",
+  "scatter": [
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.29,
+    -0.17,
+    1.8,
+    2.15
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    -0.23,
+    0.29,
+    1.08,
+    1.75
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.37,
+    -0.14,
+    2.99,
+    1.97
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    0.31,
+    -0.13,
+    5.71,
+    2.16
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.38,
+    0.04,
+    1.69,
+    2.18
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.1,
+    -0.41,
+    5.02,
+    2.04
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    0.02,
+    0.36,
+    1.86,
+    2.3
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.02,
+    0.21,
+    4.72,
+    2.3
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.2,
+    -0.0,
+    1.13,
+    2.39
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    -0.04,
+    0.13,
+    1.52,
+    3.14
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    -0.02,
+    0.14,
+    1.48,
+    2.89
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.13,
+    -0.13,
+    2.06,
+    2.45
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.09,
+    0.43,
+    0.52,
+    1.61
+   ],
+   [
+    "grass_medium_01_mid_c_LOD0",
+    0.4,
+    0.01,
+    2.64,
+    2.17
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    -0.3,
+    -0.13,
+    5.22,
+    2.15
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    0.38,
+    -0.04,
+    3.7,
+    1.71
+   ]
+  ]
+ },
+ "grass_3": {
+  "natural": true,
+  "height": 1,
+  "cw": 300,
+  "ch": 300,
+  "top": 0.7,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/grass_medium_01/grass_medium_01.gltf",
+  "scatter": [
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.36,
+    -0.24,
+    0.89,
+    1.54
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.23,
+    0.13,
+    4.8,
+    2.19
+   ],
+   [
+    "grass_medium_01_mid_b_LOD0",
+    -0.37,
+    -0.22,
+    3.11,
+    1.58
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    -0.25,
+    0.22,
+    6.11,
+    2.25
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.07,
+    0.28,
+    1.55,
+    2.28
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    0.38,
+    -0.05,
+    5.34,
+    2.03
+   ],
+   [
+    "grass_medium_01_mid_b_LOD0",
+    -0.33,
+    -0.24,
+    3.03,
+    2.02
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    0.03,
+    -0.15,
+    1.66,
+    2.95
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.35,
+    -0.16,
+    3.42,
+    1.89
+   ],
+   [
+    "grass_medium_01_large_a_LOD0",
+    -0.47,
+    -0.07,
+    0.98,
+    1.47
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    -0.23,
+    0.08,
+    0.12,
+    2.7
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    -0.02,
+    -0.04,
+    0.11,
+    2.85
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    -0.46,
+    0.16,
+    2.79,
+    1.74
+   ],
+   [
+    "grass_medium_01_mid_a_LOD0",
+    0.13,
+    -0.44,
+    3.06,
+    1.75
+   ],
+   [
+    "grass_medium_01_large_c_LOD0",
+    0.34,
+    -0.17,
+    1.41,
+    1.73
+   ],
+   [
+    "grass_medium_01_large_b_LOD0",
+    0.22,
+    0.03,
+    3.31,
+    2.48
+   ]
+  ]
+ },
+ "nettle_0": {
+  "natural": true,
+  "height": 1,
+  "cw": 300,
+  "ch": 300,
+  "top": 0.7,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/nettle_plant/nettle_plant.gltf",
+  "scatter": [
+   [
+    "nettle_plant_medium_b_LOD0",
+    0.07,
+    -0.04,
+    2.84,
+    3.4
+   ],
+   [
+    "nettle_plant_tall_b_LOD0",
+    0.18,
+    0.14,
+    4.5,
+    3.48
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    -0.08,
+    0.08,
+    3.18,
+    3.82
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    -0.18,
+    0.17,
+    0.59,
+    3.55
+   ],
+   [
+    "nettle_plant_medium_a_LOD0",
+    -0.01,
+    0.04,
+    2.84,
+    3.82
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    0.16,
+    0.15,
+    0.84,
+    3.96
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    0.03,
+    0.22,
+    3.3,
+    3.79
+   ],
+   [
+    "nettle_plant_medium_a_LOD0",
+    0.03,
+    -0.22,
+    0.93,
+    3.98
+   ],
+   [
+    "nettle_plant_tall_b_LOD0",
+    0.19,
+    -0.18,
+    5.29,
+    4.01
+   ]
+  ]
+ },
+ "nettle_1": {
+  "natural": true,
+  "height": 1,
+  "cw": 300,
+  "ch": 300,
+  "top": 0.7,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/nettle_plant/nettle_plant.gltf",
+  "scatter": [
+   [
+    "nettle_plant_tall_a_LOD0",
+    -0.08,
+    0.16,
+    1.67,
+    3.24
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    0.0,
+    -0.06,
+    1.26,
+    3.15
+   ],
+   [
+    "nettle_plant_medium_a_LOD0",
+    0.0,
+    0.01,
+    5.87,
+    3.53
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    0.12,
+    0.13,
+    2.19,
+    3.13
+   ],
+   [
+    "nettle_plant_tall_b_LOD0",
+    -0.03,
+    -0.04,
+    2.02,
+    3.88
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    -0.03,
+    0.01,
+    1.57,
+    3.24
+   ],
+   [
+    "nettle_plant_medium_a_LOD0",
+    0.0,
+    0.21,
+    1.88,
+    3.12
+   ],
+   [
+    "nettle_plant_tall_a_LOD0",
+    -0.07,
+    0.09,
+    0.61,
+    3.2
+   ],
+   [
+    "nettle_plant_medium_a_LOD0",
+    0.09,
+    0.1,
+    1.86,
+    3.2
+   ]
+  ]
+ },
+ "bush_0": {
+  "natural": true,
+  "height": 1,
+  "cw": 420,
+  "ch": 380,
+  "top": 0.75,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/shrub_02/shrub_02.gltf",
+  "scatter": [
+   [
+    "shrub_02_c",
+    0.02,
+    0.06,
+    4.0,
+    1.52
+   ],
+   [
+    "shrub_02_c",
+    -0.18,
+    0.06,
+    1.67,
+    1.48
+   ],
+   [
+    "shrub_02_a",
+    0.15,
+    0.07,
+    6.16,
+    1.64
+   ],
+   [
+    "shrub_02_d",
+    0.1,
+    -0.01,
+    5.1,
+    1.42
+   ],
+   [
+    "shrub_02_a",
+    0.01,
+    -0.07,
+    0.16,
+    1.58
+   ]
+  ]
+ },
+ "bush_1": {
+  "natural": true,
+  "height": 1,
+  "cw": 420,
+  "ch": 380,
+  "top": 0.75,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/shrub_02/shrub_02.gltf",
+  "scatter": [
+   [
+    "shrub_02_b",
+    0.06,
+    0.03,
+    2.53,
+    1.56
+   ],
+   [
+    "shrub_02_d",
+    0.02,
+    -0.11,
+    5.21,
+    1.47
+   ],
+   [
+    "shrub_02_d",
+    -0.08,
+    -0.06,
+    1.37,
+    1.71
+   ],
+   [
+    "shrub_02_a",
+    -0.04,
+    0.04,
+    5.04,
+    1.66
+   ],
+   [
+    "shrub_02_d",
+    -0.05,
+    -0.14,
+    3.51,
+    1.78
+   ]
+  ]
+ },
+ "bush_2": {
+  "natural": true,
+  "height": 1,
+  "cw": 420,
+  "ch": 380,
+  "top": 0.75,
+  "withShadow": 0.42,
+  "sunPos": [
+   -9,
+   10,
+   1
+  ],
+  "glb": "plants/shrub_02/shrub_02.gltf",
+  "scatter": [
+   [
+    "shrub_02_c",
+    -0.12,
+    0.06,
+    5.04,
+    1.79
+   ],
+   [
+    "shrub_02_d",
+    -0.09,
+    -0.16,
+    1.0,
+    1.72
+   ],
+   [
+    "shrub_02_c",
+    0.14,
+    0.07,
+    0.39,
+    1.74
+   ],
+   [
+    "shrub_02_b",
+    -0.1,
+    -0.12,
+    5.43,
+    1.43
+   ],
+   [
+    "shrub_02_d",
+    -0.13,
+    -0.11,
+    4.68,
+    1.71
+   ]
+  ]
+ }
+}

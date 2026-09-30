@@ -4,31 +4,31 @@ const SPRITE_DATA = {
  "cover": {
   "grass_0": {
    "file": "assets/cover/grass_0.png",
-   "w": 73.0,
-   "h": 56.0,
-   "ax": 34.2,
-   "ay": 33.0
+   "w": 46.0,
+   "h": 39.0,
+   "ax": 21.1,
+   "ay": 22.6
   },
   "grass_1": {
    "file": "assets/cover/grass_1.png",
-   "w": 64.0,
-   "h": 54.0,
-   "ax": 27.6,
-   "ay": 31.5
+   "w": 50.5,
+   "h": 37.5,
+   "ax": 20.8,
+   "ay": 22.0
   },
   "grass_2": {
    "file": "assets/cover/grass_2.png",
-   "w": 68.0,
-   "h": 48.5,
-   "ax": 29.4,
-   "ay": 26.2
+   "w": 59.0,
+   "h": 41.5,
+   "ax": 27.3,
+   "ay": 23.5
   },
   "grass_3": {
    "file": "assets/cover/grass_3.png",
-   "w": 69.0,
-   "h": 52.0,
-   "ax": 31.2,
-   "ay": 30.0
+   "w": 56.5,
+   "h": 40.5,
+   "ax": 25.3,
+   "ay": 23.5
   },
   "fern_0": {
    "file": "assets/cover/fern_0.png",
@@ -60,38 +60,38 @@ const SPRITE_DATA = {
   },
   "nettle_0": {
    "file": "assets/cover/nettle_0.png",
-   "w": 30.5,
-   "h": 16.0,
-   "ax": 10.4,
-   "ay": 11.6
+   "w": 51.5,
+   "h": 37.0,
+   "ax": 13.4,
+   "ay": 26.2
   },
   "nettle_1": {
    "file": "assets/cover/nettle_1.png",
-   "w": 42.5,
-   "h": 29.0,
-   "ax": 13.4,
-   "ay": 20.5
+   "w": 37.0,
+   "h": 28.5,
+   "ax": 9.5,
+   "ay": 21.7
   },
   "bush_0": {
    "file": "assets/cover/bush_0.png",
-   "w": 133.0,
-   "h": 94.0,
-   "ax": 44.0,
-   "ay": 69.5
+   "w": 165.0,
+   "h": 133.0,
+   "ax": 47.3,
+   "ay": 95.7
   },
   "bush_1": {
    "file": "assets/cover/bush_1.png",
-   "w": 114.5,
-   "h": 99.5,
-   "ax": 38.3,
-   "ay": 72.8
+   "w": 153.5,
+   "h": 107.0,
+   "ax": 42.5,
+   "ay": 79.7
   },
   "bush_2": {
    "file": "assets/cover/bush_2.png",
-   "w": 110.5,
-   "h": 69.0,
-   "ax": 36.3,
-   "ay": 49.3
+   "w": 181.5,
+   "h": 141.0,
+   "ax": 74.9,
+   "ay": 90.7
   },
   "sapling_0": {
    "file": "assets/cover/sapling_0.png",
