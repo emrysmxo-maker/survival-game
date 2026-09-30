@@ -205,3 +205,8 @@
   border-radius: 14px; border: 2px solid #3d523a;
 }
 #bigmap-legend { margin-top: 10px; font: 12px/1.5 sans-serif; color: #cfd8c8; text-align: center; }
+
+#version-tag {
+  position: fixed; right: 8px; bottom: 6px; z-index: 5; pointer-events: none;
+  font: 12px/1 sans-serif; color: rgba(255,255,255,.55); text-shadow: 0 1px 2px #000;
+}

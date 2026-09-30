@@ -32,31 +32,31 @@ const SPRITE_DATA = {
   },
   "fern_0": {
    "file": "assets/cover/fern_0.png",
-   "w": 79.0,
-   "h": 47.5,
-   "ax": 34.8,
-   "ay": 24.7
+   "w": 90.0,
+   "h": 67.0,
+   "ax": 32.4,
+   "ay": 37.7
   },
   "fern_1": {
    "file": "assets/cover/fern_1.png",
-   "w": 70.5,
-   "h": 62.5,
-   "ax": 29.7,
-   "ay": 39.5
+   "w": 77.5,
+   "h": 53.0,
+   "ax": 30.9,
+   "ay": 35.4
   },
   "fern_2": {
    "file": "assets/cover/fern_2.png",
-   "w": 69.5,
-   "h": 49.0,
-   "ax": 31.2,
-   "ay": 26.8
+   "w": 89.5,
+   "h": 71.0,
+   "ax": 24.7,
+   "ay": 48.7
   },
   "fern_3": {
    "file": "assets/cover/fern_3.png",
-   "w": 84.0,
-   "h": 52.0,
-   "ax": 40.1,
-   "ay": 30.3
+   "w": 87.5,
+   "h": 68.0,
+   "ax": 27.9,
+   "ay": 44.6
   },
   "nettle_0": {
    "file": "assets/cover/nettle_0.png",

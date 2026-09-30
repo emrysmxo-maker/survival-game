@@ -6,7 +6,7 @@ from PIL import Image, ImageFilter
 PPM=63.2; SS=2; SCREEN=214/360      # px экрана на px холста (как деревья)
 GAME='/home/user/survival-game'
 specs={}
-for f in ['p3.json','p4.json','sh.json']: specs.update(json.load(open(f)))
+for f in ['p3.json','p4.json','p5.json','sh.json']: specs.update(json.load(open(f)))
 man={'cover':{}, 'treeShadow':{}, 'rock':{}}
 def grade(im,k):
     a=np.array(im).astype(np.float32)

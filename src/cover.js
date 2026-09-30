@@ -211,17 +211,23 @@ function drawBendSprite(c, o, x, y, tip, tipY, squash) {
   if (!img.complete || !img.naturalWidth) return;
   const sc = o.scale, w = d.w * sc, h = d.h * sc, ay = d.ay * sc, ax = d.ax * sc;
   const nw = img.naturalWidth, nh = img.naturalHeight;
-  const gFrac = d.ay / d.h;
-  const srcG = nh * gFrac, band = srcG / COVER_SLICES;
-  const topH = ay * (1 - squash), dstBand = topH / COVER_SLICES;
+  const srcG = nh * (d.ay / d.h), band = srcG / COVER_SLICES;
+  // наклон к камере/от неё — вытягивает/сжимает растение по высоте;
+  // вертикальный сдвиг полосок дал бы швы (тень в картинке удваивалась полосами)
+  const topH = ay * Math.max(0.5, 1 - squash + tipY / Math.max(ay, 1) * 0.5), dstBand = topH / COVER_SLICES;
+  const dpr = view.dpr || 1;
   c.save();
-  c.translate(x, y);
+  c.translate(Math.round(x * dpr) / dpr, Math.round(y * dpr) / dpr);
   const ox = o.flip ? -tip : tip;                     // в зеркальной системе
   if (o.flip) c.scale(-1, 1);
+  // границы полосок — по целым пикселям экрана и без перекрытия: иначе шов
+  // либо светится, либо удваивает полупрозрачную тень из картинки
+  let y0 = Math.round(-topH * dpr) / dpr;
   for (let i = 0; i < COVER_SLICES; i++) {
     const hn = 1 - (i + 0.5) / COVER_SLICES;         // 1 у верха, 0 у земли
-    const bend = hn * hn;
-    c.drawImage(img, 0, i * band, nw, band + 1, -ax + ox * bend, -topH + i * dstBand + tipY * bend, w, dstBand + 1.2);
+    const y1 = i === COVER_SLICES - 1 ? 0 : Math.round((-topH + (i + 1) * dstBand) * dpr) / dpr;
+    if (y1 > y0) c.drawImage(img, 0, i * band, nw, band, -ax + ox * hn * hn, y0, w, y1 - y0);
+    y0 = y1;
   }
   if (h > ay + 0.5) c.drawImage(img, 0, srcG, nw, nh - srcG, -ax, 0, w, h - ay);
   c.restore();

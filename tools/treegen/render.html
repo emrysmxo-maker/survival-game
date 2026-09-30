@@ -31,7 +31,7 @@ window.renderTree=function(spec){
         const c=src.clone(true); c.position.set(0,0,0); c.rotation.set(0,0,0); c.updateMatrixWorld(true);
         const bb1=new THREE.Box3().setFromObject(c); const cc=bb1.getCenter(new THREE.Vector3());
         const w=new THREE.Group(); c.position.set(-cc.x,-bb1.min.y,-cc.z); w.add(c);
-        w.position.set(x,0,z); w.rotation.y=rot||0; w.scale.setScalar(sc2||1); tree.add(w);
+        w.position.set(x,0,z); w.rotation.y=rot||0; if(Array.isArray(sc2)) w.scale.set(sc2[0],sc2[1],sc2[2]); else w.scale.setScalar(sc2||1); tree.add(w);
       }
     } else
     tree=gltfCache[spec.glb].clone(true);

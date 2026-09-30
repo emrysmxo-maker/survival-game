@@ -91,3 +91,6 @@ function gameLoop(time) {
   requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
+
+// Номер версии в углу экрана (src/version.js)
+(function () { const el = document.getElementById('version-tag'); if (el) el.textContent = 'v' + GAME_VERSION; })();
