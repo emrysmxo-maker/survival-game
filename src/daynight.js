@@ -13,8 +13,15 @@ const dayNight = { t: 10, auto: true };   // t — часы (0..24)
   const wrap = document.createElement('div');
   wrap.id = 'daynight';
   wrap.innerHTML = '<span id="dn-label">10:00</span><input id="dn-slider" type="range" min="0" max="24" step="0.05" value="10"><span id="dn-auto">⏸</span>';
-  (document.getElementById('ui-overlay') || document.body).appendChild(wrap);
+  // стили прямо здесь: style.css у телефона мог остаться старым в кэше —
+  // тогда ползунок уезжал наверх под панель
+  wrap.style.cssText = 'position:fixed;left:50%;bottom:8px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;' +
+    'padding:4px 12px;background:rgba(10,16,10,0.78);border:1px solid rgba(255,255,255,0.22);border-radius:16px;' +
+    'pointer-events:auto;z-index:30;font:13px sans-serif;color:#e8e2c8;touch-action:auto;';
+  document.body.appendChild(wrap);
   const slider = wrap.querySelector('#dn-slider');
+  slider.style.cssText = 'width:190px;accent-color:#e0a040;touch-action:auto;';
+  wrap.querySelector('#dn-auto').style.cssText = 'font-size:16px;padding:0 4px;cursor:pointer;';
   const auto = wrap.querySelector('#dn-auto');
   slider.addEventListener('input', () => { dayNight.t = Number(slider.value); });
   auto.addEventListener('click', () => { dayNight.auto = !dayNight.auto; auto.textContent = dayNight.auto ? '⏸' : '▶'; });
@@ -113,6 +120,102 @@ function drawDayNight(c) {
     g.addColorStop(1, 'rgba(120,100,70,0)');
     c.fillStyle = g;
     c.fillRect(px - r, py - r, r * 2, r * 2);
+  }
+  c.restore();
+}
+
+// Солнце для освещения земли (render.js, drawGroundLight): направление К солнцу
+// по земле (мир) и сила светотени. Утром солнце слева экрана, в полдень сверху,
+// вечером справа; низкое солнце — светотень сильнее (длинные тени), полдень —
+// мягче, ночью — едва (луна).
+function sunLight() {
+  const t = dayNight.t, e = sunElevation(t);
+  const th = Math.max(0, Math.min(Math.PI, Math.PI * (t - 6) / 12));
+  const sxs = -Math.cos(th), sys = -Math.sin(th);            // на экране
+  let dx = (sxs + sys) / 2, dy = (sys - sxs) / 2;             // в мир
+  const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+  let k;
+  if (e > 0) k = 0.55 + 0.75 * (1 - e);                       // 0.55 в полдень … 1.3 у горизонта
+  else k = Math.max(0.12, 1.3 * (1 + e / 0.15));              // сумерки гаснут до лунных 0.12
+  return { dx, dy, k: Math.max(0, k), sxs, sys, e };
+}
+
+// Единственные тени в игре — от солнца: деревья и боец/зомби. Направление —
+// от солнца, длина — по его высоте (утром/вечером длинные), ночью их нет.
+// Картинки теней деревьев отрендерены с солнцем слева (тень вправо) под ~48°,
+// поэтому их поворачиваем и вытягиваем.
+// Картинки теней обрезаны по краю холста рендера (у ствола) — при повороте
+// тени этот срез становился резкой прямой линией. Края плавно гасим.
+const _feather = {};
+function featheredShadow(key) {
+  if (_feather[key]) return _feather[key];
+  const img = spriteImage(key, 'treeShadow');
+  if (!img.complete || !img.naturalWidth) return null;
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d');
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'destination-in';
+  const f = Math.max(6, Math.round(Math.min(w, h) * 0.18));
+  const mk = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); return gr; };
+  g.fillStyle = mk(0, 0, f, 0); g.fillRect(0, 0, w, h);
+  g.fillStyle = mk(w, 0, w - f, 0); g.fillRect(0, 0, w, h);
+  g.fillStyle = mk(0, 0, 0, f); g.fillRect(0, 0, w, h);
+  g.fillStyle = mk(0, h, 0, h - f); g.fillRect(0, 0, w, h);
+  _feather[key] = cv;
+  return cv;
+}
+
+function drawSunShadows(c) {
+  const t = dayNight.t, e = sunElevation(t);
+  if (e <= 0.02) return;
+  const sun = sunLight();
+  const alpha = 0.32 * Math.min(1, e / 0.15);
+  const ang = Math.atan2(-sun.sys, -sun.sxs);                 // куда падает тень на экране
+  const elev = Math.asin(Math.min(1, e)) || 0.02;
+  const len = Math.max(0.6, Math.min(2.6, Math.tan(0.84) / Math.tan(Math.max(0.2, elev))));
+  c.save();
+  c.globalAlpha = alpha;
+  for (const chunk of loadedChunks.values()) {
+    for (const tr of chunk.trees) {
+      const key = TREE_FILES[tr.type].replace('.png', '');
+      const d = SPRITE_DATA.treeShadow[key];
+      if (!d) continue;
+      const p = toScreen(tr.x, tr.y, heightOf(tr));
+      const R = (d.w + d.h) * len * (tr.scale || 1);
+      if (p.x < -R || p.x > view.w + R || p.y < -R || p.y > view.h + R) continue;
+      const img = featheredShadow(key);
+      if (!img) continue;
+      const sc = tr.scale || 1;
+      c.save();
+      c.translate(p.x, p.y);
+      c.scale(1, TILE_H / TILE_W);            // поворот в плоскости земли (изометрия)
+      c.rotate(ang);
+      c.scale(len, 1);
+      c.scale(1, TILE_W / TILE_H);
+      c.drawImage(img, -d.ax * sc, -d.ay * sc, d.w * sc, d.h * sc);
+      c.restore();
+    }
+  }
+  c.globalAlpha = 1;
+  const who = [[player.x, player.y, player.h, 1]];
+  if (typeof zombies !== 'undefined') for (const z of zombies) who.push([z.x, z.y, undefined, z.state === 'walk' ? 1 : 1.4]);
+  for (const [x, y, h, k] of who) {
+    const p = toScreen(x, y, h);
+    if (p.x < -80 || p.x > view.w + 80 || p.y < -80 || p.y > view.h + 80) continue;
+    c.save();
+    c.translate(p.x, p.y);
+    c.scale(1, TILE_H / TILE_W);
+    c.rotate(ang);
+    const L = 26 * k * len;
+    c.translate(L * 0.5, 0);
+    c.scale(L / 12, 0.9 * k);
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, 12);
+    g.addColorStop(0, `rgba(0,0,0,${(alpha * 1.3).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(0, 0, 12, 0, Math.PI * 2); c.fill();
+    c.restore();
   }
   c.restore();
 }

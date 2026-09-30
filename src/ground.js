@@ -27,7 +27,8 @@ const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клет�
 const GROUND_BAKE_SCALE = 2.6;
 // Размер запечённого куска земли в css-px (для отбора кусков, видимых на экране)
 // и запас вокруг экрана, в котором куски держатся/запекаются заранее.
-const GROUND_LO_SCALE = 1.3;        // быстрая грубая земля — запекается заранее, издалека
+const GROUND_LO_SCALE = 1.3;
+const GROUND_LIGHT_SCALE = 0.35;    // разрешение карт освещения склонов (они плавные)        // быстрая грубая земля — запекается заранее, издалека
 const GROUND_MARGIN_LO = 1100;      // грубая земля держится и запекается за столько px от экрана
 const GROUND_MARGIN_HI = 380;       // чёткая — когда кусок ближе этого
 const GROUND_MARGIN_HI_KEEP = 640;  // и не сбрасывается в грубую, пока не уйдёт дальше этого
@@ -271,7 +272,11 @@ function createGroundBaker(makeCanvas, textures, scale) {
   const maskData = {};
   for (const t of GROUND_LAYER_ORDER) maskData[t] = mctx.createImageData(mw, mh);
   // Вода (поверх дна), светотень рельефа (свет/тень) и лужи болота.
-  for (const t of ['water', 'lit', 'shade', 'puddle', 'low', 'hi']) maskData[t] = mctx.createImageData(mw, mh);
+  for (const t of ['water', 'puddle']) maskData[t] = mctx.createImageData(mw, mh);
+  // Наклон земли по осям мира (+x, −x, +y, −y): из них освещение склонов
+  // собирается при отрисовке по текущему положению солнца (src/daynight.js).
+  const GRAD = ['gx', 'gy'];      // 128 = ровно, светлее — подъём по оси, темнее — спуск
+  for (const t of GRAD) maskData[t] = mctx.createImageData(mw, mh);
   const S = scale || GROUND_BAKE_SCALE;
   const Ws = Math.ceil(W * S), Hs = Math.ceil(H * S);
   const layer = makeCanvas(Ws, Hs);
@@ -287,7 +292,7 @@ function createGroundBaker(makeCanvas, textures, scale) {
     for (const p of patterns) p.setTransform(new DOMMatrix([pa * S, pb * S, -pa * S, pb * S, -o.x * S, -o.y * S]));
 
     // Маски: точка маски -> «мировой пиксель» -> координаты мира -> веса.
-    const maxA = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, water: 0, lit: 0, shade: 0, puddle: 0 };
+    const maxA = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, water: 0, puddle: 0, gx: 0, gy: 0 };
     const tt = {};
     for (let j = 0; j < mh; j++) {
       const sum = ((j + 0.5) * GROUND_MASK_STEP + o.y) / (TILE_H / 2);
@@ -328,13 +333,11 @@ function createGroundBaker(makeCanvas, textures, scale) {
         const L = (gx * CE + gy * CE + SE) * nl;         // n·l, n = (-gx,-gy,1)
         const L2 = (gx * CE - gy * CE + SE) * nl;        // боковой свет
         const lightK = (L - SE) * 1.6 + (L2 - SE) * 0.5 - lap * 0.5;
+        const gxm = hx / 0.6 / 1.39 * 1.6, gym = hy / 0.6 / 1.39 * 1.6;
         const extra = {
           water: weights.t.water * 0.82,
-          // высота места: низины темнее и холоднее (сыро, тень), возвышенности светлее
-          low: smoothstep(0.2, -2.6, h) * 0.38 + smoothstep(1.5, 4.5, h) * 0,
-          hi: smoothstep(1.2, 4.2, h) * 0.5,
-          lit: Math.min(0.5, Math.max(0, lightK)),
-          shade: Math.min(0.72, Math.max(0, -lightK)),
+          gx: 0.5 + 0.5 * Math.max(-1, Math.min(1, gxm)),
+          gy: 0.5 + 0.5 * Math.max(-1, Math.min(1, gym)),
           puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8
         };
         for (const t in extra) {
@@ -382,10 +385,6 @@ function createGroundBaker(makeCanvas, textures, scale) {
     };
     overlay('puddle', 'rgb(38, 46, 36)');
     overlay('water', 'rgb(46, 66, 64)');
-    overlay('shade', 'rgb(20, 24, 16)');
-    overlay('low', 'rgb(10, 24, 30)');
-    overlay('lit', 'rgb(255, 244, 205)', 'soft-light');
-    overlay('hi', 'rgb(255, 244, 205)', 'soft-light');
 
     // Рельеф: плоская картинка `out` режется на сетку клеток мира, каждая
     // клетка (два треугольника) сдвигается по вертикали на высоту своих
@@ -414,7 +413,7 @@ function createGroundBaker(makeCanvas, textures, scale) {
     const res = makeCanvas(Ws, Math.ceil((cropBot - cropTop) * S));
     res.cropTop = cropTop;
     const rctx = res.getContext('2d');
-    const tri = (a, b, c) => {
+    const tri = (a, b, c, src, srcK, ctx2, D, gr = 0.8) => {
       // источник (плоская картинка) -> приёмник (со сдвигом по y)
       const sx0 = vx[a], sy0 = vy[a], sx1 = vx[b], sy1 = vy[b], sx2 = vx[c], sy2 = vy[c];
       const dx0 = sx0, dy0 = sy0 - vh[a] + RELIEF_MARGIN - cropTop;
@@ -429,25 +428,56 @@ function createGroundBaker(makeCanvas, textures, scale) {
       const e = dx0 - m11 * sx0 - m21 * sy0, f = dy0 - m12 * sx0 - m22 * sy0;
       // клип — приёмный треугольник, чуть раздутый (без щелей между клетками)
       const mx = (dx0 + dx1 + dx2) / 3, my = (dy0 + dy1 + dy2) / 3;
-      const grow = (x, y) => { const l = Math.hypot(x - mx, y - my) || 1; return [x + (x - mx) / l * 0.8, y + (y - my) / l * 0.8]; };
+      const grow = (x, y) => { const l = Math.hypot(x - mx, y - my) || 1; return [x + (x - mx) / l * gr, y + (y - my) / l * gr]; };
       const p0 = grow(dx0, dy0), p1 = grow(dx1, dy1), p2 = grow(dx2, dy2);
-      rctx.save();
-      rctx.beginPath();
-      rctx.moveTo(p0[0] * S, p0[1] * S); rctx.lineTo(p1[0] * S, p1[1] * S); rctx.lineTo(p2[0] * S, p2[1] * S);
-      rctx.closePath();
-      rctx.clip();
-      rctx.setTransform(m11 * S, m12 * S, m21 * S, m22 * S, e * S, f * S);
-      const bx0 = Math.floor(Math.min(sx0, sx1, sx2)) - 1, by0 = Math.floor(Math.min(sy0, sy1, sy2)) - 1;
-      const bw = Math.ceil(Math.max(sx0, sx1, sx2)) - bx0 + 2, bh = Math.ceil(Math.max(sy0, sy1, sy2)) - by0 + 2;
-      rctx.drawImage(out, bx0 * S, by0 * S, bw * S, bh * S, bx0, by0, bw, bh);
-      rctx.restore();
+      ctx2.save();
+      ctx2.beginPath();
+      ctx2.moveTo(p0[0] * D, p0[1] * D); ctx2.lineTo(p1[0] * D, p1[1] * D); ctx2.lineTo(p2[0] * D, p2[1] * D);
+      ctx2.closePath();
+      ctx2.clip();
+      ctx2.setTransform(m11 * D, m12 * D, m21 * D, m22 * D, e * D, f * D);
+      const mg = Math.ceil(gr / Math.min(1, Math.abs(m11) + 0.3)) + 1;
+      const bx0 = Math.floor(Math.min(sx0, sx1, sx2)) - mg, by0 = Math.floor(Math.min(sy0, sy1, sy2)) - mg;
+      const bw = Math.ceil(Math.max(sx0, sx1, sx2)) - bx0 + 2 * mg, bh = Math.ceil(Math.max(sy0, sy1, sy2)) - by0 + 2 * mg;
+      ctx2.drawImage(src, bx0 * srcK, by0 * srcK, bw * srcK, bh * srcK, bx0, by0, bw, bh);
+      ctx2.restore();
     };
     for (let sum = 0; sum <= 2 * G - 2; sum++) {
       for (let i = Math.max(0, sum - G + 1); i <= Math.min(G - 1, sum); i++) {
         const j = sum - i;
         const a = j * (G + 1) + i, b = a + 1, c = a + G + 1, d = c + 1;
-        tri(a, b, d);
-        tri(a, d, c);
+        tri(a, b, d, out, S, rctx, S);
+        tri(a, d, c, out, S, rctx, S);
+      }
+    }
+    // Карты наклона — той же сеткой рельефа, в низком разрешении (LK): непрозрачные
+    // серые (128 = ровно) — как сама земля, поэтому на стыках треугольников нет
+    // швов. На каждую ось две: прямая и инвертированная (для солнца с другой стороны).
+    const LK = GROUND_LIGHT_SCALE;
+    res.light = [];
+    for (const t of GRAD) {
+      const src = maskData[t].data;
+      for (const inv of [false, true]) {
+        const flat = makeCanvas(mw, mh);
+        const fc = flat.getContext('2d');
+        const im = fc.createImageData(mw, mh);
+        for (let q = 0; q < mw * mh; q++) {
+          const v = inv ? 255 - src[q * 4 + 3] : src[q * 4 + 3];
+          im.data[q * 4] = v; im.data[q * 4 + 1] = v; im.data[q * 4 + 2] = v; im.data[q * 4 + 3] = 255;
+        }
+        fc.putImageData(im, 0, 0);
+        const warped = makeCanvas(Math.ceil(Ws / S * LK), Math.ceil(res.height / S * LK));
+        const wc = warped.getContext('2d');
+        wc.imageSmoothingEnabled = true;
+        for (let sum = 0; sum <= 2 * G - 2; sum++) {
+          for (let i = Math.max(0, sum - G + 1); i <= Math.min(G - 1, sum); i++) {
+            const j = sum - i;
+            const a = j * (G + 1) + i, b = a + 1, c = a + G + 1, d = c + 1;
+            tri(a, b, d, flat, 1 / GROUND_MASK_STEP, wc, LK, 3);
+            tri(a, d, c, flat, 1 / GROUND_MASK_STEP, wc, LK, 3);
+          }
+        }
+        res.light.push(warped);
       }
     }
     return res;

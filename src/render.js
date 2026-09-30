@@ -21,7 +21,7 @@ function startGroundBaking() {
     try {
       const w = new Worker(`src/ground-worker.js?v=${ASSET_VERSION}`);
       w.onmessage = (e) => {
-        const { key, bitmap, cropTop, hi } = e.data;
+        const { key, bitmap, cropTop, hi, light } = e.data;
         groundBake.inFlight.delete(key + (hi ? ':H' : ':L'));
         const chunk = loadedChunks.get(key);
         if (!chunk) { bitmap.close(); return; }
@@ -35,6 +35,8 @@ function startGroundBaking() {
         } else if (chunk.ground && chunk.ground.close) {
           chunk.ground.close();
         }
+        if (chunk.groundLight) chunk.groundLight.forEach((b) => b && b.close && b.close());
+        chunk.groundLight = light;
         chunk.ground = bitmap;
         chunk.groundScale = hi ? GROUND_BAKE_SCALE : GROUND_LO_SCALE;
         chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
@@ -65,6 +67,7 @@ function localBake(chunk, hi) {
     }, groundImages, S);
   }
   chunk.ground = groundBake.localBakers[S](chunk.cx, chunk.cy);
+  chunk.groundLight = chunk.ground.light;
   chunk.groundScale = S;
   chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
   chunk.groundOrigin.y += chunk.ground.cropTop || 0;
@@ -99,7 +102,8 @@ function drawGround() {
       if (d > GROUND_BAKE_KEEP_RADIUS || ds > GROUND_MARGIN_LO) {
         if (chunk.ground && chunk.ground.close) chunk.ground.close();
         if (chunk.groundPrev && chunk.groundPrev.close) chunk.groundPrev.close();
-        chunk.ground = null; chunk.groundPrev = null;
+        if (chunk.groundLight) chunk.groundLight.forEach((b) => b && b.close && b.close());
+        chunk.ground = null; chunk.groundPrev = null; chunk.groundLight = null;
         continue;
       }
       if (!chunk.ground) {
@@ -147,10 +151,69 @@ function drawGround() {
         ctx.drawImage(chunk.ground, x, y, gw, gh);
         ctx.globalAlpha = 1;
       }
+      drawGroundLight(chunk, x, y, gw, gh);
       continue;
     }
     ctx.drawImage(chunk.ground, x, y, gw, gh);
+    drawGroundLight(chunk, x, y, gw, gh);
   }
+}
+
+// Освещение склонов от солнца: 4 карты наклона (+x, −x, +y, −y) складываются
+// с весами по направлению и высоте солнца (sunLight() в daynight.js). Склон к
+// солнцу светлее, от солнца — темнее; утром и вечером сильнее, ночью почти нет.
+const _sunDefault = { dx: -0.7071, dy: -0.7071, k: 0.9 };
+const GROUND_LIGHT_GAIN = 1.6;   // сила светотени склонов
+function drawGroundLight(chunk, x, y, gw, gh) {
+  const L = chunk.groundLight;
+  if (!L) return;
+  const sun = typeof sunLight === 'function' ? sunLight() : _sunDefault;
+  if (sun.k < 0.01) return;
+  // освещение = −(gx·dx + gy·dy)·k; карты: [gx, 255−gx, gy, 255−gy]
+  const wx = -sun.dx * sun.k, wy = -sun.dy * sun.k;
+  // только внутри контура своего чанка (с рельефом): иначе на стыках чанков
+  // полупрозрачные карты ложатся дважды или оставляют щель — видны линии
+  if (!chunk.lightPoly) {
+    const G = GROUND_WARP_CELLS, cs = CHUNK_SIZE / G, sx = chunk.cx * CHUNK_SIZE, sy = chunk.cy * CHUNK_SIZE;
+    const pts = [];
+    const add = (i, j) => { const wx = sx + i * cs, wy = sy + j * cs; pts.push((wx - wy) * TILE_W / 2, (wx + wy) * TILE_H / 2 - terrainHeight(wx, wy) * RELIEF_PX_PER_M); };
+    for (let i = 0; i < G; i++) add(i, 0);
+    for (let j = 0; j < G; j++) add(G, j);
+    for (let i = G; i > 0; i--) add(i, G);
+    for (let j = G; j > 0; j--) add(0, j);
+    // раздуть на ~1.2 px, как раздута сама земля при запекании: её полоска на
+    // стыке перекрывает соседний кусок — туда же должен лечь и свет этого куска
+    let cx = 0, cy = 0;
+    for (let k = 0; k < pts.length; k += 2) { cx += pts[k]; cy += pts[k + 1]; }
+    cx /= pts.length / 2; cy /= pts.length / 2;
+    for (let k = 0; k < pts.length; k += 2) {
+      const dx = pts[k] - cx, dy = pts[k + 1] - cy, l = Math.hypot(dx, dy) || 1;
+      pts[k] += dx / l * 0.7; pts[k + 1] += dy / l * 0.7;
+    }
+    chunk.lightPoly = pts;
+  }
+  const P = chunk.lightPoly, ox = x - chunk.groundOrigin.x, oy = y - chunk.groundOrigin.y;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(P[0] + ox, P[1] + oy);
+  for (let k = 2; k < P.length; k += 2) ctx.lineTo(P[k] + ox, P[k + 1] + oy);
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalCompositeOperation = 'soft-light';
+  for (const [wgt, a, b] of [[wx, L[0], L[1]], [wy, L[2], L[3]]]) {
+    if (Math.abs(wgt) < 0.02) continue;
+    const img = wgt > 0 ? a : b;
+    if (!img) continue;
+    let rem = Math.abs(wgt) * GROUND_LIGHT_GAIN;        // >1 — кладём дважды (soft-light мягкий)
+    while (rem > 0.01) {
+      ctx.globalAlpha = Math.min(1, rem);
+      ctx.drawImage(img, x, y, gw, gh);
+      rem -= 1;
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
 }
 
 function render() {
@@ -167,6 +230,7 @@ function render() {
   const renderQueue = [];
   drawGround();
   drawGroundLayer(ctx);
+  if (typeof drawSunShadows === 'function') drawSunShadows(ctx);   // единственные тени — от солнца
   drawEffects(ctx);
   drawBloodDecals(ctx);
   drawCasings(ctx);

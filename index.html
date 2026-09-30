@@ -13,7 +13,7 @@
   <meta name="theme-color" content="#0c120c">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="icon" href="assets/icons/icon-192.png">
-  <link rel="stylesheet" href="style.css">
+  <script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '">');</script>
   <script>if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(function () {});</script>
 </head>
 <body>
