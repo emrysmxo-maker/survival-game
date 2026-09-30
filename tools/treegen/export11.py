@@ -4,7 +4,7 @@ import numpy as np, os
 from PIL import Image
 OUT='/home/user/survival-game/assets/trees'
 AUTUMN={'03_maple':(0.05,1.3,1.1),'08_rowan':(0.075,1.2,0.95),'07_aspen':(0.15,1.1,1.1)}   # целевой оттенок, насыщенность, яркость
-BRIGHT={'00_pine':1.7,'05_bluespruce':1.7,'09_cedar':1.2,'10_larch':1.2}
+BRIGHT={'02_birch':1.0,'04_deadwood':1.0,'00_pine':1.7,'05_bluespruce':1.7,'09_cedar':1.2,'10_larch':1.2}
 def grade(im,k):
     a=np.array(im.convert('RGBA')).astype(np.float32); rgb=a[:,:,:3]/255.0
     mx=rgb.max(2); mn=rgb.min(2); d=mx-mn+1e-6
@@ -20,14 +20,16 @@ def grade(im,k):
     p=v*(1-s); q=v*(1-f*s); t=v*(1-(1-f)*s)
     R=np.choose(i,[v,q,p,p,t,v]); G=np.choose(i,[t,v,v,q,p,p]); B=np.choose(i,[p,p,t,v,v,q])
     rgb=np.stack([R,G,B],2)
-    gr=rgb.mean(2,keepdims=True); rgb=(gr+(rgb-gr)*0.92)*0.97          # чуть приглушить под фон
+    gr=rgb.mean(2,keepdims=True); rgb=(gr+(rgb-gr)*(1.0 if k in ('02_birch','04_deadwood') else 0.92))*0.97          # чуть приглушить под фон
     a[:,:,:3]=rgb*255
     return Image.fromarray(a.clip(0,255).astype(np.uint8),'RGBA')
-for f in sorted(os.listdir('outs')):
+SRC = 'outh' if os.path.isdir('outh') else 'outs'         # outh — рендеры x2 (720x1440)
+SIZE = (720, 1440) if SRC == 'outh' else (360, 720)
+for f in sorted(os.listdir(SRC)):
     if not f.endswith('.png'): continue
     k=f[:-4]
-    im=grade(Image.open('outs/'+f),k).resize((360,720),Image.LANCZOS)
+    im=grade(Image.open(SRC+'/'+f),k).resize(SIZE,Image.LANCZOS)
     im.save(OUT+'/'+k+'.png')
-    al=np.array(im.getchannel('A')); row=al[int(0.9*720)-14]        # ширина ствола у земли
+    al=np.array(im.getchannel('A')); row=al[int(0.9*SIZE[1])-14*SIZE[1]//720]        # ширина ствола у земли
     xs=np.nonzero(row>128)[0]
-    print(k,'trunk w frac',round((xs.max()-xs.min()+1)/360,3) if len(xs) else None)
+    print(k,'trunk w frac',round((xs.max()-xs.min()+1)/SIZE[0],3) if len(xs) else None)

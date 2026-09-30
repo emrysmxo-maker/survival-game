@@ -12,7 +12,8 @@ window.ready=true;
 const SS=2;                       // суперсэмплинг (размер холста — в spec.cw/ch)
 const PPM=63.2;                  // px холста на метр (как у бойца: 32.5 px/м на экране)
 window.renderTree=function(spec){
-  const CW=spec.cw||360, CH=spec.ch||720, TOP=spec.top||0.9;
+  const RES=spec.res||1;                    // множитель разрешения картинки (2 = вдвое чётче)
+  const CW=(spec.cw||360)*RES, CH=(spec.ch||720)*RES, TOP=spec.top||0.9, PPMe=PPM*RES;
   const elev=spec.elev ?? Math.asin(54/74);
   const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
   r.setSize(CW*SS,CH*SS); r.setClearColor(0x000000,0);
@@ -127,7 +128,7 @@ window.renderTree=function(spec){
   }
   sc.add(dl);
   const R=30;
-  const wM=CW*SS/(PPM*SS)/1, hM=CH/PPM;
+  const wM=CW/PPMe, hM=CH/PPMe;
   const ox=spec.ox||0;
   const cam=new THREE.OrthographicCamera(-wM/2+ox,wM/2+ox, TOP*hM, -(1-TOP)*hM, 0.1, 100);
   cam.position.set(0,R*Math.sin(elev),R*Math.cos(elev)); cam.lookAt(0,0,0);
