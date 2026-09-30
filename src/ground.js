@@ -28,7 +28,9 @@ const GROUND_BAKE_MARGIN = 2;
 // (метр на экране по вертикали ≈ 37.7 px/м × cos(наклона камеры)).
 // Запечённая земля чанка «морщится» по сетке WARP_CELLS × WARP_CELLS, и в
 // холсте оставлен запас RELIEF_MARGIN сверху и снизу под перепад высот внутри чанка.
-const RELIEF_PX_PER_M = 48;
+// Не больше ~32: иначе склон, уходящий от камеры круче ~60%, «заворачивается»
+// на экране — боец бежит вниз, а на экране топчется на месте (было 48 в v2.3).
+const RELIEF_PX_PER_M = 32;
 const RELIEF_MARGIN = 260;
 const GROUND_WARP_CELLS = 16;
 const CHUNK_PX_W = CHUNK_SIZE * TILE_W;
@@ -140,12 +142,12 @@ function bowlNoise(wx, wy) {
 const TEST_MAP = true;
 const TEST_MAP_R = 30;
 const TEST_FEATURES = {
-  pit:      { x: 5, y: 5, r: 5.5, depth: 3.0 },    // яма (впереди-внизу от старта)
-  hill:     { x: -8, y: -8, r: 7.5, h: 4.0 },      // холм (сверху от старта)
+  pit:      { x: 5, y: 5, r: 7, depth: 2.6 },    // яма (впереди-внизу от старта)
+  hill:     { x: -8, y: -8, r: 9, h: 3.6 },      // холм (сверху от старта)
   swamp:    { x: -17, y: 6, r: 7 },                // болото (слева)
   clearing: { x: 15, y: -11, r: 6 },               // поляна (справа)
   rocky:    { x: -3, y: -21, r: 5.5 },             // каменистое место (вверху)
-  cliffX: 20, cliffH: 2.5                           // уступ вдоль x = 20 (правее — выше)
+  cliffX: 20, cliffH: 2.0                           // уступ вдоль x = 20 (правее — выше)
 };
 function testStreamY(wx) { return 19 + 3 * Math.sin(wx * 0.18); }
 function testStreamDist(wx, wy) {
@@ -157,13 +159,13 @@ function terrainAtTest(wx, wy, out) {
   const F = TEST_FEATURES;
   const d = testStreamDist(wx, wy);
   const water = smoothstep(1.15, 0.7, d);
-  const ravine = smoothstep(5.5, 0.9, d);
+  const ravine = smoothstep(6.5, 0.9, d);
   const pit = radial(wx, wy, F.pit, F.pit.r);
   const hill = radial(wx, wy, F.hill, F.hill.r);
   const swamp = radial(wx, wy, F.swamp, F.swamp.r) * (1 - ravine);
-  const cliff = smoothstep(F.cliffX - 0.8, F.cliffX + 0.8, wx) * smoothstep(12, 8, wy) * smoothstep(-26, -22, wy);
+  const cliff = smoothstep(F.cliffX - 2.2, F.cliffX + 2.2, wx) * smoothstep(12, 8, wy) * smoothstep(-26, -22, wy);
   const bump = 0.25 * Math.sin(wx * 0.45 + wy * 0.2) * Math.sin(wy * 0.37 - wx * 0.15) * (1 - ravine) * (1 - swamp);
-  out.h = hill * F.hill.h - pit * F.pit.depth - swamp * 0.8 - ravine * 3.4 + cliff * F.cliffH + bump;
+  out.h = hill * F.hill.h - pit * F.pit.depth - swamp * 0.8 - ravine * 2.0 + cliff * F.cliffH + bump;
   out.bowl = pit;
   out.water = water;
   out.ravine = ravine;
@@ -179,7 +181,7 @@ function terrainAt(wx, wy, out) {
   if (TEST_MAP) return terrainAtTest(wx, wy, out);
   const d = streamDist(wx, wy);
   const water = smoothstep(1.15, 0.7, d);
-  const ravine = smoothstep(5.5, 0.9, d);
+  const ravine = smoothstep(6.5, 0.9, d);
   const hill = hillHeight(wx, wy);
   const wet = wetNoise(wx, wy);
   // болото — в сырых местах, чаще в низинах, не на ручье
@@ -189,7 +191,7 @@ function terrainAt(wx, wy, out) {
   // бугры не в овраге и у воды; на болоте — вполовину слабее (плоское, но не ровное)
   const bump = bumpHeight(wx, wy) * 0.5 * (1 - ravine) * (1 - water) * (1 - 0.5 * swamp);
   const terr = terraceHeight(wx, wy) * terraceMask(wx, wy) * (1 - ravine) * (1 - water) * (1 - swamp) * (1 - bowl);
-  const h = hill * 0.5 * (1 - 0.8 * swamp) + bump + terr - swamp * 0.8 - ravine * 3.4 - bowl * 3.0;
+  const h = hill * 0.5 * (1 - 0.8 * swamp) + bump + terr - swamp * 0.8 - ravine * 2.0 - bowl * 3.0;
   out.h = h;
   out.bowl = bowl;
   out.water = water;

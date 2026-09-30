@@ -80,6 +80,17 @@ function generateCover(chunk, startX, startY, seedStart) {
     const def = COVER_KINDS[kind];
     cover.push({ x, y, kind, key: def.keys[Math.floor(r3 * def.keys.length)], flip: r3 > 0.5, scale: kind === 'roots' ? 0.7 + r1 * 0.3 : 0.8 + r1 * 0.35 });
   }
+  // на склоне у дерева с нижней стороны оголяются корни (земля осыпалась)
+  for (const tr of chunk.trees) {
+    groundGrad(tr);
+    const g = Math.hypot(tr._gx, tr._gy) / 1.39;           // уклон, м/м
+    if (g < 0.3) continue;
+    const ux = -tr._gx / (g * 1.39), uy = -tr._gy / (g * 1.39);  // вниз по склону
+    const sx = (ux - uy);                                  // куда это на экране (знак x)
+    cover.push({ x: tr.x + ux * 0.28, y: tr.y + uy * 0.28, kind: 'roots',
+      key: COVER_KINDS.roots.keys[Math.floor(rnd() * 2)], flip: sx < 0,
+      scale: Math.min(1.15, 0.7 + g * 0.6) * (tr.scale || 1) });
+  }
   // корни у основания больших деревьев
   for (const tr of chunk.trees) {
     if (!tr.isGiant || rnd() > 0.5) continue;
@@ -89,14 +100,33 @@ function generateCover(chunk, startX, startY, seedStart) {
   chunk.cover = cover;
 }
 
+// Наклон земли в точке (м на тайл по осям мира), кешируется в объекте.
+function groundGrad(o) {
+  if (o._gx === undefined) {
+    o._gx = (terrainHeight(o.x + 0.5, o.y) - terrainHeight(o.x - 0.5, o.y));
+    o._gy = (terrainHeight(o.x, o.y + 0.5) - terrainHeight(o.x, o.y - 0.5));
+  }
+  return o;
+}
+// Лежащий предмет (ветка, бревно, корни) «ложится» на склон: точка картинки,
+// смещённая на (dx, dy) px от якоря, опускается/поднимается на высоту земли
+// под ней. Для плоскости это аффинное преобразование y' = y + kx·dx + ky·dy.
+function slopeTransform(c, o) {
+  groundGrad(o);
+  const kx = -RELIEF_PX_PER_M * (o._gx - o._gy) / TILE_W;
+  const ky = -RELIEF_PX_PER_M * (o._gx + o._gy) / TILE_H;
+  c.transform(1, kx, 0, Math.max(0.35, 1 + ky), 0, 0);
+}
+
 // Рисует спрайт по SPRITE_DATA: точка земли — в (x, y).
-function drawDataSprite(c, group, key, x, y, scale, flip, skew, squash) {
+function drawDataSprite(c, group, key, x, y, scale, flip, skew, squash, lieOn) {
   const d = SPRITE_DATA[group][key];
   const img = spriteImage(key, group);
   if (!img.complete || !img.naturalWidth) return;
   const w = d.w * scale, h = d.h * scale;
   c.save();
   c.translate(x, y);
+  if (lieOn) slopeTransform(c, lieOn);
   if (skew) c.transform(1, 0, skew, 1, 0, 0);       // наклон верхушки от ветра
   if (squash) c.scale(1, 1 - squash);               // примят сверху
   if (flip) c.scale(-1, 1);
@@ -116,7 +146,7 @@ function drawGroundLayer(c) {
       if (!COVER_KINDS[o.kind].flat) continue;
       const p = toScreen(o.x, o.y, heightOf(o));
       if (!onScreen(p, 120)) continue;
-      drawDataSprite(c, 'cover', o.key, p.x, p.y, o.scale, o.flip);
+      drawDataSprite(c, 'cover', o.key, p.x, p.y, o.scale, o.flip, 0, 0, o);
     }
   }
   // тени деревьев
