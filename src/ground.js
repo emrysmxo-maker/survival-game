@@ -20,6 +20,10 @@ const CAMERA_ELEV = Math.asin(TILE_H / TILE_W); // угол камеры над 
 // CC0), рисуются canvas-паттерном в изометрической проекции.
 // 0 трава, 1 светлая, 2 тропа, 3 тёмная, 4 пепел, 5 болото, 6 дно ручья, 7 камни.
 const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клеток занимает одно повторение текстуры
+// Земля запекается в GROUND_BAKE_SCALE раз крупнее css-пикселей: на телефоне с
+// плотностью 3.3 иначе она растягивается и «мылит». 1.5 ≈ разрешение текстур
+// (384 px на 3.2 клетки); память ~9 МБ на чанк (×25 чанков). 1 — как раньше.
+const GROUND_BAKE_SCALE = 1.5;
 const GROUND_TEX_PX = 384; // ассеты assets/ground/*.jpg приведены к этому размеру (фото + свет из карты нормалей, tools/treegen/bake_ground.py)
 const GROUND_MASK_STEP = 8;
 const GROUND_LAYER_ORDER = [1, 3, 4, 7, 5, 2, 6]; // …камни, болото, тропа, дно ручья (сверху)
@@ -259,7 +263,9 @@ function createGroundBaker(makeCanvas, textures) {
   for (const t of GROUND_LAYER_ORDER) maskData[t] = mctx.createImageData(mw, mh);
   // Вода (поверх дна), светотень рельефа (свет/тень) и лужи болота.
   for (const t of ['water', 'lit', 'shade', 'puddle', 'low', 'hi']) maskData[t] = mctx.createImageData(mw, mh);
-  const layer = makeCanvas(W, H);
+  const S = GROUND_BAKE_SCALE;
+  const Ws = Math.ceil(W * S), Hs = Math.ceil(H * S);
+  const layer = makeCanvas(Ws, Hs);
   const lctx = layer.getContext('2d');
   const patterns = textures.map((tex) => lctx.createPattern(tex, 'repeat'));
   const weights = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -269,7 +275,7 @@ function createGroundBaker(makeCanvas, textures) {
 
   return function bake(cx, cy) {
     const o = chunkPixelOrigin(cx, cy);
-    for (const p of patterns) p.setTransform(new DOMMatrix([pa, pb, -pa, pb, -o.x, -o.y]));
+    for (const p of patterns) p.setTransform(new DOMMatrix([pa * S, pb * S, -pa * S, pb * S, -o.x * S, -o.y * S]));
 
     // Маски: точка маски -> «мировой пиксель» -> координаты мира -> веса.
     const maxA = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, water: 0, lit: 0, shade: 0, puddle: 0 };
@@ -330,22 +336,22 @@ function createGroundBaker(makeCanvas, textures) {
       }
     }
 
-    const out = makeCanvas(W, H);
+    const out = makeCanvas(Ws, Hs);
     const octx = out.getContext('2d');
     octx.imageSmoothingEnabled = true;
     octx.imageSmoothingQuality = 'high';
     octx.fillStyle = patterns[0];
-    octx.fillRect(0, 0, W, H);
+    octx.fillRect(0, 0, Ws, Hs);
     for (const t of GROUND_LAYER_ORDER) {
       if (maxA[t] === 0) continue;
       mctx.putImageData(maskData[t], 0, 0);
       lctx.globalCompositeOperation = 'source-over';
-      lctx.clearRect(0, 0, W, H);
+      lctx.clearRect(0, 0, Ws, Hs);
       lctx.fillStyle = patterns[t];
-      lctx.fillRect(0, 0, W, H);
+      lctx.fillRect(0, 0, Ws, Hs);
       lctx.globalCompositeOperation = 'destination-in';
       lctx.imageSmoothingEnabled = true;
-      lctx.drawImage(mask, 0, 0, mw * GROUND_MASK_STEP, mh * GROUND_MASK_STEP);
+      lctx.drawImage(mask, 0, 0, mw * GROUND_MASK_STEP * S, mh * GROUND_MASK_STEP * S);
       lctx.globalCompositeOperation = 'source-over';
       octx.drawImage(layer, 0, 0);
     }
@@ -355,11 +361,11 @@ function createGroundBaker(makeCanvas, textures) {
       if (maxA[t] === 0) return;
       mctx.putImageData(maskData[t], 0, 0);
       lctx.globalCompositeOperation = 'source-over';
-      lctx.clearRect(0, 0, W, H);
+      lctx.clearRect(0, 0, Ws, Hs);
       lctx.fillStyle = color;
-      lctx.fillRect(0, 0, W, H);
+      lctx.fillRect(0, 0, Ws, Hs);
       lctx.globalCompositeOperation = 'destination-in';
-      lctx.drawImage(mask, 0, 0, mw * GROUND_MASK_STEP, mh * GROUND_MASK_STEP);
+      lctx.drawImage(mask, 0, 0, mw * GROUND_MASK_STEP * S, mh * GROUND_MASK_STEP * S);
       lctx.globalCompositeOperation = 'source-over';
       octx.globalCompositeOperation = op || 'source-over';
       octx.drawImage(layer, 0, 0);
@@ -376,7 +382,7 @@ function createGroundBaker(makeCanvas, textures) {
     // клетка (два треугольника) сдвигается по вертикали на высоту своих
     // углов. Рисуем от дальних к ближним — ближний склон закрывает дальний.
     const HH = H + RELIEF_MARGIN * 2;
-    const res = makeCanvas(W, HH);
+    const res = makeCanvas(Ws, Math.ceil(HH * S));
     const rctx = res.getContext('2d');
     const G = GROUND_WARP_CELLS, cs = CHUNK_SIZE / G;
     const startX = cx * CHUNK_SIZE, startY = cy * CHUNK_SIZE;
@@ -410,13 +416,13 @@ function createGroundBaker(makeCanvas, textures) {
       const p0 = grow(dx0, dy0), p1 = grow(dx1, dy1), p2 = grow(dx2, dy2);
       rctx.save();
       rctx.beginPath();
-      rctx.moveTo(p0[0], p0[1]); rctx.lineTo(p1[0], p1[1]); rctx.lineTo(p2[0], p2[1]);
+      rctx.moveTo(p0[0] * S, p0[1] * S); rctx.lineTo(p1[0] * S, p1[1] * S); rctx.lineTo(p2[0] * S, p2[1] * S);
       rctx.closePath();
       rctx.clip();
-      rctx.setTransform(m11, m12, m21, m22, e, f);
+      rctx.setTransform(m11 * S, m12 * S, m21 * S, m22 * S, e * S, f * S);
       const bx0 = Math.floor(Math.min(sx0, sx1, sx2)) - 1, by0 = Math.floor(Math.min(sy0, sy1, sy2)) - 1;
       const bw = Math.ceil(Math.max(sx0, sx1, sx2)) - bx0 + 2, bh = Math.ceil(Math.max(sy0, sy1, sy2)) - by0 + 2;
-      rctx.drawImage(out, bx0, by0, bw, bh, bx0, by0, bw, bh);
+      rctx.drawImage(out, bx0 * S, by0 * S, bw * S, bh * S, bx0, by0, bw, bh);
       rctx.restore();
     };
     for (let sum = 0; sum <= 2 * G - 2; sum++) {

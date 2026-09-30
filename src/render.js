@@ -98,8 +98,9 @@ function drawGround() {
   for (const chunk of drawList) {
     const x = chunk.groundOrigin.x - camX;
     const y = chunk.groundOrigin.y - camY;
-    if (x > W || y > H || x + chunk.ground.width < 0 || y + chunk.ground.height < 0) continue;
-    ctx.drawImage(chunk.ground, x, y);
+    const gw = chunk.ground.width / GROUND_BAKE_SCALE, gh = chunk.ground.height / GROUND_BAKE_SCALE;
+    if (x > W || y > H || x + gw < 0 || y + gh < 0) continue;
+    ctx.drawImage(chunk.ground, x, y, gw, gh);
   }
 }
 
