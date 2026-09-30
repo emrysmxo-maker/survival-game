@@ -41,7 +41,7 @@
 | `src/effects.js` | Следы на мягкой земле, пыль при беге, брызги и круги на воде (`updateEffects`, `drawEffects`). |
 | `src/update.js` | Автообновление: раз в 15 с HEAD-запрос `index.html`, при смене Last-Modified — перезагрузка страницы. |
 | `src/sprites-data.js` | Автогенерация (`tools/treegen/export_sprites.py`): размеры/якоря картинок покрова, теней, валунов. |
-| `assets/cover/parts/` | Растения, разрезанные на 6 твёрдых частей (+ тень) для раздвигания бойцом; `tools/treegen/pp.json` + `export_parts.py`. |
+| `assets/cover/pieces/` | Растения, разрезанные на ~12 пучков листьев (атлас на растение + тень) для раздвигания бойцом; `tools/treegen/pk.json` + `rtk.py` + `export_pieces.py`. |
 | `assets/cover/`, `assets/shadows/` | Картинки покрова и теней деревьев (рендеры 3D под угол камеры). |
 | `src/render.js` | Вся отрисовка. |
 | `src/main.js` | Холст под размер экрана телефона, игровой цикл. |

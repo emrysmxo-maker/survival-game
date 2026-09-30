@@ -60,16 +60,18 @@ window.renderTree=function(spec){
   tree.position.set(-(bb.min.x+bb.max.x)/2*0 , -bb.min.y, 0); // основание на y=0
   const holder=new THREE.Group(); holder.add(tree); sc.add(holder);
   holder.rotation.y=spec.rot||0;
-  if(spec.parts){
-    // растение режется на spec.parts секторов вокруг корня (по связным кускам
-    // сетки — листьям/стеблям); рисуется только сектор spec.part. В игре каждый
-    // сектор отклоняется поворотом вокруг корня целиком — без растяжения.
+  window.lastMeta=null; let pieceVerts=null;
+  if(spec.pieces){
+    // Растение режется на spec.pieces пучков (листья/стебли/травинки, сгруппированные
+    // по близости); рисуется только пучок spec.piece, остальные невидимы, но
+    // отбрасывают тень (общая освещённость сохраняется). В игре каждый пучок —
+    // отдельный спрайт со своим корнем и пружиной. Мета — точка корня пучка.
     holder.updateMatrixWorld(true);
-    const N=spec.parts, K=spec.part, v=new THREE.Vector3();
+    const K=spec.pieces, kk=spec.piece, v=new THREE.Vector3();
     const meshes=[]; holder.traverse(n=>{ if(n.isMesh) meshes.push(n); });
+    const comps=[];                                     // связные куски сетки
     for(const m of meshes){
-      let g=m.geometry.clone();
-      const pos=g.attributes.position, nv=pos.count;
+      const g=m.geometry.clone(); const pos=g.attributes.position, nv=pos.count;
       if(!g.index) g.setIndex([...Array(nv).keys()]);
       const idx=g.index.array;
       const par=new Int32Array(nv); for(let i=0;i<nv;i++) par[i]=i;
@@ -79,11 +81,31 @@ window.renderTree=function(spec){
       for(let i=0;i<nv;i++){ v.fromBufferAttribute(pos,i); const k=Math.round(v.x*1e4)+','+Math.round(v.y*1e4)+','+Math.round(v.z*1e4); if(seen.has(k)) uni(i,seen.get(k)); else seen.set(k,i); }
       for(let t=0;t<idx.length;t+=3){ uni(idx[t],idx[t+1]); uni(idx[t],idx[t+2]); }
       const cs=new Map();
-      for(let i=0;i<nv;i++){ const r=find(i); v.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld); let c=cs.get(r); if(!c){ c=[0,0,0]; cs.set(r,c); } c[0]+=v.x; c[1]+=v.z; c[2]++; }
-      const sec=new Map();
-      for(const [r,c] of cs){ const a=Math.atan2(c[1]/c[2],c[0]/c[2]); sec.set(r, Math.floor((a+Math.PI)/(2*Math.PI)*N)%N); }
-      const keep=[]; for(let t=0;t<idx.length;t+=3) if(sec.get(find(idx[t]))===K) keep.push(idx[t],idx[t+1],idx[t+2]);
-      g.setIndex(keep); m.geometry=g;
+      for(let i=0;i<nv;i++){ const r=find(i); v.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld); let c=cs.get(r); if(!c){ c={x:0,z:0,n:0,cl:0}; cs.set(r,c); comps.push(c); } c.x+=v.x; c.z+=v.z; c.n++; }
+      m.userData={g,idx,find,cs};
+    }
+    for(const c of comps){ c.x/=c.n; c.z/=c.n; }
+    // k-means по центрам кусков; начальные центры — самые дальние друг от друга
+    const cen=[]; { let f=comps[0]; for(const c of comps) if(c.x<f.x) f=c; cen.push([f.x,f.z]);
+      while(cen.length<Math.min(K,comps.length)){ let best=null,bd=-1; for(const c of comps){ let d=1e9; for(const q of cen) d=Math.min(d,(c.x-q[0])**2+(c.z-q[1])**2); if(d>bd){bd=d;best=c;} } cen.push([best.x,best.z]); } }
+    for(let it=0;it<10;it++){
+      const sum=cen.map(()=>[0,0,0]);
+      for(const c of comps){ let bi=0,bd=1e9; cen.forEach((q,i)=>{ const d=(c.x-q[0])**2+(c.z-q[1])**2; if(d<bd){bd=d;bi=i;} }); c.cl=bi; sum[bi][0]+=c.x; sum[bi][1]+=c.z; sum[bi][2]++; }
+      sum.forEach((q,i)=>{ if(q[2]) cen[i]=[q[0]/q[2],q[1]/q[2]]; });
+    }
+    pieceVerts=[];
+    for(const m of meshes){
+      const {g,idx,find,cs}=m.userData; const pos=g.attributes.position;
+      const keep=[], hide=[];
+      for(let t=0;t<idx.length;t+=3){ const c=cs.get(find(idx[t])); (c.cl===kk?keep:hide).push(idx[t],idx[t+1],idx[t+2]); }
+      for(let t=0;t<keep.length;t++){ v.fromBufferAttribute(pos,keep[t]).applyMatrix4(m.matrixWorld); pieceVerts.push(v.clone()); }
+      const gk=g.clone(); gk.setIndex(keep); m.geometry=gk;
+      if(hide.length){
+        const gh=g.clone(); gh.setIndex(hide);
+        const hm=new THREE.Mesh(gh,m.material.clone()); hm.material.colorWrite=false; hm.material.depthWrite=false;
+        hm.position.copy(m.position); hm.quaternion.copy(m.quaternion); hm.scale.copy(m.scale); hm.castShadow=true; hm.receiveShadow=false;
+        m.parent.add(hm);
+      }
     }
   }
   sc.add(new THREE.HemisphereLight(0xdfe9ff,0x6b5a3a,spec.hemi??1.15));
@@ -110,6 +132,12 @@ window.renderTree=function(spec){
   const cam=new THREE.OrthographicCamera(-wM/2+ox,wM/2+ox, TOP*hM, -(1-TOP)*hM, 0.1, 100);
   cam.position.set(0,R*Math.sin(elev),R*Math.cos(elev)); cam.lookAt(0,0,0);
   r.render(sc,cam);
+  if(pieceVerts&&pieceVerts.length){
+    let mn=1e9; for(const q of pieceVerts) mn=Math.min(mn,q.y);
+    let sx=0,sz=0,n=0; for(const q of pieceVerts) if(q.y<mn+0.07){ sx+=q.x; sz+=q.z; n++; }
+    const rt=new THREE.Vector3(sx/n,mn,sz/n).applyMatrix4(new THREE.Matrix4()).project(cam);
+    window.lastMeta={root:[(rt.x+1)/2*CW,(1-rt.y)/2*CH], n:pieceVerts.length};
+  }
   const url=r.domElement.toDataURL('image/png');
   r.dispose();
   return url;
