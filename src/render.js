@@ -108,7 +108,7 @@ function drawGround() {
       }
       if (!chunk.ground) {
         if (!groundBake.inFlight.has(key + ':L')) pending.push([0, ds, key, chunk, false]);
-      } else if (chunk.groundScale !== GROUND_BAKE_SCALE && ds < GROUND_MARGIN_HI) {
+      } else if (chunk.groundScale !== GROUND_BAKE_SCALE && ds < GROUND_MARGIN_HI && !DBG.loOnly) {
         if (!groundBake.inFlight.has(key + ':H')) pending.push([1, ds, key, chunk, true]);
       } else if (chunk.groundScale === GROUND_BAKE_SCALE && ds > GROUND_MARGIN_HI_KEEP) {
         if (!groundBake.inFlight.has(key + ':L')) pending.push([2, ds, key, chunk, false]);
@@ -166,7 +166,7 @@ const _sunDefault = { dx: -0.7071, dy: -0.7071, k: 0.9 };
 const GROUND_LIGHT_GAIN = 1.6;   // сила светотени склонов
 function drawGroundLight(chunk, x, y, gw, gh) {
   const L = chunk.groundLight;
-  if (!L) return;
+  if (!L || DBG.noSlopeLight) return;
   const sun = typeof sunLight === 'function' ? sunLight() : _sunDefault;
   if (sun.k < 0.01) return;
   // освещение = −(gx·dx + gy·dy)·k; карты: [gx, 255−gx, gy, 255−gy]
@@ -333,7 +333,7 @@ function render() {
         // экране — «прозрачное окошко» вокруг бойца, чтобы его форма и
         // оружие оставались видны (как в играх с таким видом сверху).
         const pp = toScreen(player.x, player.y, player.h);
-        const covers = (obj.x + obj.y) > (player.x + player.y) + 0.05 &&
+        const covers = !DBG.noHole && (obj.x + obj.y) > (player.x + player.y) + 0.05 &&
           pp.x > left + dw * 0.12 && pp.x < left + dw * 0.88 &&
           pp.y - 35 > top && pp.y < pos.y + 6;
         obj.fade = (obj.fade || 0) + ((covers ? 1 : 0) - (obj.fade || 0)) * 0.2;
@@ -420,6 +420,7 @@ function drawTreeWithHole(sprite, left, top, dw, dh, hx, hy, strength) {
 // дрожь листвы в верхней части.
 let treeHoleObj = null;
 function windOffset(obj, hn, t) {
+  if (DBG.noWind) return 0;
   const ph = obj.x * 0.55 + obj.y * 0.35;
   const w = 2 * Math.PI * WIND_FREQ;
   const gust = 0.65 + 0.35 * Math.sin(t * 0.21 + ph * 0.15);

@@ -349,16 +349,17 @@ function updateCoverPhysics(o) {
 }
 
 function drawCoverItem(c, o, half) {
+  if (DBG.noPlants) return;
   const p = toScreen(o.x, o.y, heightOf(o));
   if (!onScreen(p, 120)) return;
   updateCoverPhysics(o);
   const def = COVER_KINDS[o.kind];
   const ph = o.x * 0.55 + o.y * 0.35;
   const cp = SPRITE_DATA.coverPieces && SPRITE_DATA.coverPieces[o.key];
-  if (!cp || o._act < 0.05 || !_coverAtlasOk) {
+  if (!cp || o._act < 0.05 || !_coverAtlasOk || DBG.noPieces) {
     if (half) return;                                    // целая картинка — один раз
     const H = SPRITE_DATA.cover[o.key].ay * o.scale;
-    const wind = def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+    const wind = DBG.noWind ? 0 : def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
     drawWindSprite(c, o, p.x, p.y, wind);
     return;
   }
@@ -371,7 +372,7 @@ function drawCoverItem(c, o, half) {
   // то же качание от ветра, что у целой картинки (drawWindSprite): иначе при
   // переходе «далеко ↔ рядом» растение слегка дёргается
   const Hs = SPRITE_DATA.cover[o.key].ay * sc;
-  const windTip = def.sway * 0.07 * Hs * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+  const windTip = DBG.noWind ? 0 : def.sway * 0.07 * Hs * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
   if (windTip) c.transform(1, 0, windTip / Math.max(Hs, 1), 1, 0, 0);
   if (SHADOWS_ENABLED && !half && cp.shadow) {
     const sh = cp.shadow, img = partImage(sh.file);

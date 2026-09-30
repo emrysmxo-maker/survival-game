@@ -167,6 +167,7 @@ function featheredShadow(key) {
 }
 
 function drawSunShadows(c) {
+  if (DBG.noSunShadow) return;
   const t = dayNight.t, e = sunElevation(t);
   if (e <= 0.02) return;
   const sun = sunLight();

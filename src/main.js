@@ -102,7 +102,7 @@ function update(dt) {
     ring += terrainHeight(player.x + Math.cos(a) * 6, player.y + Math.sin(a) * 6);
   }
   const depth = Math.max(0, ring / 8 - player.h);
-  const zoomTarget = 1 + Math.min(CAMERA_ZOOM_MAX - 1, depth * CAMERA_ZOOM_PER_M);
+  const zoomTarget = DBG.noZoom ? 1 : 1 + Math.min(CAMERA_ZOOM_MAX - 1, depth * CAMERA_ZOOM_PER_M);
   camera.zoom = camera.zoom || 1;
   camera.zoom += (zoomTarget - camera.zoom) * Math.min(1, CAMERA_ZOOM_RATE * dt);
   camera.x = (player.x - player.y) * (TILE_W / 2);
