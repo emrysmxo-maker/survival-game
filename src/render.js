@@ -108,6 +108,12 @@ function render() {
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   syncRenderCamera();
   ctx.clearRect(0, 0, view.w, view.h);
+  // зум камеры (в низинах приближение): масштаб вокруг центра экрана
+  const zoom = camera.zoom || 1;
+  if (zoom > 1.001) {
+    ctx.setTransform(view.dpr * zoom, 0, 0, view.dpr * zoom,
+      view.dpr * view.w / 2 * (1 - zoom), view.dpr * view.h / 2 * (1 - zoom));
+  }
   const renderQueue = [];
   drawGround();
   drawGroundLayer(ctx);

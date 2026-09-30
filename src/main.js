@@ -30,6 +30,8 @@ resize();
 let lastTime = performance.now();
 // Резкость разгона при старте (1/с): 14 — около 0.1 с до полной скорости.
 const PLAYER_START_ACCEL = 14;
+// Зум камеры в низинах: +ZOOM_PER_M на метр глубины, не больше ZOOM_MAX; скорость 1/с.
+const CAMERA_ZOOM_PER_M = 0.12, CAMERA_ZOOM_MAX = 1.22, CAMERA_ZOOM_RATE = 1.4;
 
 function update(dt) {
   let wantX = 0, wantY = 0;
@@ -73,6 +75,18 @@ function update(dt) {
   player.h = terrainHeight(player.x, player.y);
   if (camera.h === null) camera.h = player.h;
   camera.h += (player.h - camera.h) * Math.min(1, 2.6 * dt);
+  // Камера сближается, когда боец в низине, и плавно возвращается на место при
+  // выходе (глубина места = насколько боец ниже средней высоты окрестности
+  // в радиусе 6 тайлов). На бугре и ровном месте зума нет — только приближение.
+  let ring = 0;
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    ring += terrainHeight(player.x + Math.cos(a) * 6, player.y + Math.sin(a) * 6);
+  }
+  const depth = Math.max(0, ring / 8 - player.h);
+  const zoomTarget = 1 + Math.min(CAMERA_ZOOM_MAX - 1, depth * CAMERA_ZOOM_PER_M);
+  camera.zoom = camera.zoom || 1;
+  camera.zoom += (zoomTarget - camera.zoom) * Math.min(1, CAMERA_ZOOM_RATE * dt);
   camera.x = (player.x - player.y) * (TILE_W / 2);
   camera.y = (player.x + player.y) * (TILE_H / 2);
 
