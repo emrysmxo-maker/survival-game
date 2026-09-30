@@ -34,9 +34,12 @@ function stepEffects(ent, x, y, dt, heavy) {
     }
     return;
   }
-  const soft = Math.max(t.swamp, _fw[2] || 0, (_fw[4] || 0) * 0.8, (_fw[3] || 0) * 0.6);
+  // Мягкость земли: болото, тропа, пепел, тёмная земля — след чёткий; на траве
+  // и поляне — слабый (примятая трава), на камнях — почти нет. Так следы
+  // остаются и на тестовой карте, где почти вся земля — трава.
+  const soft = Math.max(t.swamp, _fw[2] || 0, (_fw[4] || 0) * 0.8, (_fw[3] || 0) * 0.6, 0.4 * (1 - (_fw[7] || 0)));
   if (soft > 0.3) {
-    fx.prints.push({ x: fxw, y: fyw, h, ang: Math.atan2((nx + ny) * TILE_H / 2, (nx - ny) * TILE_W / 2), mud: t.swamp > 0.3, age: 0, k: heavy ? 1.2 : 1 });
+    fx.prints.push({ x: fxw, y: fyw, h, ang: Math.atan2((nx + ny) * TILE_H / 2, (nx - ny) * TILE_W / 2), mud: t.swamp > 0.3, soft: Math.min(1, soft / 0.7), age: 0, k: heavy ? 1.2 : 1 });
     if (fx.prints.length > FOOTPRINT_MAX) fx.prints.shift();
   }
   // уклон по ходу шага (м/м): на спуске из-под ног сыплется земля даже на траве
@@ -73,7 +76,7 @@ function drawEffects(c) {
   for (const p of fx.prints) {
     const s = toScreen(p.x, p.y, p.h);
     if (!onScreen(s, 20)) continue;
-    const a = (p.mud ? 0.5 : 0.32) * Math.min(1, (FOOTPRINT_LIFE - p.age) / 6);
+    const a = (p.mud ? 0.5 : 0.32) * (p.soft === undefined ? 1 : 0.55 + 0.45 * p.soft) * Math.min(1, (FOOTPRINT_LIFE - p.age) / 6);
     c.fillStyle = p.mud ? `rgba(22,16,8,${a})` : `rgba(40,30,18,${a})`;
     c.beginPath();
     c.ellipse(s.x, s.y, 5.2 * p.k, 2.3 * p.k, p.ang, 0, Math.PI * 2);
