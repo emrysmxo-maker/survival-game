@@ -40,6 +40,7 @@
 | `src/cover.js` | Покров земли (трава, кусты, ветки, корни), тени деревьев и тени под ногами (`drawGroundLayer`, `footShadow`). |
 | `src/effects.js` | Следы на мягкой земле, пыль при беге, брызги и круги на воде (`updateEffects`, `drawEffects`). |
 | `src/update.js` | Автообновление: раз в 15 с HEAD-запрос `index.html`, при смене Last-Modified — перезагрузка страницы. |
+| `src/daynight.js` | День/ночь: время суток, ползунок, общий свет, лучи солнца, свет у бойца ночью. |
 | `src/sprites-data.js` | Автогенерация (`tools/treegen/export_sprites.py`): размеры/якоря картинок покрова, теней, валунов. |
 | `assets/cover/pieces/` | Растения, разрезанные на ~12 пучков листьев (атлас на растение + тень) для раздвигания бойцом; `tools/treegen/pk.json` + `rtk.py` + `export_pieces.py`. |
 | `assets/cover/`, `assets/shadows/` | Картинки покрова и теней деревьев (рендеры 3D под угол камеры). |

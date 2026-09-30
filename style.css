@@ -237,3 +237,15 @@
 
 /* Остался один стиль стрельбы (3) — панель выбора убрана */
 #style-bar { display: none !important; }
+
+/* Время суток: ползунок внизу по центру */
+#daynight {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; padding: 4px 10px;
+  background: rgba(10, 16, 10, 0.72); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px;
+  pointer-events: auto; z-index: 6; font: 12px sans-serif; color: #e8e2c8;
+}
+#dn-slider { width: 170px; accent-color: #e0a040; touch-action: auto; }
+#dn-auto { cursor: pointer; font-size: 14px; padding: 0 2px; }
+#joystick-hint { display: none !important; }
+#rot-btn { bottom: 50px; }

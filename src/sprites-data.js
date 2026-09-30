@@ -4,182 +4,182 @@ const SPRITE_DATA = {
  "cover": {
   "grass_0": {
    "file": "assets/cover/grass_0.png",
-   "w": 45.9,
-   "h": 39.1,
+   "w": 40.6,
+   "h": 37.4,
    "ax": 21.2,
    "ay": 22.4
   },
   "grass_1": {
    "file": "assets/cover/grass_1.png",
-   "w": 50.6,
-   "h": 37.6,
+   "w": 42.9,
+   "h": 37.1,
    "ax": 21.0,
    "ay": 22.2
   },
   "grass_2": {
    "file": "assets/cover/grass_2.png",
-   "w": 59.1,
-   "h": 41.8,
+   "w": 52.9,
+   "h": 40.3,
    "ax": 27.4,
    "ay": 23.6
   },
   "grass_3": {
    "file": "assets/cover/grass_3.png",
-   "w": 56.8,
-   "h": 40.9,
+   "w": 50.3,
+   "h": 38.2,
    "ax": 25.4,
    "ay": 23.8
   },
   "fern_0": {
    "file": "assets/cover/fern_0.png",
-   "w": 90.0,
-   "h": 66.5,
+   "w": 61.8,
+   "h": 53.2,
    "ax": 32.3,
    "ay": 37.6
   },
   "fern_1": {
    "file": "assets/cover/fern_1.png",
-   "w": 77.4,
-   "h": 52.9,
+   "w": 58.8,
+   "h": 49.4,
    "ax": 30.8,
    "ay": 35.3
   },
   "fern_2": {
    "file": "assets/cover/fern_2.png",
-   "w": 89.1,
-   "h": 70.9,
+   "w": 65.0,
+   "h": 66.2,
    "ax": 24.5,
    "ay": 48.8
   },
   "fern_3": {
    "file": "assets/cover/fern_3.png",
-   "w": 87.4,
-   "h": 67.9,
+   "w": 58.5,
+   "h": 61.8,
    "ax": 27.8,
    "ay": 44.4
   },
   "nettle_0": {
    "file": "assets/cover/nettle_0.png",
-   "w": 51.2,
-   "h": 36.8,
+   "w": 27.6,
+   "h": 33.5,
    "ax": 13.3,
    "ay": 26.1
   },
   "nettle_1": {
    "file": "assets/cover/nettle_1.png",
-   "w": 37.1,
-   "h": 28.8,
+   "w": 18.2,
+   "h": 27.9,
    "ax": 9.3,
    "ay": 21.9
   },
   "bush_0": {
    "file": "assets/cover/bush_0.png",
-   "w": 165.0,
-   "h": 133.2,
+   "w": 103.5,
+   "h": 113.5,
    "ax": 47.0,
    "ay": 95.6
   },
   "bush_1": {
    "file": "assets/cover/bush_1.png",
-   "w": 154.1,
-   "h": 106.8,
+   "w": 87.9,
+   "h": 94.7,
    "ax": 42.7,
    "ay": 79.6
   },
   "bush_2": {
    "file": "assets/cover/bush_2.png",
-   "w": 181.5,
-   "h": 141.2,
+   "w": 143.2,
+   "h": 126.5,
    "ax": 75.0,
    "ay": 91.1
   },
   "sapling_0": {
    "file": "assets/cover/sapling_0.png",
-   "w": 127.6,
-   "h": 109.7,
+   "w": 77.1,
+   "h": 90.0,
    "ax": 38.5,
    "ay": 88.4
   },
   "sapling_1": {
    "file": "assets/cover/sapling_1.png",
-   "w": 115.0,
-   "h": 101.8,
+   "w": 51.8,
+   "h": 80.0,
    "ax": 25.9,
    "ay": 78.4
   },
   "sapling_2": {
    "file": "assets/cover/sapling_2.png",
-   "w": 107.9,
-   "h": 80.0,
+   "w": 50.0,
+   "h": 68.5,
    "ax": 25.0,
    "ay": 63.5
   },
   "sapling_3": {
    "file": "assets/cover/sapling_3.png",
-   "w": 131.2,
-   "h": 116.2,
+   "w": 84.4,
+   "h": 109.7,
    "ax": 42.1,
    "ay": 90.8
   },
   "sapling_4": {
    "file": "assets/cover/sapling_4.png",
-   "w": 120.3,
-   "h": 92.9,
+   "w": 62.4,
+   "h": 81.5,
    "ax": 31.1,
    "ay": 65.3
   },
   "sapling_5": {
    "file": "assets/cover/sapling_5.png",
-   "w": 95.0,
-   "h": 72.9,
+   "w": 60.9,
+   "h": 63.2,
    "ax": 30.4,
    "ay": 51.5
   },
   "branch_0": {
    "file": "assets/cover/branch_0.png",
-   "w": 47.6,
-   "h": 22.4,
+   "w": 45.3,
+   "h": 22.1,
    "ax": 23.1,
    "ay": 14.7
   },
   "branch_1": {
    "file": "assets/cover/branch_1.png",
-   "w": 37.4,
+   "w": 36.2,
    "h": 14.1,
    "ax": 17.3,
    "ay": 9.6
   },
   "branch_2": {
    "file": "assets/cover/branch_2.png",
-   "w": 30.3,
-   "h": 11.8,
+   "w": 27.9,
+   "h": 10.9,
    "ax": 13.8,
    "ay": 6.8
   },
   "log_0": {
    "file": "assets/cover/log_0.png",
-   "w": 102.6,
-   "h": 51.8,
+   "w": 94.7,
+   "h": 46.8,
    "ax": 47.0,
    "ay": 28.1
   },
   "log_1": {
    "file": "assets/cover/log_1.png",
-   "w": 70.6,
-   "h": 54.7,
+   "w": 62.6,
+   "h": 50.6,
    "ax": 31.6,
    "ay": 30.2
   },
   "roots_0": {
    "file": "assets/cover/roots_0.png",
-   "w": 65.9,
+   "w": 65.3,
    "h": 22.9,
    "ax": 32.7,
    "ay": 11.7
   },
   "roots_1": {
    "file": "assets/cover/roots_1.png",
-   "w": 41.2,
+   "w": 40.0,
    "h": 44.1,
    "ax": 20.5,
    "ay": 22.6
@@ -274,29 +274,29 @@ const SPRITE_DATA = {
  "rock": {
   "boulder_01": {
    "file": "assets/rocks/boulder_01.png",
-   "w": 82.4,
-   "h": 69.1,
+   "w": 57.6,
+   "h": 62.6,
    "ax": 28.8,
    "ay": 40.3
   },
   "namaqualand_boulder_02": {
    "file": "assets/rocks/namaqualand_boulder_02.png",
-   "w": 92.4,
+   "w": 82.6,
    "h": 38.2,
    "ax": 41.4,
    "ay": 23.7
   },
   "rock_09": {
    "file": "assets/rocks/rock_09.png",
-   "w": 45.6,
-   "h": 54.7,
+   "w": 34.7,
+   "h": 54.4,
    "ax": 17.3,
    "ay": 30.0
   },
   "stone_01": {
    "file": "assets/rocks/stone_01.png",
-   "w": 91.8,
-   "h": 45.6,
+   "w": 67.9,
+   "h": 43.2,
    "ax": 33.9,
    "ay": 31.4
   }

@@ -7,6 +7,9 @@
 // Солнце светит слева (чуть сзади): все тени — вправо. Так же отрендерены
 // тени в картинках подлеска, камней и деревьев.
 const TREE_SHADOW_ALPHA = 0.34;
+// Тени выключены по просьбе владельца (освещение теперь — день/ночь, src/daynight.js).
+// true — вернуть тени деревьев, под ногами и у растений вблизи.
+const SHADOWS_ENABLED = false;
 
 const spriteImages = {};
 function spriteImage(key, group) {
@@ -149,6 +152,7 @@ function drawGroundLayer(c) {
       drawDataSprite(c, 'cover', o.key, p.x, p.y, o.scale, o.flip, 0, 0, o);
     }
   }
+  if (!SHADOWS_ENABLED) return;
   // тени деревьев
   c.save();
   c.globalAlpha = TREE_SHADOW_ALPHA;
@@ -339,7 +343,7 @@ function drawCoverItem(c, o, half) {
   const Hs = SPRITE_DATA.cover[o.key].ay * sc;
   const windTip = def.sway * 0.07 * Hs * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
   if (windTip) c.transform(1, 0, windTip / Math.max(Hs, 1), 1, 0, 0);
-  if (!half && cp.shadow) {
+  if (SHADOWS_ENABLED && !half && cp.shadow) {
     const sh = cp.shadow, img = partImage(sh.file);
     if (img.complete && img.naturalWidth) {
       c.globalAlpha = COVER_PART_SHADOW;

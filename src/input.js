@@ -58,6 +58,7 @@ document.getElementById('bigmap').addEventListener('click', () => toggleBigMap(f
 document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
 
 window.addEventListener('touchstart', (e) => {
+  if (e.target.closest && e.target.closest('#daynight')) return;   // ползунок времени
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
@@ -90,6 +91,7 @@ window.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
+  if (e.target.closest && e.target.closest('#daynight')) return;
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];

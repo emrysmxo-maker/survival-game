@@ -283,6 +283,9 @@ function render() {
     }
   });
 
+  // День и ночь, лучи солнца (src/daynight.js) — поверх мира, под джойстиком
+  if (typeof drawDayNight === 'function') drawDayNight(ctx);
+
   // Сенсорный джойстик
   if (joystick.active) {
     ctx.beginPath();

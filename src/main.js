@@ -111,6 +111,7 @@ function update(dt) {
   updateWeapon(dt);
   if (typeof updateZombies === 'function') updateZombies(dt);
   updateEffects(dt);
+  if (typeof updateDayNight === 'function') updateDayNight(dt);
   if (typeof updateMinimap === 'function') updateMinimap(dt);
   updateWorldChunks();
 }
