@@ -87,6 +87,16 @@ function updateWeapon(dt) {
     b.px = b.x; b.py = b.y;           // прошлое положение: попадание ищем по отрезку
     b.x += b.dx * BULLET_SPEED * dt;
     b.y += b.dy * BULLET_SPEED * dt;
+    b.z += b.vzT * BULLET_SPEED * dt;            // набирает/теряет высоту по наклону ствола
+    const gz = terrainHeight(b.x, b.y);
+    if (b.z < gz + 0.12) {
+      // склон/бугор выше пули — пуля бьёт в землю (фонтанчик пыли на склоне)
+      b.z = gz;
+      spawnImpact(b.x, b.y, 0, false);
+      spawnImpact(b.x, b.y, 0, false);
+      bullets.splice(i, 1);
+      continue;
+    }
     if (typeof bulletHitsZombie === 'function' && bulletHitsZombie(b)) {
       bullets.splice(i, 1);
     } else if (bulletHitsTree(b)) {
@@ -152,7 +162,13 @@ function shootBullet() {
   const mx = player.x + (hasGun ? charMuzzle.gx : dx * 0.4);
   const my = player.y + (hasGun ? charMuzzle.gy : dy * 0.4);
   const lift = hasGun ? charMuzzle.lift : 30;
-  weapon.bullets.push({ x: mx, y: my, sx: mx, sy: my, dx, dy, lift, age: 0, h0: player.h || 0 });
+  // Высота пули над уровнем моря (м): дуло над землёй бойца. Ствол наводится
+  // вдоль уклона на первые ~5 тайлов: стреляешь в гору — пуля идёт вверх по
+  // склону (автомат поднят), с горы — вниз; на горизонтали — ровно.
+  const z0 = (player.h || 0) + lift / RELIEF_PX_PER_M;
+  const aimSlope = Math.max(-0.45, Math.min(0.45,
+    (terrainHeight(mx + dx * 5, my + dy * 5) - terrainHeight(mx, my)) / 5));
+  weapon.bullets.push({ x: mx, y: my, sx: mx, sy: my, dx, dy, lift, age: 0, z: z0, z0, vzT: aimSlope });
 
   // Дымок у дула: пара серых клубочков, медленно расходятся и поднимаются.
   for (let k = 0; k < 2; k++) {
@@ -242,16 +258,17 @@ function drawBullet(ctx, b) {
   // экрана тайл вдвое короче, и при стрельбе вниз/вверх след раньше
   // сжимался в едва заметную точку.
   // Пуля летит прямо на постоянной высоте (высота дула над землёй у бойца).
-  const hz = b.h0 === undefined ? (b.h0 = (player.h || 0)) : b.h0;
-  const head = toScreen(b.x, b.y, hz);
-  const flown = toScreen(b.sx, b.sy, hz);
+  // Высота пули — абсолютная (м), поэтому на склоне трассер идёт вдоль склона,
+  // а не «по воздуху» на высоте бойца.
+  const head = toScreen(b.x, b.y, b.z);
+  const flown = toScreen(b.sx, b.sy, b.z0);
   const hx = head.x - flown.x, hy = head.y - flown.y;
   const flownPx = Math.hypot(hx, hy);
   if (flownPx < 1) return;
   const ux = hx / flownPx, uy = hy / flownPx;
   const len = Math.min(TRACER_LEN_PX, flownPx);
   const tx = head.x - ux * len, ty = head.y - uy * len;
-  const y0 = b.lift;
+  const y0 = 0;
   const g = ctx.createLinearGradient(tx, ty - y0, head.x, head.y - y0);
   g.addColorStop(0, 'rgba(255, 210, 120, 0)');
   g.addColorStop(0.7, 'rgba(255, 225, 150, 0.55)');
