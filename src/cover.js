@@ -270,12 +270,20 @@ function updateCoverPhysics(o) {
       const Dx = (ux + fx * 0.6) * w * 15 * sc * kind, Dy = (uy + fy * 0.6) * w * 15 * sc * kind;
       target += (vx0 * Dy - vy0 * Dx) / len2;                       // поворот вокруг корня пучка
     }
-    target = Math.max(-0.9, Math.min(0.9, target));
+    // длинный пучок: кончик уходит далеко и быстро даже при малом угле — поэтому
+    // чем он длиннее, тем мягче пружина (медленнее), меньше предельный угол
+    // (кончик смещается не больше ~16 px) и меньше предельная скорость кончика
+    const L = Math.max(pc.h, pc.w) * sc + 1;
+    const kL = Math.min(1, Math.pow(28 / L, 1.4));
+    const maxA = Math.min(0.9, 16 * sc * kind / L);
+    target = Math.max(-maxA, Math.min(maxA, target));
     const kk = o._k[j];
-    // пружина: быстро отклоняется, потом с разбросом покачивается
-    o._vel[j] += ((target - o._ang[j]) * 95 * kk - o._vel[j] * 6.5) * _frameDt;
+    // пружина: отклоняется не мгновенно, потом с разбросом покачивается
+    o._vel[j] += ((target - o._ang[j]) * 24 * kk * kL - o._vel[j] * 5.2 * Math.sqrt(kL)) * _frameDt;
+    const vmax = Math.min(2.2, 60 / L);                 // кончик не быстрее ~60 px/с
+    o._vel[j] = Math.max(-vmax, Math.min(vmax, o._vel[j]));
     o._ang[j] += o._vel[j] * _frameDt;
-    act = Math.max(act, Math.abs(o._ang[j]) * 30 + Math.abs(o._vel[j]));
+    act = Math.max(act, Math.abs(o._ang[j]) * 30 + Math.abs(o._vel[j]) * 4);
   }
   o._act = act;
   o._wy = _pushers.length ? _pushers[0].y : 1e9;
