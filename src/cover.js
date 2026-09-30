@@ -90,15 +90,16 @@ function generateCover(chunk, startX, startY, seedStart) {
 }
 
 // Рисует спрайт по SPRITE_DATA: точка земли — в (x, y).
-function drawDataSprite(c, group, key, x, y, scale, flip, skew) {
+function drawDataSprite(c, group, key, x, y, scale, flip, skew, squash) {
   const d = SPRITE_DATA[group][key];
   const img = spriteImage(key, group);
   if (!img.complete || !img.naturalWidth) return;
   const w = d.w * scale, h = d.h * scale;
   c.save();
   c.translate(x, y);
-  if (flip) c.scale(-1, 1);
   if (skew) c.transform(1, 0, skew, 1, 0, 0);       // наклон верхушки от ветра
+  if (squash) c.scale(1, 1 - squash);               // примят сверху
+  if (flip) c.scale(-1, 1);
   c.drawImage(img, -d.ax * scale, -d.ay * scale, w, h);
   c.restore();
 }
@@ -163,13 +164,45 @@ function footShadow(c, x, y, h, k) {
 }
 
 // Стоящий подлесок (трава, папоротник, куст, ёлочка) — в общей очереди
-// по глубине; качается от ветра (наклон верхушки).
+// по глубине; качается от ветра (наклон верхушки). Когда рядом проходит
+// боец или зомби, растение отгибается от него в сторону и чуть приминается,
+// потом плавно выпрямляется.
+const COVER_PUSH_R = { grass: 0.55, fern: 0.75, nettle: 0.6, bush: 0.9, sapling: 0.6 };
+const COVER_PUSH_K = { grass: 0.9, fern: 0.75, nettle: 0.8, bush: 0.45, sapling: 0.35 };
+let _coverT = 0, _coverDt = 0;
+function coverPush(o, e, R, acc) {
+  const dx = o.x - e.x, dy = o.y - e.y;
+  const d = Math.hypot(dx, dy);
+  if (d >= R) return;
+  const k = 1 - d / R;
+  // в какую сторону экрана отгибаться: от идущего
+  let sx = (dx - dy) * TILE_W / 2;
+  if (Math.abs(sx) < 2) sx = o.flip ? -1 : 1;
+  acc.b += Math.sign(sx) * k;
+  acc.s += k;
+}
+const _pacc = { b: 0, s: 0 };
 function drawCoverItem(c, o) {
   const p = toScreen(o.x, o.y, heightOf(o));
   if (!onScreen(p, 120)) return;
   const def = COVER_KINDS[o.kind];
   const t = performance.now() / 1000;
+  if (t !== _coverT) { _coverDt = Math.min(0.1, t - _coverT); _coverT = t; }
   const ph = o.x * 0.55 + o.y * 0.35;
-  const skew = def.sway * 0.06 * (Math.sin(t * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(t * 3.1 + ph * 2.3) * 0.3);
-  drawDataSprite(c, 'cover', o.key, p.x, p.y, o.scale, o.flip, skew);
+  let skew = def.sway * 0.06 * (Math.sin(t * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(t * 3.1 + ph * 2.3) * 0.3);
+  // раздвигание
+  const R = (COVER_PUSH_R[o.kind] || 0.6) * o.scale;
+  _pacc.b = 0; _pacc.s = 0;
+  coverPush(o, player, R, _pacc);
+  if (typeof zombies !== 'undefined') for (const z of zombies) coverPush(o, z, R, _pacc);
+  const K = COVER_PUSH_K[o.kind] || 0.6;
+  const tb = Math.max(-1, Math.min(1, _pacc.b)) * K, ts = Math.min(1, _pacc.s) * K * 0.3;
+  if (o._pb === undefined) { o._pb = 0; o._ps = 0; }
+  // отгибается быстро, выпрямляется медленнее (с лёгкой пружиной)
+  const rate = Math.abs(tb) > Math.abs(o._pb) ? 14 : 3.5;
+  const f = 1 - Math.exp(-rate * _coverDt);
+  o._pb += (tb - o._pb) * f;
+  o._ps += (ts - o._ps) * f;
+  skew -= o._pb;
+  drawDataSprite(c, 'cover', o.key, p.x, p.y, o.scale, o.flip, skew, o._ps);
 }
