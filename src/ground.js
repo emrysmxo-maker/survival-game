@@ -78,6 +78,26 @@ function bumpHeight(wx, wy) {
   );
 }
 
+// Уступы (террасы): ступени высотой ~2 м — ровные площадки и крутые откосы
+// (5–6 тайлов шириной, уклон ~30%) вдоль линий уровня плавного поля. Откос
+// даёт яркую кромку сверху и тёмную стенку — рельеф виден сразу. Есть не везде
+// (маска terraceMask ~половина мира), в овраге/у воды/на болоте нет.
+function terraceField(wx, wy) {
+  return (
+    Math.sin(wx * 0.021 + 0.6 * Math.sin(wy * 0.017)) +
+    0.8 * Math.sin(wy * 0.024 - 0.5 * Math.sin(wx * 0.02) + 1.9) +
+    0.5 * Math.sin((wx + wy) * 0.035 + 0.4)
+  ) * 0.75;
+}
+function terraceHeight(wx, wy) {
+  const L = terraceField(wx, wy);
+  const k = Math.floor(L), f = L - k;
+  return 2.0 * (k + smoothstep(0.78, 0.95, f));
+}
+function terraceMask(wx, wy) {
+  return smoothstep(-0.25, 0.35, Math.sin(wx * 0.017 - wy * 0.013 + 2.2) + 0.6 * Math.sin(wx * 0.03 + wy * 0.041));
+}
+
 // Ручьи: линии, где плавное поле F = 0. Расстояние до ручья ≈ |F| / |∇F|.
 function streamField(wx, wy) {
   return (
@@ -125,7 +145,8 @@ function terrainAt(wx, wy, out) {
   const bowl = smoothstep(0.5, 0.85, bowlNoise(wx, wy)) * (1 - ravine);
   // бугры не в овраге и у воды; на болоте — вполовину слабее (плоское, но не ровное)
   const bump = bumpHeight(wx, wy) * 0.5 * (1 - ravine) * (1 - water) * (1 - 0.5 * swamp);
-  const h = hill * 0.5 * (1 - 0.8 * swamp) + bump - swamp * 0.8 - ravine * 3.4 - bowl * 3.0;
+  const terr = terraceHeight(wx, wy) * terraceMask(wx, wy) * (1 - ravine) * (1 - water) * (1 - swamp) * (1 - bowl);
+  const h = hill * 0.5 * (1 - 0.8 * swamp) + bump + terr - swamp * 0.8 - ravine * 3.4 - bowl * 3.0;
   out.h = h;
   out.bowl = bowl;
   out.water = water;
@@ -209,24 +230,32 @@ function createGroundBaker(makeCanvas, textures) {
         const wx = (sum + diff) / 2, wy = (sum - diff) / 2;
         groundWeights(wx, wy, weights);
         const idx = (j * mw + i) * 4 + 3;
+        // Рельеф места: наклон, вогнутость — для светотени и для материала откоса
+        const h = weights.t.h;
+        const hx = terrainAt(wx + 0.6, wy, tt).h - h;
+        const hy = terrainAt(wx, wy + 0.6, tt).h - h;
+        const lap = (terrainAt(wx + 1.5, wy, tt).h + terrainAt(wx - 1.5, wy, tt).h +
+                     terrainAt(wx, wy + 1.5, tt).h + terrainAt(wx, wy - 1.5, tt).h) / 4 - h;
+        const slope = Math.hypot(hx, hy) / 0.6 / 1.39;          // уклон, доли (0.3 = 30%)
+        // крутой откос — голая земля и камень вместо травы (материал виден с любого
+        // направления, в отличие от светотени)
+        const steep = smoothstep(0.16, 0.42, slope) * (1 - weights.t.swamp) * (1 - weights.t.water);
+        weights[3] = Math.max(weights[3], steep * 0.35);
+        weights[7] = Math.max(weights[7], steep * 0.7);
         for (const t of GROUND_LAYER_ORDER) {
           const a = Math.round(weights[t] * 255);
           maskData[t].data[idx] = a;
           if (a > maxA[t]) maxA[t] = a;
         }
-        // Светотень: наклон земли к свету (свет — сверху-слева экрана,
-        // это направление мира (-1,-1)). Шаг 0.6 тайла.
-        const h = weights.t.h;
-        const hx = terrainAt(wx + 0.6, wy, tt).h - h;
-        const hy = terrainAt(wx, wy + 0.6, tt).h - h;
-        // вогнутость (впадина темнее, бугор светлее): среднее по соседям на 1.5 тайла
-        const lap = (terrainAt(wx + 1.5, wy, tt).h + terrainAt(wx - 1.5, wy, tt).h +
-                     terrainAt(wx, wy + 1.5, tt).h + terrainAt(wx, wy - 1.5, tt).h) / 4 - h;
-        const lightK = -(hx + hy) * 1.9 - lap * 0.55;
+        // Светотень: главный свет — сверху-слева экрана (мир (-1,-1)); второй,
+        // слабее, — слева-снизу (мир (-1,+1)): иначе откос вдоль главного луча
+        // остаётся без светотени. Плюс затемнение по крутизне и по вогнутости
+        // (впадина темнее, бугор светлее).
+        const lightK = -(hx + hy) * 1.6 - (hx - hy) * 0.7 - lap * 0.6;
         const extra = {
           water: weights.t.water * 0.82,
           lit: Math.min(0.4, Math.max(0, lightK)),
-          shade: Math.min(0.62, Math.max(0, -lightK)),
+          shade: Math.min(0.62, Math.max(0, -lightK) + smoothstep(0.1, 0.45, slope) * 0.08),
           puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8
         };
         for (const t in extra) {
