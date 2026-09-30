@@ -59,6 +59,18 @@ function treeSpot(wx, wy, r) {
 // В болоте растут в основном берёзы и чахлые сосны.
 const SWAMP_TREES = [2, 2, 0, 7];
 
+// Тестовая карта (TEST_MAP в ground.js): рощи — по одной породе на участок
+// 15×20 тайлов, всего 12 участков = все породы; за краем карты ничего нет.
+const TEST_SPECIES = [0, 9, 10, 5, 1, 3, 11, 6, 2, 7, 8, 4];
+function testSpeciesAt(x, y) {
+  const i = Math.min(3, Math.max(0, Math.floor((x + TEST_MAP_R) / 15)));
+  const j = Math.min(2, Math.max(0, Math.floor((y + TEST_MAP_R) / 20)));
+  return TEST_SPECIES[j * 4 + i];
+}
+function inTestMap(x, y, m) {
+  return Math.abs(x) < TEST_MAP_R - (m || 0) && Math.abs(y) < TEST_MAP_R - (m || 0);
+}
+
 function generateChunk(cx, cy) {
   const key = `${cx},${cy}`;
   if (loadedChunks.has(key)) return loadedChunks.get(key);
@@ -107,7 +119,8 @@ function generateChunk(cx, cy) {
     const spot = treeSpot(gx, gy, pseudoRand(seed++));
     if (!tooClose && spot) {
       const pool = spot.swamp > 0.5 ? SWAMP_TREES : eco.canopy;
-      const type = pool[Math.floor(pseudoRand(seed++) * pool.length)];
+      let type = pool[Math.floor(pseudoRand(seed++) * pool.length)];
+      if (TEST_MAP) type = testSpeciesAt(gx, gy);
       chunk.trees.push({
         x: gx, y: gy,
         type: type,
@@ -126,7 +139,8 @@ function generateChunk(cx, cy) {
         const sSpot = treeSpot(sx, sy, pseudoRand(seed++));
         if (!sSpot) continue;
         const sPool = sSpot.swamp > 0.5 ? SWAMP_TREES : eco.subcanopy;
-        const subType = sPool[Math.floor(pseudoRand(seed++) * sPool.length)];
+        let subType = sPool[Math.floor(pseudoRand(seed++) * sPool.length)];
+        if (TEST_MAP) subType = testSpeciesAt(gx, gy);
         chunk.trees.push({
           x: sx, y: sy, type: subType,
           scale: 0.88 + pseudoRand(seed++) * 0.1,
@@ -216,6 +230,12 @@ function generateChunk(cx, cy) {
   }
 
   generateCover(chunk, startX, startY, seed + 7777);
+  if (TEST_MAP) {
+    // за краем тестовой карты — пусто; сухостой только в своей роще
+    chunk.trees = chunk.trees.filter((t) => inTestMap(t.x, t.y, 1) && (t.type !== 4 || testSpeciesAt(t.x, t.y) === 4));
+    chunk.rocks = chunk.rocks.filter((t) => inTestMap(t.x, t.y, 1));
+    chunk.cover = chunk.cover.filter((t) => inTestMap(t.x, t.y, 0.5));
+  }
 
   loadedChunks.set(key, chunk);
   return chunk;
@@ -246,7 +266,7 @@ function updateWorldChunks() {
     }
   }
 
-  const curEco = getEcosystemAt(pChunkX, pChunkY);
+  const curEco = TEST_MAP ? { name: '🧪 Тестовая карта' } : getEcosystemAt(pChunkX, pChunkY);
   let totalTrees = 0;
   loadedChunks.forEach(c => {
     totalTrees += c.trees.length;

@@ -107,6 +107,7 @@ function streamField(wx, wy) {
   );
 }
 function streamDist(wx, wy) {
+  if (TEST_MAP) return testStreamDist(wx, wy);
   const f = streamField(wx, wy);
   const e = 0.5;
   const gx = (streamField(wx + e, wy) - streamField(wx - e, wy)) / (2 * e);
@@ -131,9 +132,51 @@ function bowlNoise(wx, wy) {
   return (Math.sin(wx * 0.045 + 1.1 * Math.sin(wy * 0.03 + 1)) + Math.sin(wy * 0.05 - 0.9 * Math.sin(wx * 0.04) + 2.5)) / 2;
 }
 
+// ---------------- Тестовая карта ----------------
+// TEST_MAP = true: вместо бесконечного мира — квадрат ±TEST_MAP_R тайлов, где
+// собрано всё для проверки: яма, холм, овраг с ручьём, болото, поляна,
+// каменистое место, уступ, тропа, рощи всех пород (world.js). Выключить —
+// поставить false: снова бесконечная генерация, ничего больше менять не нужно.
+const TEST_MAP = true;
+const TEST_MAP_R = 30;
+const TEST_FEATURES = {
+  pit:      { x: 5, y: 5, r: 5.5, depth: 3.0 },    // яма (впереди-внизу от старта)
+  hill:     { x: -8, y: -8, r: 7.5, h: 4.0 },      // холм (сверху от старта)
+  swamp:    { x: -17, y: 6, r: 7 },                // болото (слева)
+  clearing: { x: 15, y: -11, r: 6 },               // поляна (справа)
+  rocky:    { x: -3, y: -21, r: 5.5 },             // каменистое место (вверху)
+  cliffX: 20, cliffH: 2.5                           // уступ вдоль x = 20 (правее — выше)
+};
+function testStreamY(wx) { return 19 + 3 * Math.sin(wx * 0.18); }
+function testStreamDist(wx, wy) {
+  const d = wy - testStreamY(wx), k = 3 * 0.18 * Math.cos(wx * 0.18);
+  return Math.abs(d) / Math.sqrt(1 + k * k);
+}
+function radial(x, y, c, r) { return smoothstep(r, r * 0.25, Math.hypot(x - c.x, y - c.y)); }
+function terrainAtTest(wx, wy, out) {
+  const F = TEST_FEATURES;
+  const d = testStreamDist(wx, wy);
+  const water = smoothstep(1.15, 0.7, d);
+  const ravine = smoothstep(5.5, 0.9, d);
+  const pit = radial(wx, wy, F.pit, F.pit.r);
+  const hill = radial(wx, wy, F.hill, F.hill.r);
+  const swamp = radial(wx, wy, F.swamp, F.swamp.r) * (1 - ravine);
+  const cliff = smoothstep(F.cliffX - 0.8, F.cliffX + 0.8, wx) * smoothstep(12, 8, wy) * smoothstep(-26, -22, wy);
+  const bump = 0.25 * Math.sin(wx * 0.45 + wy * 0.2) * Math.sin(wy * 0.37 - wx * 0.15) * (1 - ravine) * (1 - swamp);
+  out.h = hill * F.hill.h - pit * F.pit.depth - swamp * 0.8 - ravine * 3.4 + cliff * F.cliffH + bump;
+  out.bowl = pit;
+  out.water = water;
+  out.ravine = ravine;
+  out.swamp = swamp;
+  out.clearing = radial(wx, wy, F.clearing, F.clearing.r) * (1 - swamp);
+  out.rocky = Math.max(radial(wx, wy, F.rocky, F.rocky.r), smoothstep(0.6, 0, Math.abs(wx - F.cliffX)) * smoothstep(12, 8, wy) * smoothstep(-26, -22, wy)) * (1 - water);
+  return out;
+}
+
 // Всё о месте (wx, wy): высота (м), вода/болото/камни/поляна (0..1).
 // water — вода ручья; ravine — склон оврага вокруг ручья.
 function terrainAt(wx, wy, out) {
+  if (TEST_MAP) return terrainAtTest(wx, wy, out);
   const d = streamDist(wx, wy);
   const water = smoothstep(1.15, 0.7, d);
   const ravine = smoothstep(5.5, 0.9, d);
@@ -257,14 +300,24 @@ function createGroundBaker(makeCanvas, textures) {
         // слабее, — слева-снизу (мир (-1,+1)): иначе откос вдоль главного луча
         // остаётся без светотени. Плюс затемнение по крутизне и по вогнутости
         // (впадина темнее, бугор светлее).
-        const lightK = -(hx + hy) * 1.6 - (hx - hy) * 0.7 - lap * 0.6;
+        // Освещение склона по закону Ламберта: нормаль земли из уклона (высоты
+        // слегка преувеличены ×1.5, как и на экране), солнце сверху-слева экрана
+        // (мир (-1,-1)) под 35° над горизонтом. Ровная земля — без изменений;
+        // склон от солнца темнеет (до 70%), к солнцу — светлеет. Плюс слабый
+        // боковой свет (мир (-1,+1)) и затемнение во впадинах.
+        const gx = hx / 0.6 / 1.39 * 1.5, gy = hy / 0.6 / 1.39 * 1.5;
+        const nl = 1 / Math.sqrt(gx * gx + gy * gy + 1);
+        const SE = 0.574, CE = 0.819 / Math.SQRT2;        // sin, cos(35°)/√2
+        const L = (gx * CE + gy * CE + SE) * nl;         // n·l, n = (-gx,-gy,1)
+        const L2 = (gx * CE - gy * CE + SE) * nl;        // боковой свет
+        const lightK = (L - SE) * 1.6 + (L2 - SE) * 0.5 - lap * 0.5;
         const extra = {
           water: weights.t.water * 0.82,
           // высота места: низины темнее и холоднее (сыро, тень), возвышенности светлее
           low: smoothstep(0.2, -2.6, h) * 0.38 + smoothstep(1.5, 4.5, h) * 0,
           hi: smoothstep(1.2, 4.2, h) * 0.5,
-          lit: Math.min(0.4, Math.max(0, lightK)),
-          shade: Math.min(0.62, Math.max(0, -lightK) + smoothstep(0.1, 0.45, slope) * 0.08),
+          lit: Math.min(0.5, Math.max(0, lightK)),
+          shade: Math.min(0.72, Math.max(0, -lightK)),
           puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8
         };
         for (const t in extra) {

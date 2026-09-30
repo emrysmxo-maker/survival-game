@@ -62,6 +62,11 @@ function update(dt) {
   player.x += player.vx * dt;
   player.y += player.vy * dt;
   collidePlayer(prevX, prevY);
+  if (TEST_MAP) {                              // край тестовой карты
+    const lim = TEST_MAP_R - 1;
+    player.x = Math.max(-lim, Math.min(lim, player.x));
+    player.y = Math.max(-lim, Math.min(lim, player.y));
+  }
   // Реальная скорость после столкновений: у дерева боец не «бежит на месте».
   const realSpeed = dt > 0 ? Math.hypot(player.x - prevX, player.y - prevY) / dt : 0;
 
