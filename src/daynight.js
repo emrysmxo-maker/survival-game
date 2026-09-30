@@ -9,20 +9,67 @@
 const DAY_REAL_MIN = 30;          // сколько реальных минут длятся игровые сутки (15 мин день, 15 мин ночь)
 const dayNight = { t: 10, auto: true };   // t — часы (0..24)
 
-// Шаг 1: Удаляем старую механику подмены текстур кустов при подходе (кусты больше не мерцают)
+// Плавная реакция и раздвигание кустов при проходе сквозь них без смены текстур (не мерцают)
 if (typeof coverIsNear === 'function') coverIsNear = function () { return false; };
 if (typeof drawCoverItem === 'function') {
   drawCoverItem = function (c, o, half) {
     if (typeof DBG !== 'undefined' && DBG.noPlants) return;
-    if (half) return; // целая картинка — один раз, без подмены на пучки
+    if (half) return; // один проход цельной картинки
     const p = toScreen(o.x, o.y, heightOf(o));
     if (!onScreen(p, 120)) return;
     const def = COVER_KINDS[o.kind];
     if (!def) return;
     const ph = o.x * 0.55 + o.y * 0.35;
-    const H = (SPRITE_DATA.cover && SPRITE_DATA.cover[o.key]) ? SPRITE_DATA.cover[o.key].ay * o.scale : 40;
+    const d = SPRITE_DATA.cover && SPRITE_DATA.cover[o.key];
+    if (!d) return;
+    const img = spriteImage(o.key, 'cover');
+    if (!img.complete || !img.naturalWidth) return;
+
+    const sc = o.scale || 1, w = d.w * sc, h = d.h * sc, ay = d.ay * sc, ax = d.ax * sc;
+    const H = ay;
     const wind = (typeof DBG !== 'undefined' && DBG.noWind) ? 0 : def.sway * 0.07 * H * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
-    drawWindSprite(c, o, p.x, p.y, wind);
+
+    // Плавное отклонение и раздвигание куста при проходе сквозь него
+    if (o._bendX === undefined) { o._bendX = 0; o._spread = 0; }
+    let targetBendX = 0, targetSpread = 0;
+    if (typeof DBG === 'undefined' || !DBG.noPieces) {
+      const walkers = [];
+      if (typeof player !== 'undefined') walkers.push(player);
+      if (typeof zombies !== 'undefined') {
+        for (let i = 0; i < zombies.length; i++) walkers.push(zombies[i]);
+      }
+      const actR = 0.95 * sc;
+      for (let i = 0; i < walkers.length; i++) {
+        const wk = walkers[i];
+        const dx = wk.x - o.x, dy = wk.y - o.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < actR) {
+          const k = Math.pow(1 - dist / actR, 1.3);
+          const ndx = dist > 0.05 ? dx / dist : 0.707;
+          const ndy = dist > 0.05 ? dy / dist : 0.707;
+          // Отклонение на экране в сторону от игрока:
+          const sx = -(ndx - ndy) * (TILE_W / 2);
+          targetBendX += sx * 0.55 * k;
+          // Небольшое раздвигание куста в стороны (раскрывается для вида)
+          targetSpread += k * 0.28;
+        }
+      }
+    }
+    o._bendX += (targetBendX - o._bendX) * 0.28;
+    o._spread += (targetSpread - o._spread) * 0.28;
+
+    const totalBendX = wind + (o.flip ? -o._bendX : o._bendX);
+    const spreadX = 1 + o._spread;
+    const squashY = 1 - o._spread * 0.25;
+    const dpr = view.dpr || 1;
+
+    c.save();
+    c.translate(Math.round(p.x * dpr) / dpr, Math.round(p.y * dpr) / dpr);
+    if (o.flip) c.scale(-1, 1);
+    if (o._spread > 0.005) c.scale(spreadX, squashY);
+    if (totalBendX) c.transform(1, 0, totalBendX / Math.max(ay, 1), 1, 0, 0);
+    c.drawImage(img, -ax, -ay, w, h);
+    c.restore();
   };
 }
 
@@ -142,9 +189,7 @@ function drawDayNight(c) {
 }
 
 // Солнце для освещения земли (render.js, drawGroundLight): направление К солнцу
-// по земле (мир) и сила светотени. Утром солнце слева экрана, в полдень сверху,
-// вечером справа; низкое солнце — светотень сильнее (длинные тени), полдень —
-// мягче, ночью — едва (луна).
+// по земле (мир) и сила светотени.
 function sunLight() {
   const t = dayNight.t, e = sunElevation(t);
   const th = Math.max(0, Math.min(Math.PI, Math.PI * (t - 6) / 12));
@@ -214,7 +259,7 @@ function drawSunShadows(c) {
     }
   }
 
-  // Шаг 2: Упрощенные динамические эллипсы теней кустов, привязанные к солнцу (без текстур и без мерцания)
+  // Упрощенные динамические эллипсы теней кустов, привязанные к солнцу (без текстур и без мерцания)
   if (typeof DBG === 'undefined' || !DBG.noPlants) {
     for (const chunk of loadedChunks.values()) {
       for (const o of chunk.cover || []) {

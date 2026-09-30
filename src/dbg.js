@@ -1,12 +1,11 @@
-// Диагностика мерцания (отдельный файл): кнопка ⚙ слева открывает панель
-// переключателей. Каждый отключает один механизм игры — включаешь по одному и
-// смотришь, пропало ли мерцание. Значения запоминаются в браузере.
-const DBG = { noPieces: true, noWind: false, noSunShadow: false, noSlopeLight: false, loOnly: false, noHole: false, noZoom: false, noPlants: false };
+// Диагностика (отдельный файл): кнопка ⚙ слева открывает панель
+// переключателей. Каждый отключает один механизм игры. Значения запоминаются в браузере.
+const DBG = { noPieces: false, noWind: false, noSunShadow: false, noSlopeLight: true, loOnly: false, noHole: false, noZoom: false, noPlants: false };
 const DBG_LABELS = {
-  noPieces: 'Кусты не раздвигаются (старая механика выключена)',
+  noPieces: 'Без отклонения кустов (стоят неподвижно)',
   noWind: 'Без ветра (кусты и деревья не качаются)',
   noSunShadow: 'Без теней от солнца (деревья, боец, кусты)',
-  noSlopeLight: 'Без света/тени склонов',
+  noSlopeLight: 'Без света/тени склонов (без тумана)',
   loOnly: 'Земля только в одном качестве',
   noHole: 'Без окошка в кроне над бойцом',
   noZoom: 'Без зума камеры в ямах',
@@ -16,9 +15,9 @@ const DBG_LABELS = {
   try {
     const saved = JSON.parse(localStorage.getItem('dbg') || '{}');
     Object.assign(DBG, saved);
-    // Шаг 1: по умолчанию старая механика подмены текстур кустов отключена,
-    // чтобы кусты не мерцали и не менялись при касании.
-    if (saved.noPieces === undefined) DBG.noPieces = true;
+    // По умолчанию свет склонов отключен, чтобы не было серого тумана
+    if (saved.noSlopeLight === undefined) DBG.noSlopeLight = true;
+    if (saved.noPieces === undefined) DBG.noPieces = false;
   } catch (e) { /* нет хранилища */ }
   const save = () => { try { localStorage.setItem('dbg', JSON.stringify(DBG)); } catch (e) { /* ignore */ } };
   const box = document.createElement('div');
