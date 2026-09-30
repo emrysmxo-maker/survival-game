@@ -25,7 +25,16 @@ function startGroundBaking() {
         groundBake.inFlight.delete(key + (hi ? ':H' : ':L'));
         const chunk = loadedChunks.get(key);
         if (!chunk) { bitmap.close(); return; }
-        if (chunk.ground && chunk.ground.close) chunk.ground.close();
+        if (chunk.groundPrev && chunk.groundPrev.close) chunk.groundPrev.close();
+        chunk.groundPrev = null;
+        if (chunk.ground && hi) {
+          // грубая земля остаётся снизу, чёткая проявляется поверх за ~0.45 с —
+          // без «щелчка» (был заметен как «что-то меняется под ногами»)
+          chunk.groundPrev = chunk.ground; chunk.groundPrevScale = chunk.groundScale;
+          chunk.groundPrevOrigin = chunk.groundOrigin; chunk.groundFadeT0 = performance.now();
+        } else if (chunk.ground && chunk.ground.close) {
+          chunk.ground.close();
+        }
         chunk.ground = bitmap;
         chunk.groundScale = hi ? GROUND_BAKE_SCALE : GROUND_LO_SCALE;
         chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
@@ -89,7 +98,8 @@ function drawGround() {
       const ds = distToScreen(chunk);
       if (d > GROUND_BAKE_KEEP_RADIUS || ds > GROUND_MARGIN_LO) {
         if (chunk.ground && chunk.ground.close) chunk.ground.close();
-        chunk.ground = null;
+        if (chunk.groundPrev && chunk.groundPrev.close) chunk.groundPrev.close();
+        chunk.ground = null; chunk.groundPrev = null;
         continue;
       }
       if (!chunk.ground) {
@@ -124,6 +134,21 @@ function drawGround() {
     const gs = chunk.groundScale || GROUND_BAKE_SCALE;
     const gw = chunk.ground.width / gs, gh = chunk.ground.height / gs;
     if (x > W || y > H || x + gw < 0 || y + gh < 0) continue;
+    if (chunk.groundPrev) {
+      const a = (performance.now() - chunk.groundFadeT0) / 450;
+      const ps = chunk.groundPrevScale || 1, po = chunk.groundPrevOrigin;
+      ctx.drawImage(chunk.groundPrev, po.x - camX, po.y - camY, chunk.groundPrev.width / ps, chunk.groundPrev.height / ps);
+      if (a >= 1) {
+        if (chunk.groundPrev.close) chunk.groundPrev.close();
+        chunk.groundPrev = null;
+        ctx.drawImage(chunk.ground, x, y, gw, gh);
+      } else {
+        ctx.globalAlpha = a < 0 ? 0 : a;
+        ctx.drawImage(chunk.ground, x, y, gw, gh);
+        ctx.globalAlpha = 1;
+      }
+      continue;
+    }
     ctx.drawImage(chunk.ground, x, y, gw, gh);
   }
 }

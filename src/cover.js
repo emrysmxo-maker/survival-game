@@ -298,12 +298,14 @@ function updateCoverPhysics(o) {
     // (кончик смещается не больше ~16 px) и меньше предельная скорость кончика
     const L = Math.max(pc.h, pc.w) * sc + 1;
     const kL = Math.min(1, Math.pow(28 / L, 1.4));
-    const maxA = Math.min(0.9, 16 * sc * kind / L);
+    // у коротких пучков (трава, крапива) 16 px давали до 50° — растение «раскрывалось»
+    // и сквозь него была видна земля (выглядело как пропавший куст). Предел угла 0.32 рад (~18°).
+    const maxA = Math.min(0.32, 16 * sc * kind / L);
     target = Math.max(-maxA, Math.min(maxA, target));
     const kk = o._k[j];
     // пружина: отклоняется не мгновенно, потом с разбросом покачивается
     o._vel[j] += ((target - o._ang[j]) * 24 * kk * kL - o._vel[j] * 5.2 * Math.sqrt(kL)) * _frameDt;
-    const vmax = Math.min(2.2, 60 / L);                 // кончик не быстрее ~60 px/с
+    const vmax = Math.min(1.5, 60 / L);                 // кончик не быстрее ~60 px/с
     o._vel[j] = Math.max(-vmax, Math.min(vmax, o._vel[j]));
     o._ang[j] += o._vel[j] * _frameDt;
     act = Math.max(act, Math.abs(o._ang[j]) * 30 + Math.abs(o._vel[j]) * 4);
