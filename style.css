@@ -210,3 +210,27 @@
   position: fixed; right: 8px; bottom: 6px; z-index: 5; pointer-events: none;
   font: 12px/1 sans-serif; color: rgba(255,255,255,.55); text-shadow: 0 1px 2px #000;
 }
+
+/* ---------- Горизонтальный экран (две руки) ----------
+   Левый большой палец — джойстик (любое касание в левой половине), правый —
+   огонь и кнопки; всё остальное убрано к краям, центр свободен под игру. */
+@media (orientation: landscape) {
+  #debug-panel { top: 8px; left: 8px; padding: 6px 10px; font-size: 11px; line-height: 1.35; }
+  #minimap { top: 8px; right: 8px; width: 72px; height: 72px; }
+  #zombie-btn { left: 8px; top: auto; bottom: 8px; padding: 7px 10px; font-size: 12px; }
+  #style-bar { right: 92px; top: 8px; width: auto; flex-direction: column; }
+  #style-bar .style-grid { grid-template-columns: repeat(5, 34px); gap: 4px; }
+  #style-bar .style-btn { height: 28px; line-height: 28px; font-size: 12px; }
+  #style-bar .style-title { display: none; }
+  #style-name { display: none; }
+  #fire-btn { right: 28px; bottom: 22px; width: 104px; height: 104px; }
+  #auto-btn { right: 150px; bottom: 30px; width: 60px; height: 60px; font-size: 10px; }
+  #joystick-hint { bottom: 8px; left: 33%; }
+  #version-tag { right: auto; left: 8px; bottom: auto; top: 76px; }
+}
+#rot-btn {
+  position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
+  padding: 5px 12px; font: 12px sans-serif; color: #fff; pointer-events: auto;
+  background: rgba(20, 30, 20, 0.7); border: 1px solid rgba(255,255,255,0.3); border-radius: 14px;
+}
+@media (orientation: landscape) { #rot-btn { display: none; } }

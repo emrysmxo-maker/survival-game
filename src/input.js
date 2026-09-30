@@ -61,6 +61,7 @@ window.addEventListener('touchstart', (e) => {
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
+    if (t.target.closest && t.target.closest('#rot-btn')) { goLandscape(); continue; }
     if (t.target.closest && t.target.closest('#zombie-btn')) { spawnZombie(); continue; }
     if (t.target.closest && t.target.closest('#auto-btn')) { toggleAutoFire(); continue; }
     if (t.target.closest && t.target.closest('#minimap')) { toggleBigMap(true); continue; }
@@ -75,6 +76,8 @@ window.addEventListener('touchstart', (e) => {
       setFire(true);
       continue;
     }
+    // горизонтально (две руки): джойстик — только в левой половине экрана
+    if (window.innerWidth > window.innerHeight && t.clientX > window.innerWidth * 0.55) continue;
     if (!joystick.active) {
       joystick.active = true;
       joystick.touchId = t.identifier;
@@ -132,3 +135,14 @@ function stopJoy(id) {
 }
 window.addEventListener('touchend', (e) => { for (const t of e.changedTouches) stopJoy(t.identifier); });
 window.addEventListener('touchcancel', (e) => { for (const t of e.changedTouches) stopJoy(t.identifier); });
+
+// Кнопка «две руки»: полный экран и блокировка горизонтали (Android Chrome
+// разрешает блокировку только в полноэкранном режиме). Если не вышло —
+// достаточно повернуть телефон, игра сама перестроится.
+function goLandscape() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  Promise.resolve(req ? req.call(el) : null)
+    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+    .catch(() => {});
+}
