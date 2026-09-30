@@ -9,7 +9,7 @@
     n++;
     if (t - t0 >= 500) {
       const fps = Math.round(n * 1000 / (t - t0));
-      el.textContent = 'v' + GAME_VERSION + ' · ' + fps + ' fps';
+      el.textContent = 'v' + GAME_VERSION + ' · ' + fps + ' fps · ' + window.innerWidth + '×' + window.innerHeight + ' @' + (window.devicePixelRatio || 1).toFixed(1);
       n = 0; t0 = t;
     }
     requestAnimationFrame(tick);
