@@ -25,7 +25,8 @@ for name,sp in specs.items():
     if not os.path.exists(fn): continue
     im=Image.open(fn).convert('RGBA')
     cw,ch,top,ox=sp.get('cw',360),sp.get('ch',720),sp.get('top',0.9),sp.get('ox',0)
-    gx=(cw/2-ox*PPM)*SS; gy=top*ch*SS
+    R=sp.get('res',1)                       # рендер в R раз крупнее (render.html spec.res)
+    gx=(cw/2-ox*PPM)*SS*R; gy=top*ch*SS*R
     bb=im.getchannel('A').point(lambda v:255 if v>6 else 0).getbbox()
     im=im.crop(bb); ax=gx-bb[0]; ay=gy-bb[1]
     shadow=name.startswith('sh_')
@@ -39,12 +40,12 @@ for name,sp in specs.items():
         man['treeShadow'][key]={'file':out,'w':w,'h':h,'ax':round(ax*k,1),'ay':round(ay*k,1)}
     else:
         im=grade(im,name)
-        d=1 if shadow else 2
+        D=2*R                               # во сколько раз файл крупнее экранных px (2R ≈ 3.4)
         if name.startswith('rock_'):
             key=name[5:]; out=f'assets/rocks/{key}.png'; group='rock'
         else:
             key=name; out=f'assets/cover/{key}.png'; group='cover'
-        man[group][key]={'file':out,'w':round(w/2,1),'h':round(h/2,1),'ax':round(ax*k/2,1),'ay':round(ay*k/2,1)}
+        man[group][key]={'file':out,'w':round(w/D,1),'h':round(h/D,1),'ax':round(ax*k/D,1),'ay':round(ay*k/D,1)}
     im.save(GAME+'/'+out, optimize=True)
 import re
 prev=open(GAME+'/src/sprites-data.js').read() if os.path.exists(GAME+'/src/sprites-data.js') else ''

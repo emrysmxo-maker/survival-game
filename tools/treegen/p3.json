@@ -167,7 +167,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "grass_1": {
   "glb": "plants/grass_medium_01/grass_medium_01.gltf",
@@ -337,7 +338,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "grass_2": {
   "glb": "plants/grass_medium_01/grass_medium_01.gltf",
@@ -507,7 +509,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "grass_3": {
   "glb": "plants/grass_medium_01/grass_medium_01.gltf",
@@ -677,7 +680,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "fern_0": {
   "glb": "plants/fern_02/fern_02.gltf",
@@ -707,7 +711,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "fern_1": {
   "glb": "plants/fern_02/fern_02.gltf",
@@ -744,7 +749,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "fern_2": {
   "glb": "plants/fern_02/fern_02.gltf",
@@ -788,7 +794,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "fern_3": {
   "glb": "plants/fern_02/fern_02.gltf",
@@ -839,7 +846,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "nettle_0": {
   "glb": "plants/nettle_plant/nettle_plant.gltf",
@@ -890,7 +898,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "nettle_1": {
   "glb": "plants/nettle_plant/nettle_plant.gltf",
@@ -941,7 +950,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "bush_0": {
   "glb": "plants/shrub_02/shrub_02.gltf",
@@ -964,7 +974,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "bush_1": {
   "glb": "plants/shrub_02/shrub_02.gltf",
@@ -987,7 +998,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "bush_2": {
   "glb": "plants/shrub_02/shrub_02.gltf",
@@ -1010,7 +1022,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "sapling_0": {
   "glb": "plants/pine_sapling_small/pine_sapling_small.gltf",
@@ -1033,7 +1046,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "sapling_1": {
   "glb": "plants/pine_sapling_small/pine_sapling_small.gltf",
@@ -1056,7 +1070,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "sapling_2": {
   "glb": "plants/pine_sapling_small/pine_sapling_small.gltf",
@@ -1079,7 +1094,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "sapling_3": {
   "glb": "plants/fir_sapling/fir_sapling.gltf",
@@ -1102,7 +1118,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "sapling_4": {
   "glb": "plants/fir_sapling/fir_sapling.gltf",
@@ -1125,7 +1142,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "sapling_5": {
   "glb": "plants/fir_sapling/fir_sapling.gltf",
@@ -1148,7 +1166,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "branch_0": {
   "glb": "plants/dry_branches_medium_01/dry_branches_medium_01.gltf",
@@ -1171,7 +1190,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "branch_1": {
   "glb": "plants/dry_branches_medium_01/dry_branches_medium_01.gltf",
@@ -1194,7 +1214,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "branch_2": {
   "glb": "plants/dry_branches_medium_01/dry_branches_medium_01.gltf",
@@ -1217,7 +1238,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "log_0": {
   "glb": "plants/dead_tree_trunk/dead_tree_trunk.gltf",
@@ -1240,7 +1262,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "log_1": {
   "glb": "plants/dead_tree_trunk/dead_tree_trunk.gltf",
@@ -1263,7 +1286,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "roots_0": {
   "glb": "plants/pine_roots/pine_roots.gltf",
@@ -1286,7 +1310,8 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  },
  "roots_1": {
   "glb": "plants/pine_roots/pine_roots.gltf",
@@ -1309,6 +1334,7 @@
    -9,
    10,
    1
-  ]
+  ],
+  "res": 1.7
  }
 }

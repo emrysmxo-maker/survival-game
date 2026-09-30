@@ -300,7 +300,8 @@
    10,
    1
   ],
-  "ox": 0.35
+  "ox": 0.35,
+  "res": 1.7
  },
  "rock_namaqualand_boulder_02": {
   "glb": "rocks/namaqualand_boulder_02/namaqualand_boulder_02.gltf",
@@ -315,7 +316,8 @@
    10,
    1
   ],
-  "ox": 0.35
+  "ox": 0.35,
+  "res": 1.7
  },
  "rock_rock_09": {
   "glb": "rocks/rock_09/rock_09.gltf",
@@ -330,7 +332,8 @@
    10,
    1
   ],
-  "ox": 0.35
+  "ox": 0.35,
+  "res": 1.7
  },
  "rock_stone_01": {
   "glb": "rocks/stone_01/stone_01.gltf",
@@ -345,6 +348,7 @@
    10,
    1
   ],
-  "ox": 0.35
+  "ox": 0.35,
+  "res": 1.7
  }
 }

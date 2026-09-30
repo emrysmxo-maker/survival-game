@@ -1,0 +1,182 @@
+{
+ "09_cedar": {
+  "glb": "plants/fir_tree_01/fir_tree_01.gltf",
+  "scatter": [
+   [
+    "fir_tree_01_a_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 15,
+  "maxW": 4.4,
+  "cutBase": 0.32,
+  "res": 2
+ },
+ "10_larch": {
+  "glb": "plants/fir_tree_01/fir_tree_01.gltf",
+  "scatter": [
+   [
+    "fir_tree_01_b_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 14.5,
+  "maxW": 4.8,
+  "cutBase": 0.32,
+  "res": 2
+ },
+ "05_bluespruce": {
+  "glb": "plants/pine_tree_01/pine_tree_01.gltf",
+  "scatter": [
+   [
+    "pine_tree_01_a_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 15,
+  "maxW": 5.0,
+  "cutBase": 0.32,
+  "res": 2
+ },
+ "01_oak": {
+  "glb": "plants/island_tree_02/island_tree_02.gltf",
+  "scatter": [
+   [
+    "island_tree_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 11.5,
+  "maxW": 5.6,
+  "cutBase": 0.0,
+  "res": 2
+ },
+ "03_maple": {
+  "glb": "plants/tree_small_02/tree_small_02.gltf",
+  "scatter": [
+   [
+    "tree_small_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 10.5,
+  "maxW": 5.0,
+  "res": 2
+ },
+ "06_willow": {
+  "glb": "plants/jacaranda_tree/jacaranda_tree.gltf",
+  "scatter": [
+   [
+    "jacaranda_tree_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 10.5,
+  "maxW": 5.8,
+  "rot": 1.9,
+  "res": 2
+ },
+ "07_aspen": {
+  "glb": "plants/tree_small_02/tree_small_02.gltf",
+  "scatter": [
+   [
+    "tree_small_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 12,
+  "maxW": 4.2,
+  "rot": 2.4,
+  "res": 2
+ },
+ "08_rowan": {
+  "glb": "plants/tree_small_02/tree_small_02.gltf",
+  "scatter": [
+   [
+    "tree_small_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 9.5,
+  "maxW": 4.8,
+  "rot": 4.0,
+  "res": 2
+ },
+ "11_linden": {
+  "glb": "plants/island_tree_02/island_tree_02.gltf",
+  "scatter": [
+   [
+    "island_tree_02_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 10.5,
+  "maxW": 5.2,
+  "rot": 3.3,
+  "cutBase": 0.35,
+  "res": 2
+ },
+ "00_pine": {
+  "glb": "plants/pine_tree_01/pine_tree_01.gltf",
+  "scatter": [
+   [
+    "pine_tree_01_b_LOD0",
+    0,
+    0,
+    0,
+    1
+   ]
+  ],
+  "height": 15.5,
+  "maxW": 5.2,
+  "cutBase": 0.32,
+  "res": 2
+ },
+ "02_birch": {
+  "glb": "models/3D_deciduous_trees_pack/models/tree_07_birch_cluster.glb",
+  "height": 12,
+  "maxW": 4.8,
+  "res": 2
+ },
+ "04_deadwood": {
+  "preset": "Ash Medium",
+  "height": 9.5,
+  "seed": 13,
+  "maxW": 5.2,
+  "opts": {
+   "leaves.count": 0,
+   "bark.tint": 14209224,
+   "branch.radius.1": 1.1,
+   "branch.radius.2": 0.9,
+   "leaves.size": 0.01
+  },
+  "res": 2
+ }
+}
