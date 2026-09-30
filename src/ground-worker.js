@@ -7,7 +7,8 @@ self.onmessage = (e) => {
   if (m.type === 'init') {
     bake = createGroundBaker((w, h) => new OffscreenCanvas(w, h), m.textures);
   } else if (m.type === 'bake' && bake) {
-    const bitmap = bake(m.cx, m.cy).transferToImageBitmap();
-    self.postMessage({ key: m.key, bitmap }, [bitmap]);
+    const cv = bake(m.cx, m.cy);
+    const bitmap = cv.transferToImageBitmap();
+    self.postMessage({ key: m.key, bitmap, cropTop: cv.cropTop || 0 }, [bitmap]);
   }
 };

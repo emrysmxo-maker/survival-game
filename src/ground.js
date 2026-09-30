@@ -22,9 +22,13 @@ const CAMERA_ELEV = Math.asin(TILE_H / TILE_W); // угол камеры над 
 const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клеток занимает одно повторение текстуры
 // Земля запекается в GROUND_BAKE_SCALE раз крупнее css-пикселей: на телефоне с
 // плотностью 3.3 иначе она растягивается и «мылит». 1.5 ≈ разрешение текстур
-// (384 px на 3.2 клетки); память ~9 МБ на чанк (×25 чанков). 1 — как раньше.
-const GROUND_BAKE_SCALE = 1.5;
-const GROUND_TEX_PX = 384; // ассеты assets/ground/*.jpg приведены к этому размеру (фото + свет из карты нормалей, tools/treegen/bake_ground.py)
+// Текстуры 512 px (из 2K Poly Haven) на 3.2 клетки = ~3.5 px текстуры на css-px,
+// экран 3.3 — поэтому 2.6. Память ~27 МБ на кусок, в памяти только видимые (~8–12).
+const GROUND_BAKE_SCALE = 2.6;
+// Размер запечённого куска земли в css-px (для отбора кусков, видимых на экране)
+// и запас вокруг экрана, в котором куски держатся/запекаются заранее.
+const GROUND_KEEP_MARGIN = 200;
+const GROUND_TEX_PX = 512; // ассеты assets/ground/*.jpg приведены к этому размеру (фото + свет из карты нормалей, tools/treegen/bake_ground.py)
 const GROUND_MASK_STEP = 8;
 const GROUND_LAYER_ORDER = [1, 3, 4, 7, 5, 2, 6]; // …камни, болото, тропа, дно ручья (сверху)
 const GROUND_BAKE_MARGIN = 2;
@@ -39,6 +43,8 @@ const RELIEF_MARGIN = 260;
 const GROUND_WARP_CELLS = 16;
 const CHUNK_PX_W = CHUNK_SIZE * TILE_W;
 const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
+const GROUND_CHUNK_CSS_W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
+const GROUND_CHUNK_CSS_H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2 + RELIEF_MARGIN * 2;
 
 function pathDistAt(wx, wy) {
   return Math.abs(wy - Math.sin(wx * 0.15) * 8);
@@ -382,8 +388,6 @@ function createGroundBaker(makeCanvas, textures) {
     // клетка (два треугольника) сдвигается по вертикали на высоту своих
     // углов. Рисуем от дальних к ближним — ближний склон закрывает дальний.
     const HH = H + RELIEF_MARGIN * 2;
-    const res = makeCanvas(Ws, Math.ceil(HH * S));
-    const rctx = res.getContext('2d');
     const G = GROUND_WARP_CELLS, cs = CHUNK_SIZE / G;
     const startX = cx * CHUNK_SIZE, startY = cy * CHUNK_SIZE;
     const vx = new Float32Array((G + 1) * (G + 1)), vy = new Float32Array((G + 1) * (G + 1));
@@ -397,12 +401,22 @@ function createGroundBaker(makeCanvas, textures) {
         vh[k] = (terrainHeight(wx, wy) - hBase) * RELIEF_PX_PER_M;
       }
     }
+    // Холст обрезается по реальному перепаду высот внутри чанка (пустые поля
+    // сверху/снизу не хранятся — экономия памяти); cropTop — на сколько css-px
+    // картинка начинается ниже chunkBakeOrigin.
+    let vmin = 1e9, vmax = -1e9;
+    for (let k = 0; k < vh.length; k++) { if (vh[k] < vmin) vmin = vh[k]; if (vh[k] > vmax) vmax = vh[k]; }
+    const cropTop = Math.max(0, Math.floor(RELIEF_MARGIN - vmax - 6));
+    const cropBot = Math.min(HH, Math.ceil(H + RELIEF_MARGIN - vmin + 6));
+    const res = makeCanvas(Ws, Math.ceil((cropBot - cropTop) * S));
+    res.cropTop = cropTop;
+    const rctx = res.getContext('2d');
     const tri = (a, b, c) => {
       // источник (плоская картинка) -> приёмник (со сдвигом по y)
       const sx0 = vx[a], sy0 = vy[a], sx1 = vx[b], sy1 = vy[b], sx2 = vx[c], sy2 = vy[c];
-      const dx0 = sx0, dy0 = sy0 - vh[a] + RELIEF_MARGIN;
-      const dx1 = sx1, dy1 = sy1 - vh[b] + RELIEF_MARGIN;
-      const dx2 = sx2, dy2 = sy2 - vh[c] + RELIEF_MARGIN;
+      const dx0 = sx0, dy0 = sy0 - vh[a] + RELIEF_MARGIN - cropTop;
+      const dx1 = sx1, dy1 = sy1 - vh[b] + RELIEF_MARGIN - cropTop;
+      const dx2 = sx2, dy2 = sy2 - vh[c] + RELIEF_MARGIN - cropTop;
       const ax = sx1 - sx0, ay = sy1 - sy0, bx = sx2 - sx0, by = sy2 - sy0;
       const det = ax * by - ay * bx;
       if (Math.abs(det) < 1e-6) return;

@@ -21,12 +21,13 @@ function startGroundBaking() {
     try {
       const w = new Worker(`src/ground-worker.js?v=${ASSET_VERSION}`);
       w.onmessage = (e) => {
-        const { key, bitmap } = e.data;
+        const { key, bitmap, cropTop } = e.data;
         groundBake.inFlight.delete(key);
         const chunk = loadedChunks.get(key);
         if (!chunk || chunk.ground) { bitmap.close(); return; }
         chunk.ground = bitmap;
         chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
+        chunk.groundOrigin.y += cropTop || 0;
       };
       w.onerror = () => { groundBake.worker = null; groundBake.ready = false; groundBake.inFlight.clear(); };
       groundBake.worker = w;
@@ -52,6 +53,7 @@ function localBake(chunk) {
   }
   chunk.ground = groundBake.local(chunk.cx, chunk.cy);
   chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
+  chunk.groundOrigin.y += chunk.ground.cropTop || 0;
 }
 
 function drawGround() {
@@ -70,7 +72,12 @@ function drawGround() {
     const pending = [];
     for (const [key, chunk] of loadedChunks.entries()) {
       const d = Math.max(Math.abs(chunk.cx - pcx), Math.abs(chunk.cy - pcy));
-      if (d > GROUND_BAKE_KEEP_RADIUS) {
+      // Земля запечена крупно (GROUND_BAKE_SCALE) — держим в памяти только куски,
+      // которые на экране или рядом (запас GROUND_KEEP_MARGIN px), а не все 25.
+      const go = chunkBakeOrigin(chunk.cx, chunk.cy);
+      const gx = go.x - camX, gy = go.y - camY, M = GROUND_KEEP_MARGIN;
+      const near = gx < W + M && gy < H + M && gx + GROUND_CHUNK_CSS_W > -M && gy + GROUND_CHUNK_CSS_H > -M;
+      if (d > GROUND_BAKE_KEEP_RADIUS || !near) {
         if (chunk.ground && chunk.ground.close) chunk.ground.close();
         chunk.ground = null;
         continue;
