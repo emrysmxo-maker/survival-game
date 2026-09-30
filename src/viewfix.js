@@ -1,7 +1,9 @@
-// Плавающий джойстик огня и прицеливания (v5.6).
-// Касание в любой точке правой половины экрана -> джойстик появляется прямо под пальцем.
-// Внутри круга (дистанция < 26px) -> боец вскидывает оружие и целится (без выстрелов).
-// За пределами круга (дистанция >= 26px) -> открывается непрерывная стрельба ровно по направлению пальца.
+// Плавающий джойстик огня (v5.7):
+// 1. Кнопка огня по умолчанию полностью СКРЫТА (нет статической кнопки в углу).
+// 2. Появляется ровно под пальцем при касании правой половины экрана. Исчезает при отпускании.
+// 3. Не мешает джойстику ходьбы (нет перехвата чужих touch-событий — ходьба без лагов).
+// 4. Пули не вылетают из спины: если боец бежит вперед, а прицел направлен назад,
+//    боец сначала разворачивается лицом к цели, и только после разворота открывает огонь.
 (function () {
   function fix() {
     if (typeof resize !== 'function' || typeof canvas === 'undefined') return;
@@ -21,10 +23,21 @@
     window.drawGroundLight = function () { /* без серого тумана */ };
   }
 
-  // --- Плавающий джойстик огня ---
+  function wrapA(a) {
+    while (a < -Math.PI) a += Math.PI * 2;
+    while (a > Math.PI) a -= Math.PI * 2;
+    return a;
+  }
+
+  const CAMERA_ELEV = 55 * Math.PI / 180;
+  function toYaw(a) {
+    return Math.atan2(Math.cos(a), Math.sin(a) / Math.sin(CAMERA_ELEV));
+  }
+
+  // --- Настройки джойстика огня ---
   const fireBtn = document.getElementById('fire-btn');
   const fireKnob = document.getElementById('fire-knob');
-  const R_FIRE_THRESHOLD = 26; // px: внутри этого радиуса — только прицел, снаружи — непрерывный огонь
+  const R_FIRE_THRESHOLD = 26; // px: внутри этого радиуса — только прицел, снаружи — огонь
   const R_MAX_KNOB = 44;       // px: максимальный ход шляпки
 
   const fireJoy = {
@@ -35,28 +48,38 @@
     dist: 0
   };
 
-  // Стили для плавающего джойстика
+  // Стили: джойстик скрыт до касания, центрируется по пальцу
   const styleEl = document.createElement('style');
   styleEl.textContent = `
     #fire-btn {
-      transition: opacity 0.15s ease;
+      display: none !important;
+      position: fixed !important;
+      width: 90px !important;
+      height: 90px !important;
+      border-radius: 50% !important;
+      margin: 0 !important;
+      right: auto !important;
+      bottom: auto !important;
+      pointer-events: none !important;
+      transform: translate(-50%, -50%) !important;
+      z-index: 1000 !important;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
+      border: 2px solid rgba(255, 255, 255, 0.4) !important;
+      background: rgba(0, 0, 0, 0.25) !important;
     }
-    #fire-btn.floating-idle {
-      opacity: 0.35 !important;
+    #fire-btn.active {
+      display: block !important;
     }
     #fire-btn.floating-aim {
-      opacity: 0.95 !important;
-      border-color: rgba(255, 215, 0, 0.9) !important;
-      box-shadow: 0 0 16px rgba(255, 215, 0, 0.45);
+      border-color: rgba(255, 215, 0, 0.95) !important;
+      box-shadow: 0 0 16px rgba(255, 215, 0, 0.5);
     }
     #fire-btn.floating-shoot {
-      opacity: 1 !important;
       border-color: #ff3333 !important;
       background: rgba(255, 40, 40, 0.35) !important;
-      box-shadow: 0 0 24px rgba(255, 50, 50, 0.8);
+      box-shadow: 0 0 24px rgba(255, 50, 50, 0.85);
     }
     #fire-knob {
       pointer-events: none;
@@ -64,8 +87,22 @@
   `;
   document.head.appendChild(styleEl);
 
-  if (fireBtn) {
-    fireBtn.classList.add('floating-idle');
+  // Ускорение разворота бойца к цели
+  const origUpdateCharacter = window.updateCharacter;
+  if (typeof origUpdateCharacter === 'function') {
+    window.updateCharacter = function (dt, isMoving, angle, speed) {
+      origUpdateCharacter(dt, isMoving, angle, speed);
+      if (typeof weapon !== 'undefined' && weapon.firing && typeof soldierRoot !== 'undefined' && soldierRoot) {
+        const aimA = (typeof weapon.aimAngle === 'number') ? weapon.aimAngle : angle;
+        const wantYaw = toYaw(aimA);
+        const curYaw = soldierRoot.rotation.y;
+        const diff = wrapA(wantYaw - curYaw);
+        if (Math.abs(diff) > 0.05) {
+          // Быстрый и плавный разворот (14 рад/с ≈ 0.2с на полный оборот 180°)
+          soldierRoot.rotation.y = wrapA(curYaw + Math.sign(diff) * Math.min(Math.abs(diff), 14.0 * dt));
+        }
+      }
+    };
   }
 
   // Обновление оружия каждый кадр
@@ -74,9 +111,17 @@
     weapon.cooldown -= dt;
 
     const aimA = (typeof weapon.aimAngle === 'number') ? weapon.aimAngle : (typeof player !== 'undefined' ? player.angle : 0);
+    const wantYaw = toYaw(aimA);
+    const curFacingYaw = (typeof soldierRoot !== 'undefined' && soldierRoot)
+      ? soldierRoot.rotation.y
+      : (typeof charYaw !== 'undefined' ? charYaw : wantYaw);
 
-    // Стрельба ведется непрерывно, пока палец за пределами круга
-    if (weapon.firing && weapon.shootAllowed && weapon.cooldown <= 0) {
+    const yawDiff = Math.abs(wrapA(curFacingYaw - wantYaw));
+    // Боец готов стрелять, только если развернулся лицом к цели (отклонение < 22°)
+    const isFacingTarget = yawDiff <= 0.38;
+
+    // Стрельба ведется, если палец за пределами круга И боец уже повернулся к цели
+    if (weapon.firing && weapon.shootAllowed && isFacingTarget && weapon.cooldown <= 0) {
       if (typeof player !== 'undefined') {
         const wx = Math.cos(aimA) + Math.sin(aimA);
         const wy = Math.sin(aimA) - Math.cos(aimA);
@@ -128,8 +173,8 @@
     }
   };
 
-  // Проверка: касается ли палец UI элементов (чтобы не блокировать кнопки)
-  function isUIElement(target) {
+  // Проверка: касается ли палец интерфейсных кнопок
+  function isUI(target) {
     if (!target || !target.closest) return false;
     return !!(
       target.closest('#minimap') ||
@@ -144,12 +189,13 @@
     );
   }
 
-  function handleTouchStart(e) {
+  // Обработка касаний: НЕ вызываем stopPropagation, чтобы джойстик ходьбы на левой половине работал без малейших задержек!
+  window.addEventListener('touchstart', (e) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
-      if (isUIElement(t.target)) continue;
+      if (isUI(t.target)) continue;
 
-      // Если касание в правой половине экрана и плавающий джойстик еще не активен
+      // Если касание в правой половине экрана и джойстик огня свободен
       if (!fireJoy.active && t.clientX > window.innerWidth * 0.48) {
         fireJoy.active = true;
         fireJoy.touchId = t.identifier;
@@ -158,31 +204,23 @@
         fireJoy.dist = 0;
 
         if (typeof weapon !== 'undefined') {
-          weapon.firing = true; // в character.js включает стойку боевой готовности и прицел
-          weapon.shootAllowed = false; // внутри круга — НЕ стрелять!
+          weapon.firing = true;
+          weapon.shootAllowed = false;
           weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
         }
 
-        // Перемещаем джойстик ровно в место касания пальца
         if (fireBtn) {
-          const btnR = 45; // половина ширины 90px
-          fireBtn.style.left = (t.clientX - btnR) + 'px';
-          fireBtn.style.top = (t.clientY - btnR) + 'px';
-          fireBtn.style.right = 'auto';
-          fireBtn.style.bottom = 'auto';
-          fireBtn.classList.remove('floating-idle', 'floating-shoot');
-          fireBtn.classList.add('floating-aim');
+          fireBtn.style.left = t.clientX + 'px';
+          fireBtn.style.top = t.clientY + 'px';
+          fireBtn.classList.remove('floating-shoot');
+          fireBtn.classList.add('active', 'floating-aim');
         }
         if (fireKnob) fireKnob.style.transform = '';
-
-        e.stopPropagation();
-        e.preventDefault();
-        break;
       }
     }
-  }
+  }, { passive: true });
 
-  function handleTouchMove(e) {
+  window.addEventListener('touchmove', (e) => {
     if (!fireJoy.active) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
@@ -197,13 +235,13 @@
             weapon.aimAngle = Math.atan2(dy, dx);
           }
           if (dist >= R_FIRE_THRESHOLD) {
-            weapon.shootAllowed = true; // ВЫШЕЛ ЗА КРУГ: СТРЕЛЬБА!
+            weapon.shootAllowed = true;
             if (fireBtn) {
               fireBtn.classList.remove('floating-aim');
               fireBtn.classList.add('floating-shoot');
             }
           } else {
-            weapon.shootAllowed = false; // ВНУТРИ КРУГА: ТОЛЬКО ПРИЦЕЛ!
+            weapon.shootAllowed = false;
             if (fireBtn) {
               fireBtn.classList.remove('floating-shoot');
               fireBtn.classList.add('floating-aim');
@@ -215,15 +253,11 @@
           const k = Math.min(dist, R_MAX_KNOB) / (dist || 1);
           fireKnob.style.transform = 'translate(' + (dx * k) + 'px, ' + (dy * k) + 'px)';
         }
-
-        e.stopPropagation();
-        e.preventDefault();
-        break;
       }
     }
-  }
+  }, { passive: true });
 
-  function handleTouchEnd(e) {
+  function endFireJoy(e) {
     if (!fireJoy.active) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
@@ -238,21 +272,13 @@
         }
 
         if (fireBtn) {
-          fireBtn.classList.remove('floating-aim', 'floating-shoot');
-          fireBtn.classList.add('floating-idle');
-          fireKnob.style.transform = '';
+          fireBtn.classList.remove('active', 'floating-aim', 'floating-shoot');
+          if (fireKnob) fireKnob.style.transform = '';
         }
-
-        e.stopPropagation();
-        e.preventDefault();
-        break;
       }
     }
   }
 
-  // Перехват событий в фазе capture для мгновенного и надежного отклика
-  window.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false });
-  window.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
-  window.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
-  window.addEventListener('touchcancel', handleTouchEnd, { capture: true, passive: false });
+  window.addEventListener('touchend', endFireJoy, { passive: true });
+  window.addEventListener('touchcancel', endFireJoy, { passive: true });
 })();
