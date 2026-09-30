@@ -1,4 +1,6 @@
-// Управление: джойстик ходьбы (левая половина экрана) и плавающий джойстик огня (правая половина экрана).
+// Управление для Android сенсорных экранов (v6.0):
+// Левая половина экрана — джойстик ходьбы.
+// Правая половина экрана — плавающий джойстик огня (появляется под пальцем, стреляет сразу туда, куда направлен).
 
 const joystick = {
   active: false,
@@ -16,18 +18,16 @@ const fireJoy = {
   active: false,
   touchId: null,
   startX: 0,
-  startY: 0,
-  dist: 0
+  startY: 0
 };
 
 const fireBtn = document.getElementById('fire-btn');
 const fireKnob = document.getElementById('fire-knob');
-const FIRE_AIM_RADIUS = 44;   // px — максимальный ход шляпки
-const FIRE_SHOOT_RADIUS = 18; // px — внутри этого круга только прицел, за кругом — стрельба
+const FIRE_AIM_RADIUS = 44; // px — максимальный ход шляпки
 
 function selectFireStyle(n) {
   fireStyle = n;
-  try { localStorage.setItem('fireStyle', String(n)); } catch (e) { /* нет хранилища */ }
+  try { localStorage.setItem('fireStyle', String(n)); } catch (e) {}
   document.querySelectorAll('.style-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.style) === n));
   const el = document.getElementById('style-name');
   if (el) el.textContent = FIRE_STYLE_NAMES[n];
@@ -55,17 +55,15 @@ if (bm) bm.addEventListener('click', () => toggleBigMap(false));
 
 document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
 
-// Клавиатура (для ПК-тестов): пробел — огонь туда, куда смотрит боец
+// Клавиатура (для тестов): пробел — огонь
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') {
-    weapon.aiming = true;
+  if (e.code === 'Space' && typeof weapon !== 'undefined') {
     weapon.firing = true;
     weapon.aimAngle = player.angle;
   }
 });
 window.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') {
-    weapon.aiming = false;
+  if (e.code === 'Space' && typeof weapon !== 'undefined') {
     weapon.firing = false;
   }
 });
@@ -84,6 +82,7 @@ function isUI(target) {
   );
 }
 
+// Сенсорные касания на экране телефона
 window.addEventListener('touchstart', (e) => {
   if (e.target.closest && (e.target.closest('#daynight') || e.target.closest('#dbg'))) return;
   e.preventDefault();
@@ -98,7 +97,7 @@ window.addEventListener('touchstart', (e) => {
       continue;
     }
 
-    // ЛЕВАЯ ПОЛОВИНА ЭКРАНА: Джойстик ходьбы
+    // ЛЕВАЯ ПОЛОВИНА: Движение игрока
     if (t.clientX < window.innerWidth * 0.5) {
       if (!joystick.active) {
         joystick.active = true;
@@ -113,25 +112,22 @@ window.addEventListener('touchstart', (e) => {
       continue;
     }
 
-    // ПРАВАЯ ПОЛОВИНА ЭКРАНА: Плавающий джойстик огня
+    // ПРАВАЯ ПОЛОВИНА: Плавающий огонь и прицел
     if (!fireJoy.active) {
       fireJoy.active = true;
       fireJoy.touchId = t.identifier;
       fireJoy.startX = t.clientX;
       fireJoy.startY = t.clientY;
-      fireJoy.dist = 0;
 
       if (typeof weapon !== 'undefined') {
-        weapon.aiming = true;  // включает режим боевой готовности в character.js (вскидывает ствол)
-        weapon.firing = false; // внутри круга — пока только прицел
+        weapon.firing = true; // Сразу открывает огонь!
         weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
       }
 
       if (fireBtn) {
         fireBtn.style.left = t.clientX + 'px';
         fireBtn.style.top = t.clientY + 'px';
-        fireBtn.classList.remove('pressed');
-        fireBtn.classList.add('active');
+        fireBtn.classList.add('active', 'pressed');
       }
       if (fireKnob) fireKnob.style.transform = '';
     }
@@ -144,7 +140,7 @@ window.addEventListener('touchmove', (e) => {
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
 
-    // Движение левого джойстика
+    // Левый стик (ходьба)
     if (joystick.active && t.identifier === joystick.touchId) {
       const diffX = t.clientX - joystick.startX;
       const diffY = t.clientY - joystick.startY;
@@ -165,23 +161,16 @@ window.addEventListener('touchmove', (e) => {
       continue;
     }
 
-    // Движение правого джойстика (прицел / огонь)
+    // Правый стик (направление стрельбы)
     if (fireJoy.active && t.identifier === fireJoy.touchId) {
       const dx = t.clientX - fireJoy.startX;
       const dy = t.clientY - fireJoy.startY;
       const dist = Math.hypot(dx, dy);
-      fireJoy.dist = dist;
 
       if (typeof weapon !== 'undefined') {
+        weapon.firing = true;
         if (dist > 6) {
           weapon.aimAngle = Math.atan2(dy, dx);
-        }
-        if (dist >= FIRE_SHOOT_RADIUS) {
-          weapon.firing = true; // за кругом: ОГОНЬ!
-          if (fireBtn) fireBtn.classList.add('pressed');
-        } else {
-          weapon.firing = false; // внутри круга: ТОЛЬКО ПРИЦЕЛ!
-          if (fireBtn) fireBtn.classList.remove('pressed');
         }
       }
 
@@ -197,9 +186,7 @@ function stopJoy(id) {
   if (fireJoy.active && fireJoy.touchId === id) {
     fireJoy.active = false;
     fireJoy.touchId = null;
-    fireJoy.dist = 0;
     if (typeof weapon !== 'undefined') {
-      weapon.aiming = false;
       weapon.firing = autoFire;
     }
     if (fireBtn) {
