@@ -20,7 +20,7 @@ function getEcosystemAt(cx, cy) {
   const n = Math.sin(cx * 0.3) + Math.cos(cy * 0.3);
   if (n > 0.8) return {
     name: '🌲 Кедрово-сосновый бор',
-    canopy: [0, 9, 5],      // Сосна, Кедр, Голубая ель
+    canopy: [0, 9, 10],     // Сосна, Кедр, Лиственница (голубую ель убрали: хвоя «тортом»)
     subcanopy: [2, 7],      // Береза, Осина
   };
   if (n > 0.2) return {
