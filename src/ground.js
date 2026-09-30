@@ -27,7 +27,10 @@ const GROUND_TILES_PER_TEXTURE = 3.2; // сколько игровых клет�
 const GROUND_BAKE_SCALE = 2.6;
 // Размер запечённого куска земли в css-px (для отбора кусков, видимых на экране)
 // и запас вокруг экрана, в котором куски держатся/запекаются заранее.
-const GROUND_KEEP_MARGIN = 200;
+const GROUND_LO_SCALE = 1;          // быстрая грубая земля — запекается заранее, издалека
+const GROUND_MARGIN_LO = 1100;      // грубая земля держится и запекается за столько px от экрана
+const GROUND_MARGIN_HI = 380;       // чёткая — когда кусок ближе этого
+const GROUND_MARGIN_HI_KEEP = 640;  // и не сбрасывается в грубую, пока не уйдёт дальше этого
 const GROUND_TEX_PX = 512; // ассеты assets/ground/*.jpg приведены к этому размеру (фото + свет из карты нормалей, tools/treegen/bake_ground.py)
 const GROUND_MASK_STEP = 8;
 const GROUND_LAYER_ORDER = [1, 3, 4, 7, 5, 2, 6]; // …камни, болото, тропа, дно ручья (сверху)
@@ -258,7 +261,7 @@ function chunkPixelOrigin(cx, cy) {
 // makeCanvas(w, h) — обычный <canvas> в игре или OffscreenCanvas в потоке;
 // textures — картинки/ImageBitmap в порядке 0..4. Возвращает bake(cx, cy),
 // который рисует землю чанка в новый холст и возвращает его.
-function createGroundBaker(makeCanvas, textures) {
+function createGroundBaker(makeCanvas, textures, scale) {
   const W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
   const H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2;
   const mw = Math.ceil(CHUNK_PX_W / GROUND_MASK_STEP) + 1;
@@ -269,7 +272,7 @@ function createGroundBaker(makeCanvas, textures) {
   for (const t of GROUND_LAYER_ORDER) maskData[t] = mctx.createImageData(mw, mh);
   // Вода (поверх дна), светотень рельефа (свет/тень) и лужи болота.
   for (const t of ['water', 'lit', 'shade', 'puddle', 'low', 'hi']) maskData[t] = mctx.createImageData(mw, mh);
-  const S = GROUND_BAKE_SCALE;
+  const S = scale || GROUND_BAKE_SCALE;
   const Ws = Math.ceil(W * S), Hs = Math.ceil(H * S);
   const layer = makeCanvas(Ws, Hs);
   const lctx = layer.getContext('2d');

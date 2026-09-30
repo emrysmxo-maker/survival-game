@@ -332,6 +332,11 @@ function drawCoverItem(c, o, half) {
   c.save();
   c.translate(Math.round(p.x * dpr) / dpr, Math.round(p.y * dpr) / dpr);
   if (o.flip) c.scale(-1, 1);
+  // то же качание от ветра, что у целой картинки (drawWindSprite): иначе при
+  // переходе «далеко ↔ рядом» растение слегка дёргается
+  const Hs = SPRITE_DATA.cover[o.key].ay * sc;
+  const windTip = def.sway * 0.07 * Hs * (Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph) * 0.7 + Math.sin(_frameT * 3.1 + ph * 2.3) * 0.3);
+  if (windTip) c.transform(1, 0, windTip / Math.max(Hs, 1), 1, 0, 0);
   if (!half && cp.shadow) {
     const sh = cp.shadow, img = partImage(sh.file);
     if (img.complete && img.naturalWidth) {
@@ -345,10 +350,9 @@ function drawCoverItem(c, o, half) {
     const pc = P[j];
     const front = pc.pvy * sc > o._wy;                   // корень пучка ближе к камере, чем ноги
     if (front !== !!half) continue;
-    const wind = def.sway * 0.03 * Math.sin(_frameT * 2 * Math.PI * WIND_FREQ + ph + j * 1.7);
     c.save();
     c.translate(pc.pvx * sc, pc.pvy * sc);
-    c.rotate(o._ang[j] + wind);
+    c.rotate(o._ang[j]);
     c.drawImage(atlas, pc.sx, pc.sy, pc.sw, pc.sh, (-pc.ax - pc.pvx) * sc, (-pc.ay - pc.pvy) * sc, pc.w * sc, pc.h * sc);
     c.restore();
   }

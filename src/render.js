@@ -21,11 +21,13 @@ function startGroundBaking() {
     try {
       const w = new Worker(`src/ground-worker.js?v=${ASSET_VERSION}`);
       w.onmessage = (e) => {
-        const { key, bitmap, cropTop } = e.data;
-        groundBake.inFlight.delete(key);
+        const { key, bitmap, cropTop, hi } = e.data;
+        groundBake.inFlight.delete(key + (hi ? ':H' : ':L'));
         const chunk = loadedChunks.get(key);
-        if (!chunk || chunk.ground) { bitmap.close(); return; }
+        if (!chunk) { bitmap.close(); return; }
+        if (chunk.ground && chunk.ground.close) chunk.ground.close();
         chunk.ground = bitmap;
+        chunk.groundScale = hi ? GROUND_BAKE_SCALE : GROUND_LO_SCALE;
         chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
         chunk.groundOrigin.y += cropTop || 0;
       };
@@ -42,16 +44,19 @@ function startGroundBaking() {
   }
 }
 
-function localBake(chunk) {
-  if (!groundBake.local) {
-    groundBake.local = createGroundBaker((w, h) => {
+function localBake(chunk, hi) {
+  groundBake.localBakers = groundBake.localBakers || {};
+  const S = hi ? GROUND_BAKE_SCALE : GROUND_LO_SCALE;
+  if (!groundBake.localBakers[S]) {
+    groundBake.localBakers[S] = createGroundBaker((w, h) => {
       const c = document.createElement('canvas');
       c.width = w;
       c.height = h;
       return c;
-    }, groundImages);
+    }, groundImages, S);
   }
-  chunk.ground = groundBake.local(chunk.cx, chunk.cy);
+  chunk.ground = groundBake.localBakers[S](chunk.cx, chunk.cy);
+  chunk.groundScale = S;
   chunk.groundOrigin = chunkBakeOrigin(chunk.cx, chunk.cy);
   chunk.groundOrigin.y += chunk.ground.cropTop || 0;
 }
@@ -69,32 +74,43 @@ function drawGround() {
 
   if (groundTexturesReady()) {
     if (!groundBake.started) startGroundBaking();
+    // Два уровня земли: грубая (быстро, заранее, далеко от экрана) и чёткая
+    // (только вблизи экрана). Так на экран никогда не выезжает незапечённый
+    // кусок (плоское зелёное пятно), а память не раздувается.
     const pending = [];
+    const distToScreen = (chunk) => {
+      const go = chunkBakeOrigin(chunk.cx, chunk.cy);
+      const gx = go.x - camX, gy = go.y - camY;
+      const dx = Math.max(-GROUND_CHUNK_CSS_W - gx, gx - W, 0), dy = Math.max(-GROUND_CHUNK_CSS_H - gy, gy - H, 0);
+      return Math.max(dx, dy);
+    };
     for (const [key, chunk] of loadedChunks.entries()) {
       const d = Math.max(Math.abs(chunk.cx - pcx), Math.abs(chunk.cy - pcy));
-      // Земля запечена крупно (GROUND_BAKE_SCALE) — держим в памяти только куски,
-      // которые на экране или рядом (запас GROUND_KEEP_MARGIN px), а не все 25.
-      const go = chunkBakeOrigin(chunk.cx, chunk.cy);
-      const gx = go.x - camX, gy = go.y - camY, M = GROUND_KEEP_MARGIN;
-      const near = gx < W + M && gy < H + M && gx + GROUND_CHUNK_CSS_W > -M && gy + GROUND_CHUNK_CSS_H > -M;
-      if (d > GROUND_BAKE_KEEP_RADIUS || !near) {
+      const ds = distToScreen(chunk);
+      if (d > GROUND_BAKE_KEEP_RADIUS || ds > GROUND_MARGIN_LO) {
         if (chunk.ground && chunk.ground.close) chunk.ground.close();
         chunk.ground = null;
         continue;
       }
-      if (!chunk.ground && !groundBake.inFlight.has(key)) pending.push([d, key, chunk]);
+      if (!chunk.ground) {
+        if (!groundBake.inFlight.has(key + ':L')) pending.push([0, ds, key, chunk, false]);
+      } else if (chunk.groundScale !== GROUND_BAKE_SCALE && ds < GROUND_MARGIN_HI) {
+        if (!groundBake.inFlight.has(key + ':H')) pending.push([1, ds, key, chunk, true]);
+      } else if (chunk.groundScale === GROUND_BAKE_SCALE && ds > GROUND_MARGIN_HI_KEEP) {
+        if (!groundBake.inFlight.has(key + ':L')) pending.push([2, ds, key, chunk, false]);
+      }
     }
-    pending.sort((p, q) => p[0] - q[0]);
+    pending.sort((p, q) => (p[0] - q[0]) || (p[1] - q[1]));
     if (groundBake.worker) {
       if (groundBake.ready) {
-        for (const [, key, chunk] of pending) {
+        for (const [, , key, chunk, hi] of pending) {
           if (groundBake.inFlight.size >= GROUND_MAX_IN_FLIGHT) break;
-          groundBake.inFlight.add(key);
-          groundBake.worker.postMessage({ type: 'bake', key, cx: chunk.cx, cy: chunk.cy });
+          groundBake.inFlight.add(key + (hi ? ':H' : ':L'));
+          groundBake.worker.postMessage({ type: 'bake', key, cx: chunk.cx, cy: chunk.cy, hi });
         }
       }
     } else if (pending.length) {
-      localBake(pending[0][2]);
+      localBake(pending[0][3], pending[0][4]);
     }
   }
 
@@ -105,7 +121,8 @@ function drawGround() {
   for (const chunk of drawList) {
     const x = chunk.groundOrigin.x - camX;
     const y = chunk.groundOrigin.y - camY;
-    const gw = chunk.ground.width / GROUND_BAKE_SCALE, gh = chunk.ground.height / GROUND_BAKE_SCALE;
+    const gs = chunk.groundScale || GROUND_BAKE_SCALE;
+    const gw = chunk.ground.width / gs, gh = chunk.ground.height / gs;
     if (x > W || y > H || x + gw < 0 || y + gh < 0) continue;
     ctx.drawImage(chunk.ground, x, y, gw, gh);
   }
