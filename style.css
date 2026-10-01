@@ -1,251 +1,247 @@
 * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #060906;
-      touch-action: none;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    /* Размер холста задаёт main.js (resize) точно по window.innerWidth/Height.
-       100vh на телефоне — это высота БЕЗ адресной строки, и картинка
-       растягивалась по вертикали. */
-    #gameCanvas {
-      display: block;
-      position: fixed;
-      left: 0;
-      top: 0;
-    }
-    #ui-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-    #debug-panel {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      background: rgba(12, 18, 12, 0.92);
-      border: 1px solid #324630;
-      border-radius: 10px;
-      padding: 10px 14px;
-      color: #e0e0e0;
-      font-size: 12px;
-      line-height: 1.5;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
-    }
-    .badge {
-      color: #2ecc71;
-      font-weight: bold;
-    }
-    .biome-tag {
-      color: #f1c40f;
-      font-weight: bold;
-    }
-    #minimap {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 70px;
-      height: 70px;
-      border-radius: 50%;
-      background: rgba(14, 20, 14, 0.88);
-      border: 2px solid #3d523a;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: #a2b4a0;
-      font-weight: bold;
-    }
-    #joystick-hint {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      pointer-events: none;
-      background: rgba(0,0,0,0.65);
-      padding: 6px 14px;
-      border-radius: 16px;
-      border: 1px solid #2d3b2a;
-      white-space: nowrap;
-    }
-
-/* Кнопка огня (правый нижний угол); касание обрабатывает input.js */
-#fire-btn {
-  position: absolute;
-  right: 22px;
-  bottom: 60px;
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: bold 13px sans-serif;
-  letter-spacing: 1px;
-  color: #fff;
-  background: rgba(200, 50, 40, 0.45);
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  pointer-events: auto;
-  user-select: none;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0c120c;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #fff;
   touch-action: none;
 }
-#fire-btn.pressed { background: rgba(230, 70, 50, 0.75); }
 
-/* Кнопка огня — ещё и стик прицела: точка показывает, куда целится боец */
-#fire-btn { position: absolute; }
-#fire-btn span { pointer-events: none; }
-#fire-knob {
+#gameCanvas {
   position: absolute;
-  left: 50%; top: 50%;
-  width: 26px; height: 26px;
-  margin: -13px 0 0 -13px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  display: none;
+  z-index: 10;
 }
-#fire-btn.pressed #fire-knob { display: block; }
 
-/* Выбор стиля стрельбы (временно, для теста) */
-#style-bar {
+#debug-panel {
   position: absolute;
-  right: 10px;
-  top: 150px;
-  width: 64px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
-  pointer-events: auto;
-}
-#style-bar .style-title { font: 10px sans-serif; color: rgba(255,255,255,0.7); text-align: center; }
-.style-btn {
-  height: 34px;
-  line-height: 34px;
-  text-align: center;
-  font: bold 15px sans-serif;
-  color: #fff;
-  background: rgba(20, 30, 20, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  top: 16px;
+  left: 16px;
+  background: rgba(10, 20, 10, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
-.style-btn.active { background: rgba(46, 204, 113, 0.75); }
-#style-name { font: 10px sans-serif; color: #f1c40f; text-align: center; }
 
-#style-bar { width: 84px; }
-#style-bar .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-#style-bar .style-btn { height: 30px; line-height: 30px; font-size: 13px; }
-#style-name { font-size: 10px; line-height: 1.2; }
+.biome-tag {
+  color: #2ecc71;
+  font-weight: 600;
+}
 
-/* Кнопка вызова зомби (для теста) */
+.badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+#minimap {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  pointer-events: auto;
+  background: #111;
+}
+
+#minimap-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#bigmap {
+  display: none;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(12, 18, 12, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+  pointer-events: auto;
+  z-index: 100;
+  text-align: center;
+}
+
+#bigmap.open {
+  display: block;
+}
+
+#bigmap-canvas {
+  width: 280px;
+  height: 280px;
+  display: block;
+  margin: 0 auto 8px;
+  border-radius: 6px;
+}
+
+#bigmap-legend {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 #zombie-btn {
   position: absolute;
-  left: 12px;
-  top: 150px;
-  padding: 9px 12px;
-  font: bold 13px sans-serif;
+  left: 16px;
+  bottom: 24px;
+  background: rgba(180, 40, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: bold;
   color: #fff;
-  background: rgba(120, 20, 20, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 8px;
   pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
-/* Автострельба по зомби: над кнопкой огня */
+#zombie-btn:active {
+  background: rgba(220, 50, 50, 0.9);
+}
+
 #auto-btn {
   position: absolute;
-  right: 36px;
-  bottom: 166px;
+  right: 140px;
+  bottom: 36px;
   width: 64px;
   height: 64px;
   border-radius: 50%;
+  background: rgba(40, 50, 40, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  font: bold 11px/1.15 sans-serif;
-  color: #fff;
-  background: rgba(30, 30, 30, 0.55);
-  border: 2px solid rgba(255, 255, 255, 0.4);
   pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
-#auto-btn.on { background: rgba(220, 150, 30, 0.8); border-color: #fff; }
 
-/* Мини-карта (круг справа вверху) и большая карта по нажатию */
-#minimap { padding: 0; overflow: hidden; pointer-events: auto; width: 84px; height: 84px; }
-#minimap-canvas { width: 100%; height: 100%; display: block; }
-#bigmap {
-  position: absolute; inset: 0;
+#auto-btn.active, #auto-btn.on {
+  background: rgba(230, 126, 34, 0.85);
+  border-color: #f39c12;
+}
+
+/* Плавающий джойстик огня (появляется под пальцем в правой половине) */
+#fire-btn {
   display: none;
-  align-items: center; justify-content: center; flex-direction: column;
-  background: rgba(8, 12, 8, 0.82);
+  position: fixed;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  margin: 0;
+  right: auto;
+  bottom: auto;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border: 2px solid rgba(255, 60, 60, 0.8);
+  background: rgba(255, 40, 40, 0.25);
+  box-shadow: 0 0 16px rgba(255, 50, 50, 0.6);
+}
+
+#fire-btn.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#fire-btn span {
+  display: none;
+}
+
+#fire-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+#rot-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  font: 12px sans-serif;
+  color: #fff;
   pointer-events: auto;
-  z-index: 20;
+  background: rgba(20, 30, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
 }
-#bigmap.open { display: flex; }
-#bigmap-canvas {
-  width: min(92vw, 70vh); height: min(92vw, 70vh);
-  border-radius: 14px; border: 2px solid #3d523a;
+
+@media (orientation: landscape) {
+  #rot-btn { display: none; }
 }
-#bigmap-legend { margin-top: 10px; font: 12px/1.5 sans-serif; color: #cfd8c8; text-align: center; }
 
 #version-tag {
-  position: fixed; right: 8px; bottom: 6px; z-index: 5; pointer-events: none;
-  font: 12px/1 sans-serif; color: rgba(255,255,255,.55); text-shadow: 0 1px 2px #000;
+  position: fixed;
+  right: 8px;
+  bottom: 6px;
+  z-index: 5;
+  pointer-events: none;
+  font: 12px/1 sans-serif;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 2px #000;
 }
 
-/* ---------- Горизонтальный экран (две руки) ----------
-   Левый большой палец — джойстик (любое касание в левой половине), правый —
-   огонь и кнопки; всё остальное убрано к краям, центр свободен под игру. */
+/* ---------- Горизонтальный экран (две руки) ---------- */
 @media (orientation: landscape) {
   #debug-panel { top: 8px; left: 8px; padding: 6px 10px; font-size: 11px; line-height: 1.35; }
   #minimap { top: 8px; right: 8px; width: 72px; height: 72px; }
   #zombie-btn { left: 8px; top: auto; bottom: 8px; padding: 7px 10px; font-size: 12px; }
-  #style-bar { right: 92px; top: 8px; width: auto; flex-direction: column; }
-  #style-bar .style-grid { grid-template-columns: repeat(5, 34px); gap: 4px; }
-  #style-bar .style-btn { height: 28px; line-height: 28px; font-size: 12px; }
-  #style-bar .style-title { display: none; }
-  #style-name { display: none; }
-  #fire-btn { right: 28px; bottom: 22px; width: 104px; height: 104px; }
   #auto-btn { right: 150px; bottom: 30px; width: 60px; height: 60px; font-size: 10px; }
-  #joystick-hint { bottom: 8px; left: 33%; }
   #version-tag { right: auto; left: 8px; bottom: auto; top: 76px; }
 }
-#rot-btn {
-  position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%);
-  padding: 5px 12px; font: 12px sans-serif; color: #fff; pointer-events: auto;
-  background: rgba(20, 30, 20, 0.7); border: 1px solid rgba(255,255,255,0.3); border-radius: 14px;
-}
-@media (orientation: landscape) { #rot-btn { display: none; } }
-
-/* Остался один стиль стрельбы (3) — панель выбора убрана */
-#style-bar { display: none !important; }
-
-/* Время суток: ползунок внизу по центру */
-#daynight {
-  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px; padding: 4px 10px;
-  background: rgba(10, 16, 10, 0.72); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px;
-  pointer-events: auto; z-index: 6; font: 12px sans-serif; color: #e8e2c8;
-}
-#dn-slider { width: 170px; accent-color: #e0a040; touch-action: auto; }
-#dn-auto { cursor: pointer; font-size: 14px; padding: 0 2px; }
-#joystick-hint { display: none !important; }
-#rot-btn { bottom: 50px; }

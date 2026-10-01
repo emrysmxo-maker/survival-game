@@ -1,4 +1,4 @@
-// Управление для Android сенсорных экранов (v6.4):
+// Управление для Android сенсорных экранов (v6.5):
 // Левая половина экрана — джойстик ходьбы.
 // Правая половина экрана — плавающий джойстик огня (появляется под пальцем, стреляет сразу туда, куда направлен).
 
@@ -25,15 +25,6 @@ const fireBtn = document.getElementById('fire-btn');
 const fireKnob = document.getElementById('fire-knob');
 const FIRE_AIM_RADIUS = 44; // px — максимальный ход шляпки
 
-function selectFireStyle(n) {
-  fireStyle = n;
-  try { localStorage.setItem('fireStyle', String(n)); } catch (e) {}
-  document.querySelectorAll('.style-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.style) === n));
-  const el = document.getElementById('style-name');
-  if (el) el.textContent = FIRE_STYLE_NAMES[n];
-}
-selectFireStyle(fireStyle);
-
 const zb = document.getElementById('zombie-btn');
 if (zb) zb.addEventListener('click', () => spawnZombie());
 
@@ -41,16 +32,8 @@ let autoFire = false;
 function toggleAutoFire() {
   autoFire = !autoFire;
   const b = document.getElementById('auto-btn');
-  if (b) {
-    b.classList.toggle('active', autoFire);
-    b.classList.toggle('on', autoFire);
-  }
-  if (typeof weapon !== 'undefined') {
-    weapon.auto = autoFire;
-    if (!weapon.manualFire) {
-      weapon.firing = autoFire;
-    }
-  }
+  if (b) b.classList.toggle('active', autoFire);
+  if (typeof weapon !== 'undefined') weapon.firing = autoFire;
 }
 const ab = document.getElementById('auto-btn');
 if (ab) ab.addEventListener('click', () => toggleAutoFire());
@@ -61,20 +44,16 @@ if (mm) mm.addEventListener('click', () => toggleBigMap(true));
 const bm = document.getElementById('bigmap');
 if (bm) bm.addEventListener('click', () => toggleBigMap(false));
 
-document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click', () => selectFireStyle(Number(b.dataset.style))));
-
 // Клавиатура (для тестов): пробел — огонь
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && typeof weapon !== 'undefined') {
-    weapon.manualFire = true;
     weapon.firing = true;
     weapon.aimAngle = player.angle;
   }
 });
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' && typeof weapon !== 'undefined') {
-    weapon.manualFire = false;
-    weapon.firing = typeof weapon.auto !== 'undefined' ? !!weapon.auto : false;
+    weapon.firing = false;
   }
 });
 
@@ -86,7 +65,6 @@ function isUI(target) {
     target.closest('#auto-btn') ||
     target.closest('#minimap') ||
     target.closest('#bigmap') ||
-    target.closest('.style-btn') ||
     target.closest('#daynight') ||
     target.closest('#dbg')
   );
@@ -130,9 +108,15 @@ window.addEventListener('touchstart', (e) => {
       fireJoy.startY = t.clientY;
 
       if (typeof weapon !== 'undefined') {
-        weapon.manualFire = true;
-        weapon.firing = true; // Сразу открывает огонь!
+        weapon.firing = true; // Сразу открывает огонь
         weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
+      }
+
+      // Сразу наводим прицел в сторону касания
+      const dx0 = t.clientX - fireJoy.startX;
+      const dy0 = t.clientY - fireJoy.startY;
+      if (Math.hypot(dx0, dy0) > 6 && typeof weapon !== 'undefined') {
+        weapon.aimAngle = Math.atan2(dy0, dx0);
       }
 
       if (fireBtn) {
@@ -179,7 +163,6 @@ window.addEventListener('touchmove', (e) => {
       const dist = Math.hypot(dx, dy);
 
       if (typeof weapon !== 'undefined') {
-        weapon.manualFire = true;
         weapon.firing = true;
         if (dist > 6) {
           weapon.aimAngle = Math.atan2(dy, dx);
@@ -199,8 +182,7 @@ function stopJoy(id) {
     fireJoy.active = false;
     fireJoy.touchId = null;
     if (typeof weapon !== 'undefined') {
-      weapon.manualFire = false;
-      weapon.firing = typeof weapon.auto !== 'undefined' ? !!weapon.auto : false;
+      weapon.firing = autoFire;
     }
     if (fireBtn) {
       fireBtn.classList.remove('active', 'pressed');
