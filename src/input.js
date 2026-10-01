@@ -1,4 +1,4 @@
-// Управление для Android сенсорных экранов (v6.7):
+// Управление для Android сенсорных экранов (v6.8):
 // Левая половина экрана — джойстик ходьбы.
 // Правая половина экрана — плавающий джойстик огня (появляется под пальцем, стреляет сразу туда, куда направлен).
 
@@ -24,6 +24,16 @@ const fireJoy = {
 const fireBtn = document.getElementById('fire-btn');
 const fireKnob = document.getElementById('fire-knob');
 const FIRE_AIM_RADIUS = 44; // px — максимальный ход шляпки
+
+function goToTestMap(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  window.location.href = 'test.html';
+}
+const tmb = document.getElementById('testmap-btn');
+if (tmb) {
+  tmb.addEventListener('click', goToTestMap);
+  tmb.addEventListener('touchend', goToTestMap);
+}
 
 const zb = document.getElementById('zombie-btn');
 if (zb) zb.addEventListener('click', () => spawnZombie());
@@ -77,12 +87,17 @@ function isUI(target) {
 
 // Сенсорные касания на экране телефона
 window.addEventListener('touchstart', (e) => {
+  if (e.target.closest && e.target.closest('#testmap-btn')) {
+    goToTestMap(e);
+    return;
+  }
   if (e.target.closest && (e.target.closest('#daynight') || e.target.closest('#dbg'))) return;
   e.preventDefault();
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     if (isUI(t.target)) {
-      if (t.target.closest('#rot-btn')) goLandscape();
+      if (t.target.closest('#testmap-btn')) { goToTestMap(e); return; }
+      else if (t.target.closest('#rot-btn')) goLandscape();
       else if (t.target.closest('#zombie-btn')) spawnZombie();
       else if (t.target.closest('#auto-btn')) toggleAutoFire();
       else if (t.target.closest('#minimap')) toggleBigMap(true);
