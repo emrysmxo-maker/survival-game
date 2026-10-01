@@ -1,4 +1,4 @@
-// Управление для Android сенсорных экранов (v6.6):
+// Управление для Android сенсорных экранов (v6.7):
 // Левая половина экрана — джойстик ходьбы.
 // Правая половина экрана — плавающий джойстик огня (появляется под пальцем, стреляет сразу туда, куда направлен).
 
@@ -65,6 +65,7 @@ function isUI(target) {
   if (!target || !target.closest) return false;
   return !!(
     target.closest('#rot-btn') ||
+    target.closest('#testmap-btn') ||
     target.closest('#zombie-btn') ||
     target.closest('#auto-btn') ||
     target.closest('#minimap') ||

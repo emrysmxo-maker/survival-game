@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Survival Game: Тест-полигон (Постройки)</title>
+  <link rel="manifest" href="manifest-test.webmanifest">
+  <meta name="theme-color" content="#0c120c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" href="assets/icons/icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #0f150f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #e2e8f0;
+    }
+    #canvas-container {
+      width: 100%; height: 100%; position: absolute; left: 0; top: 0;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* Верхняя плашка управления */
+    #top-bar {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 20;
+    }
+    .hud-card {
+      background: rgba(15, 23, 15, 0.88);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 10px;
+      padding: 7px 12px;
+      pointer-events: auto;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .title-box h1 {
+      font-size: 13px; font-weight: 700; color: #4ade80; letter-spacing: 0.5px;
+    }
+    .title-box p {
+      font-size: 11px; color: #94a3b8; margin-top: 1px;
+    }
+
+    .action-btns {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .btn {
+      background: rgba(30, 41, 59, 0.85);
+      color: #f1f5f9; border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 600;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center;
+      transition: all 0.15s ease; touch-action: manipulation;
+    }
+    .btn:active, .btn.active {
+      background: #22c55e; color: #052e16; border-color: #4ade80;
+    }
+    .btn-main-map {
+      background: #16a34a; color: #fff; font-weight: 700; border-color: #4ade80;
+    }
+    .btn-main-map:active {
+      background: #15803d;
+    }
+    .btn-zombie {
+      background: #dc2626; color: #fff; border-color: #ef4444; font-weight: 700;
+    }
+    .btn-zombie:active {
+      background: #b91c1c;
+    }
+
+    /* Навигатор по зданиям */
+    #obj-selector {
+      position: absolute; top: 58px; left: 10px;
+      display: flex; flex-direction: column; gap: 5px;
+      z-index: 20; pointer-events: auto;
+    }
+    .obj-btn {
+      background: rgba(15, 23, 15, 0.88);
+      backdrop-filter: blur(6px);
+      color: #cbd5e1; border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 7px; padding: 7px 11px; font-size: 11px; font-weight: 600;
+      cursor: pointer; text-align: left; display: flex; align-items: center; gap: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: all 0.15s ease;
+    }
+    .obj-btn:active, .obj-btn.active {
+      background: rgba(34, 197, 94, 0.3);
+      color: #4ade80; border-color: #22c55e;
+      transform: translateX(4px);
+    }
+
+    /* Карточка с описанием модели */
+    #info-card {
+      position: absolute; bottom: 12px; right: 12px; width: 300px; max-width: calc(100vw - 24px);
+      background: rgba(15, 23, 15, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      border-radius: 10px; padding: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+      z-index: 20; pointer-events: auto;
+    }
+    #info-card h2 {
+      font-size: 14px; color: #4ade80; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;
+    }
+    #info-card .specs {
+      font-size: 10px; color: #a3e635; margin-bottom: 5px; font-family: monospace;
+    }
+    #info-card p {
+      font-size: 11px; color: #cbd5e1; line-height: 1.35; margin-bottom: 6px;
+    }
+    #info-card .features {
+      font-size: 10px; color: #94a3b8; line-height: 1.35; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px;
+    }
+
+    /* Сенсорные джойстики для телефона */
+    .touch-indicator {
+      position: absolute; width: 90px; height: 90px; border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.08);
+      transform: translate(-50%, -50%);
+      pointer-events: none; display: none; z-index: 30;
+    }
+    .touch-knob {
+      position: absolute; width: 40px; height: 40px; border-radius: 50%;
+      top: 50%; left: 50%; margin: -20px 0 0 -20px;
+      background: rgba(46, 204, 113, 0.8);
+      border: 2px solid #fff; box-shadow: 0 0 10px rgba(46, 204, 113, 0.6);
+      pointer-events: none;
+    }
+    #fire-indicator .touch-knob {
+      background: rgba(239, 68, 68, 0.85);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+    }
+
+    /* Подсказки управления */
+    #touch-hint {
+      position: absolute; bottom: 12px; left: 16px;
+      font-size: 11px; color: #94a3b8; pointer-events: none; z-index: 10;
+      background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 6px;
+    }
+    @media (max-width: 700px) {
+      #touch-hint { display: none; }
+      #info-card { width: 230px; padding: 9px; }
+      #info-card p { font-size: 10px; }
+      #info-card .features { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <!-- Верхняя плашка -->
+  <div id="top-bar">
+    <div class="hud-card title-box">
+      <h1>ТЕСТ-ПОЛИГОН: МОДЕЛИ ДОМОВ</h1>
+      <p>Чистая земля · 4 типа построек · Оружие и зомби работают</p>
+    </div>
+
+    <div class="hud-card action-btns">
+      <button class="btn btn-zombie" id="btn-spawn-zombie">🧟 ЗОМБИ +</button>
+      <button class="btn active" id="btn-day">☀️ День</button>
+      <button class="btn" id="btn-sunset">🌅 Закат</button>
+      <button class="btn" id="btn-night">🌙 Ночь</button>
+      <a href="index.html" class="btn btn-main-map">🌲 ОСНОВНАЯ КАРТА</a>
+    </div>
+  </div>
+
+  <!-- Селектор зданий -->
+  <div id="obj-selector">
+    <button class="obj-btn active" data-target="cabin">🏡 1. Лесной сруб</button>
+    <button class="obj-btn" data-target="ruin">🏚️ 2. Заброшенный дом</button>
+    <button class="obj-btn" data-target="outpost">🪖 3. Военный блокпост</button>
+    <button class="obj-btn" data-target="camp">⛺ 4. Лагерь выживания</button>
+    <button class="obj-btn" data-target="overview">🗺️ Общий план</button>
+    <button class="obj-btn" data-target="soldier">🚶 К бойцу</button>
+  </div>
+
+  <!-- Описание объекта -->
+  <div id="info-card">
+    <h2 id="card-title">🏡 Охотничья изба / Сруб</h2>
+    <div class="specs" id="card-specs">Размер: 6.0 × 5.0 м · Высота: 4.2 м</div>
+    <p id="card-desc">Бревенчатый сруб с крыльцом, каменным дымоходом, резными окнами и тёплым светом. Идеально защищает от непогоды и волн зомби.</p>
+    <div class="features" id="card-features">
+      • Оцилиндрованные брёвна с выступающими углами<br>
+      • Двускатная деревянная крыша со стропилами<br>
+      • Крыльцо с навесом и ступеньками<br>
+      • Поленница колотых дров у стены
+    </div>
+  </div>
+
+  <!-- Индикаторы сенсорных джойстиков -->
+  <div id="move-indicator" class="touch-indicator"><div class="touch-knob" id="move-knob"></div></div>
+  <div id="fire-indicator" class="touch-indicator"><div class="touch-knob" id="fire-knob"></div></div>
+
+  <div id="touch-hint">Левая половина — ходьба · Правая половина — прицел и огонь · ЗОМБИ + спавнит врагов</div>
+
+  <!-- Three.js + GLTFLoader -->
+  <script src="assets/vendor/three.min.js"></script>
+  <script src="assets/vendor/GLTFLoader.js"></script>
+
+  <script>
+    // --- ИНИЦИАЛИЗАЦИЯ СЦЕНЫ И КАМЕРЫ ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x182418);
+    scene.fog = new THREE.FogExp2(0x182418, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.5, 300);
+    camera.position.set(0, 18, 22);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // --- ОСВЕЩЕНИЕ И СОЛНЦЕ ---
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334433, 0.65);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfffaed, 1.3);
+    dirLight.position.set(30, 45, 20);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.far = 130;
+    const d = 40;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    dirLight.shadow.bias = -0.0005;
+    scene.add(dirLight);
+
+    // Огни лагеря, сруба и блокпоста
+    const fireLight = new THREE.PointLight(0xff7722, 1.8, 14, 1.5);
+    fireLight.position.set(14, 1.2, 14);
+    scene.add(fireLight);
+
+    const cabinLight = new THREE.PointLight(0xffaa44, 1.2, 12, 1.8);
+    cabinLight.position.set(-12, 2.2, -12);
+    scene.add(cabinLight);
+
+    const outpostLight = new THREE.PointLight(0x88ccff, 1.2, 18, 1.5);
+    outpostLight.position.set(14, 6.5, -14);
+    scene.add(outpostLight);
+
+    // --- ЧИСТАЯ ЗЕМЛЯ (ЧИСТО ЗЕМЛЯ ПО ЗАПРОСУ ВЛАДЕЛЬЦА) ---
+    const texLoader = new THREE.TextureLoader();
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x3d4f33,
+      roughness: 0.9,
+      metalness: 0.05
+    });
+
+    try {
+      texLoader.load('assets/ground/grass.jpg', (t) => {
+        t.wrapS = THREE.RepeatWrapping;
+        t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(16, 16);
+        groundMat.map = t;
+        groundMat.needsUpdate = true;
+      });
+    } catch(e) {}
+
+    const groundGeo = new THREE.PlaneGeometry(90, 90, 36, 36);
+    const posAttr = groundGeo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const vx = posAttr.getX(i);
+      const vy = posAttr.getY(i);
+      const dist = Math.hypot(vx, vy);
+      if (dist > 18) {
+        const h = Math.sin(vx * 0.12) * Math.cos(vy * 0.12) * 0.5;
+        posAttr.setZ(i, h);
+      }
+    }
+    groundGeo.computeVertexNormals();
+
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Песчаные/грунтовые дорожки между постройками
+    const pathMat = new THREE.MeshStandardMaterial({ color: 0x302418, roughness: 0.95 });
+    const pathNS = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 60), pathMat);
+    pathNS.rotation.x = -Math.PI / 2;
+    pathNS.position.set(0, 0.02, 0);
+    pathNS.receiveShadow = true;
+    scene.add(pathNS);
+
+    const pathEW = new THREE.Mesh(new THREE.PlaneGeometry(60, 3.2), pathMat);
+    pathEW.rotation.x = -Math.PI / 2;
+    pathEW.position.set(0, 0.02, 0);
+    pathEW.receiveShadow = true;
+    scene.add(pathEW);
+
+    // --- МАТЕРИАЛЫ ДЛЯ ПОСТРОЕК ---
+    const mats = {
+      log: new THREE.MeshStandardMaterial({ color: 0x5a3e26, roughness: 0.85 }),
+      darkWood: new THREE.MeshStandardMaterial({ color: 0x3d2a1a, roughness: 0.9 }),
+      plankWood: new THREE.MeshStandardMaterial({ color: 0x735338, roughness: 0.8 }),
+      roofWood: new THREE.MeshStandardMaterial({ color: 0x38281b, roughness: 0.9 }),
+      oldGreyWood: new THREE.MeshStandardMaterial({ color: 0x585652, roughness: 0.95 }),
+      brokenPlank: new THREE.MeshStandardMaterial({ color: 0x474542, roughness: 0.98 }),
+      stone: new THREE.MeshStandardMaterial({ color: 0x555856, roughness: 0.9 }),
+      glass: new THREE.MeshStandardMaterial({ color: 0xffdd88, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.75 }),
+      sandbag: new THREE.MeshStandardMaterial({ color: 0x9b8f72, roughness: 0.95 }),
+      militaryMetal: new THREE.MeshStandardMaterial({ color: 0x3a4835, roughness: 0.6, metalness: 0.4 }),
+      rustyMetal: new THREE.MeshStandardMaterial({ color: 0x6d3d25, roughness: 0.7, metalness: 0.3 }),
+      tarp: new THREE.MeshStandardMaterial({ color: 0x2d4334, roughness: 0.9 })
+    };
+
+    function applyShadows(obj) {
+      obj.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      return obj;
+    }
+
+    // ==========================================
+    // 1. ОХОТНИЧЬЯ ИЗБА / СРУБ (-12, 0, -12)
+    // ==========================================
+    const cabinGroup = new THREE.Group();
+    cabinGroup.position.set(-12, 0, -12);
+    const cabinW = 6.0, cabinL = 5.0, cabinH = 2.8, logR = 0.16;
+    const numLogs = Math.floor(cabinH / (logR * 1.8));
+
+    for (let i = 0; i < numLogs; i++) {
+      const y = logR + i * (logR * 1.75);
+      const logFront = new THREE.Mesh(new THREE.CylinderGeometry(logR, logR, cabinW + 0.6, 8), mats.log);
+      logFront.rotation.z = Math.PI / 2;
+      logFront.position.set(0, y, cabinL / 2);
+      cabinGroup.add(logFront);
+
+      const logBack = logFront.clone();
+      logBack.position.set(0, y, -cabinL / 2);
+      cabinGroup.add(logBack);
+
+      const logLeft = new THREE.Mesh(new THREE.CylinderGeometry(logR, logR, cabinL + 0.6, 8), mats.log);
+      logLeft.rotation.x = Math.PI / 2;
+      logLeft.position.set(-cabinW / 2, y + logR * 0.85, 0);
+      cabinGroup.add(logLeft);
+
+      const logRight = logLeft.clone();
+      logRight.position.set(cabinW / 2, y + logR * 0.85, 0);
+      cabinGroup.add(logRight);
+    }
+
+    // Двускатная крыша
+    const roofSlopeL = Math.hypot(cabinW / 2 + 0.5, 1.8) + 0.4;
+    const roofAngle = Math.atan2(1.8, cabinW / 2 + 0.2);
+
+    const roofLeft = new THREE.Mesh(new THREE.BoxGeometry(roofSlopeL, 0.12, cabinL + 1.2), mats.roofWood);
+    roofLeft.position.set(-(cabinW / 4 + 0.1), cabinH + 0.9, 0);
+    roofLeft.rotation.z = roofAngle;
+    cabinGroup.add(roofLeft);
+
+    const roofRight = new THREE.Mesh(new THREE.BoxGeometry(roofSlopeL, 0.12, cabinL + 1.2), mats.roofWood);
+    roofRight.position.set(cabinW / 4 + 0.1, cabinH + 0.9, 0);
+    roofRight.rotation.z = -roofAngle;
+    cabinGroup.add(roofRight);
+
+    // Крыльцо и дверь
+    const porch = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 1.6), mats.plankWood);
+    porch.position.set(0, 0.18, cabinL / 2 + 0.8);
+    cabinGroup.add(porch);
+
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.9, 0.08), mats.darkWood);
+    door.position.set(0, 1.05, cabinL / 2 + 0.05);
+    cabinGroup.add(door);
+
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.1), mats.glass);
+    win.position.set(cabinW / 2 + 0.05, 1.5, 0);
+    win.rotation.y = Math.PI / 2;
+    cabinGroup.add(win);
+
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.7, 3.8, 0.7), mats.stone);
+    chimney.position.set(-cabinW / 2 + 0.8, 2.2, -cabinL / 2 + 0.8);
+    cabinGroup.add(chimney);
+
+    applyShadows(cabinGroup);
+    scene.add(cabinGroup);
+
+    // ==========================================
+    // 2. ЗАБРОШЕННЫЙ ДОМ / РУИНЫ (-14, 0, 14)
+    // ==========================================
+    const ruinGroup = new THREE.Group();
+    ruinGroup.position.set(-14, 0, 14);
+    const rW = 6.8, rL = 5.2, rH = 2.6;
+
+    const addPlankWall = (startX, startZ, endX, endZ, missingChance = 0.25) => {
+      const len = Math.hypot(endX - startX, endZ - startZ);
+      const angle = Math.atan2(endZ - startZ, endX - startX);
+      const count = Math.floor(len / 0.28);
+      for (let i = 0; i < count; i++) {
+        if (Math.random() < missingChance) continue;
+        const p = i / count;
+        const x = startX + (endX - startX) * p;
+        const z = startZ + (endZ - startZ) * p;
+        const plankH = rH * (0.8 + Math.random() * 0.25);
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(0.24, plankH, 0.06), mats.oldGreyWood);
+        plank.position.set(x, plankH / 2, z);
+        plank.rotation.y = angle;
+        ruinGroup.add(plank);
+      }
+    };
+    addPlankWall(-rW/2, -rL/2, rW/2, -rL/2, 0.15);
+    addPlankWall(-rW/2, -rL/2, -rW/2, rL/2, 0.35);
+    addPlankWall(rW/2, -rL/2, rW/2, rL/2, 0.2);
+    addPlankWall(-rW/2, rL/2, -0.8, rL/2, 0.2);
+
+    for (let z = -rL/2 + 0.4; z <= rL/2 - 0.4; z += 1.2) {
+      const rafter = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3.2), mats.brokenPlank);
+      rafter.position.set(-1.6, rH + 0.8, z);
+      rafter.rotation.set(0, Math.PI / 2, 0.55);
+      ruinGroup.add(rafter);
+    }
+    applyShadows(ruinGroup);
+    scene.add(ruinGroup);
+
+    // ==========================================
+    // 3. ВОЕННЫЙ БЛОКПОСТ И ВЫШКА (14, 0, -14)
+    // ==========================================
+    const outpostGroup = new THREE.Group();
+    outpostGroup.position.set(14, 0, -14);
+
+    const containerMesh = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.4, 3.0), mats.militaryMetal);
+    containerMesh.position.set(-1.0, 1.2, 0);
+    outpostGroup.add(containerMesh);
+
+    // Смотровая вышка
+    const twH = 6.4, twW = 2.4;
+    const tower = new THREE.Group();
+    tower.position.set(2.8, 0, -1.0);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, twH, 6), mats.darkWood);
+      leg.position.set(sx * (twW / 2), twH / 2, sz * (twW / 2));
+      tower.add(leg);
+    });
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(twW + 0.6, 0.15, twW + 0.6), mats.plankWood);
+    platform.position.set(0, twH, 0);
+    tower.add(platform);
+    const towerRoof = new THREE.Mesh(new THREE.BoxGeometry(twW + 1.0, 0.1, twW + 1.0), mats.militaryMetal);
+    towerRoof.position.set(0, twH + 2.0, 0);
+    tower.add(towerRoof);
+    outpostGroup.add(tower);
+
+    // Мешки с песком и бочки
+    for (let s = 0; s <= 8; s++) {
+      const a = -Math.PI * 0.8 + (Math.PI * 0.6) * (s / 8);
+      const bx = -1.0 + Math.cos(a) * 2.5;
+      const bz = 1.5 + Math.sin(a) * 2.5;
+      for (let lvl = 0; lvl < 2; lvl++) {
+        const bag = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.22, 0.35), mats.sandbag);
+        bag.position.set(bx, 0.11 + lvl * 0.21, bz);
+        bag.rotation.y = a + Math.PI / 2;
+        outpostGroup.add(bag);
+      }
+    }
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.95, 12), mats.rustyMetal);
+    barrel.position.set(-3.5, 0.48, 1.5);
+    outpostGroup.add(barrel);
+
+    applyShadows(outpostGroup);
+    scene.add(outpostGroup);
+
+    // ==========================================
+    // 4. ЛАГЕРЬ ВЫЖИВАНИЯ (14, 0, 14)
+    // ==========================================
+    const campGroup = new THREE.Group();
+    campGroup.position.set(14, 0, 14);
+
+    const shelter = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.08, 2.8), mats.tarp);
+    shelter.position.set(-1.5, 1.3, -1.5);
+    shelter.rotation.x = -0.48;
+    campGroup.add(shelter);
+
+    // Кострище
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2), mats.stone);
+      st.position.set(1.5 + Math.cos(a) * 0.7, 0.12, 1.5 + Math.sin(a) * 0.7);
+      campGroup.add(st);
+    }
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.25, 8), mats.rustyMetal);
+    pot.position.set(1.5, 0.7, 1.5);
+    campGroup.add(pot);
+
+    applyShadows(campGroup);
+    scene.add(campGroup);
+
+    // ==========================================
+    // ПЕРСОНАЖ И ОРУЖИЕ
+    // ==========================================
+    const soldierGroup = new THREE.Group();
+    soldierGroup.position.set(0, 0, 0);
+    scene.add(soldierGroup);
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x48583a, roughness: 0.7 });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.75, 0.3), bodyMat);
+    torso.position.y = 1.1;
+    soldierGroup.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), new THREE.MeshStandardMaterial({ color: 0xaf8e72 }));
+    head.position.y = 1.68;
+    soldierGroup.add(head);
+
+    const rifleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.9), mats.militaryMetal);
+    rifleMesh.position.set(0.28, 1.05, 0.45);
+    soldierGroup.add(rifleMesh);
+    applyShadows(soldierGroup);
+
+    // Загрузка настоящей 3D-модели бойца Soldier.glb
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+      const loader = new THREE.GLTFLoader();
+      loader.load('assets/character/Soldier.glb', (gltf) => {
+        while(soldierGroup.children.length > 0) soldierGroup.remove(soldierGroup.children[0]);
+        const m = gltf.scene;
+        m.scale.set(1.2, 1.2, 1.2);
+        applyShadows(m);
+        soldierGroup.add(m);
+      }, undefined, () => {});
+    }
+
+    // ==========================================
+    // ЗОМБИ СИСТЕМА
+    // ==========================================
+    const zombies = [];
+    let zombieGltfModel = null;
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+      new THREE.GLTFLoader().load('assets/character/Zombie.glb', (gltf) => {
+        zombieGltfModel = gltf.scene;
+      }, undefined, () => {});
+    }
+
+    function spawnZombie() {
+      const zGroup = new THREE.Group();
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 14 + Math.random() * 8;
+      zGroup.position.set(soldierGroup.position.x + Math.cos(ang) * dist, 0, soldierGroup.position.z + Math.sin(ang) * dist);
+
+      if (zombieGltfModel) {
+        const clone = zombieGltfModel.clone();
+        clone.scale.set(1.1, 1.1, 1.1);
+        applyShadows(clone);
+        zGroup.add(clone);
+      } else {
+        const zBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), new THREE.MeshStandardMaterial({ color: 0x2e4033 }));
+        zBody.position.y = 1.0;
+        zGroup.add(zBody);
+        const zHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), new THREE.MeshStandardMaterial({ color: 0x5a7560 }));
+        zHead.position.y = 1.55;
+        zGroup.add(zHead);
+      }
+      applyShadows(zGroup);
+      scene.add(zGroup);
+
+      zombies.push({
+        group: zGroup,
+        hp: 100,
+        speed: 3.2 + Math.random() * 1.5
+      });
+    }
+    document.getElementById('btn-spawn-zombie').addEventListener('click', spawnZombie);
+
+    // ==========================================
+    // ПУЛИ И СТРЕЛЬБА
+    // ==========================================
+    const bullets = [];
+    const bulletGeo = new THREE.SphereGeometry(0.08, 6, 6);
+    const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffea77 });
+
+    let isFiring = false;
+    let aimAngle = 0;
+    let lastShotTime = 0;
+
+    function fireBullet() {
+      const bMesh = new THREE.Mesh(bulletGeo, bulletMat);
+      // Точка вылета из оружия бойца
+      const spawnX = soldierGroup.position.x + Math.sin(soldierGroup.rotation.y) * 0.8;
+      const spawnZ = soldierGroup.position.z + Math.cos(soldierGroup.rotation.y) * 0.8;
+      bMesh.position.set(spawnX, 1.05, spawnZ);
+      scene.add(bMesh);
+
+      const spread = (Math.random() - 0.5) * 0.06;
+      const finalAngle = soldierGroup.rotation.y + spread;
+
+      bullets.push({
+        mesh: bMesh,
+        vx: Math.sin(finalAngle) * 45,
+        vz: Math.cos(finalAngle) * 45,
+        life: 1.2
+      });
+    }
+
+    // ==========================================
+    // СЕНСОРНОЕ УПРАВЛЕНИЕ (2 ПОЛОВИНЫ ЭКРАНА)
+    // ==========================================
+    const moveJoy = { active: false, id: null, sx: 0, sy: 0, dx: 0, dy: 0 };
+    const fireJoy = { active: false, id: null, sx: 0, sy: 0, dx: 0, dy: 0 };
+
+    const moveInd = document.getElementById('move-indicator');
+    const moveKnob = document.getElementById('move-knob');
+    const fireInd = document.getElementById('fire-indicator');
+    const fireKnob = document.getElementById('fire-knob');
+
+    window.addEventListener('touchstart', (e) => {
+      if (e.target.closest('#top-bar') || e.target.closest('#obj-selector') || e.target.closest('#info-card')) return;
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.clientX < window.innerWidth * 0.5) {
+          // Левая половина: ходьба
+          if (!moveJoy.active) {
+            moveJoy.active = true;
+            moveJoy.id = t.identifier;
+            moveJoy.sx = t.clientX;
+            moveJoy.sy = t.clientY;
+            moveJoy.dx = 0;
+            moveJoy.dy = 0;
+            moveInd.style.display = 'block';
+            moveInd.style.left = t.clientX + 'px';
+            moveInd.style.top = t.clientY + 'px';
+            moveKnob.style.transform = 'translate(0,0)';
+            cameraMode = 'soldier';
+          }
+        } else {
+          // Правая половина: прицел и огонь
+          if (!fireJoy.active) {
+            fireJoy.active = true;
+            fireJoy.id = t.identifier;
+            fireJoy.sx = t.clientX;
+            fireJoy.sy = t.clientY;
+            isFiring = true;
+            fireInd.style.display = 'block';
+            fireInd.style.left = t.clientX + 'px';
+            fireInd.style.top = t.clientY + 'px';
+            fireKnob.style.transform = 'translate(0,0)';
+          }
+        }
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (moveJoy.active && t.identifier === moveJoy.id) {
+          const diffX = t.clientX - moveJoy.sx;
+          const diffY = t.clientY - moveJoy.sy;
+          const dist = Math.hypot(diffX, diffY);
+          const angle = Math.atan2(diffY, diffX);
+          const clamped = Math.min(dist, 45);
+          moveJoy.dx = (Math.cos(angle) * clamped) / 45;
+          moveJoy.dy = (Math.sin(angle) * clamped) / 45;
+          moveKnob.style.transform = `translate(${Math.cos(angle)*clamped}px, ${Math.sin(angle)*clamped}px)`;
+        }
+        if (fireJoy.active && t.identifier === fireJoy.id) {
+          const dx = t.clientX - fireJoy.sx;
+          const dy = t.clientY - fireJoy.sy;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 8) {
+            aimAngle = Math.atan2(dx, dy);
+            soldierGroup.rotation.y = aimAngle;
+          }
+          const clamped = Math.min(dist, 45);
+          const angle = Math.atan2(dy, dx);
+          fireKnob.style.transform = `translate(${Math.cos(angle)*clamped}px, ${Math.sin(angle)*clamped}px)`;
+        }
+      }
+    }, { passive: false });
+
+    function stopTouch(id) {
+      if (moveJoy.active && moveJoy.id === id) {
+        moveJoy.active = false;
+        moveJoy.id = null;
+        moveJoy.dx = 0;
+        moveJoy.dy = 0;
+        moveInd.style.display = 'none';
+      }
+      if (fireJoy.active && fireJoy.id === id) {
+        fireJoy.active = false;
+        fireJoy.id = null;
+        isFiring = false;
+        fireInd.style.display = 'none';
+      }
+    }
+    window.addEventListener('touchend', (e) => { for (let i = 0; i < e.changedTouches.length; i++) stopTouch(e.changedTouches[i].identifier); });
+    window.addEventListener('touchcancel', (e) => { for (let i = 0; i < e.changedTouches.length; i++) stopTouch(e.changedTouches[i].identifier); });
+
+    // Клавиатура для тестов
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      if (e.code === 'Space') isFiring = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+      if (e.code === 'Space') isFiring = false;
+    });
+
+    // ==========================================
+    // НАВИГАЦИЯ И ВЫБОР ОБЪЕКТА
+    // ==========================================
+    const targets = {
+      cabin: { pos: new THREE.Vector3(-12, 1.8, -12), camOffset: new THREE.Vector3(0, 7, 10), title: '🏡 Лесной сруб / Изба', specs: 'Размер: 6.0 × 5.0 м · Высота: 4.2 м', desc: 'Бревенчатый сруб с крыльцом, каменным дымоходом, резными окнами и тёплым светом. Идеально защищает от непогоды и волн зомби.', features: '• Оцилиндрованные бревна с выступающими углами\\n• Двускатная деревянная крыша со стропилами\\n• Крыльцо с навесом и ступеньками\\n• Поленница колотых дров у стены' },
+      ruin: { pos: new THREE.Vector3(-14, 1.8, 14), camOffset: new THREE.Vector3(0, 7, 10), title: '🏚️ Заброшенный дом / Руины', specs: 'Размер: 6.8 × 5.2 м · Высота: 3.4 м', desc: 'Полуразрушенный дом с провалившейся крышей, выбитыми окнами и расщепленными досками. Атмосферная точка с ценным лутом.', features: '• Выветренные серые доски с проломами\\n• Обрушенные стропила крыши\\n• Завалы стройматериалов и кирпичей\\n• Удобные огневые амбразуры для стрельбы' },
+      outpost: { pos: new THREE.Vector3(14, 3, -14), camOffset: new THREE.Vector3(0, 9, 13), title: '🪖 Военный блокпост и вышка', specs: 'Площадка: 8 × 8 м · Высота вышки: 8.2 м', desc: 'Укрепленный форпост с наблюдательной вышкой, бронированным модулем КПП, баррикадами из мешков с песком и складом патронов.', features: '• Смотровая вышка с круговым сектором обзора\\n• Защитный бруствер из мешков с песком\\n• Бочки с топливом и ящики боеприпасов\\n• Бронированный модуль КПП' },
+      camp: { pos: new THREE.Vector3(14, 1.5, 14), camOffset: new THREE.Vector3(0, 6, 8), title: '⛺ Лагерь выживания', specs: 'Зона: 5 × 5 м · Навес: 3.6 × 2.8 м', desc: 'Уютный базовый лагерь в глуши: деревянный навес-шалаш, каменное кострище с котелком, спальник и верстак.', features: '• Односкатный шалаш из брезента и жердей\\n• Кострище с искрами и котелком на треноге\\n• Походный стол с инструментами\\n• Спальное место с лапником' },
+      overview: { pos: new THREE.Vector3(0, 0, 0), camOffset: new THREE.Vector3(0, 36, 40), title: '🗺️ Общий план полигона', specs: 'Полигон: 90 × 90 м · 4 тестовые зоны', desc: 'Все 4 типа объектов размещены по секторам карты вокруг центрального перекрестка. Используйте джойстик, чтобы прогуляться бойцом между ними.', features: '• Северо-Запад: Лесной сруб\\n• Юго-Запад: Заброшенные руины\\n• Северо-Восток: Военный блокпост\\n• Юго-Восток: Лагерь выживания' },
+      soldier: { pos: new THREE.Vector3(0, 1.0, 0), camOffset: new THREE.Vector3(0, 14, 16), title: '🚶 Боец спецназа', specs: 'Рост: 1.8 м · Экипировка: Вектор/АК', desc: 'Главный герой. Управляйте левой половиной экрана для бега, правой — для прицеливания и стрельбы.', features: '• Тест масштаба персонажа к домам\\n• Проверка коллизий и проходов\\n• Открытие огня по мишеням/зомби' }
+    };
+
+    let cameraMode = 'inspect';
+    let lookTarget = new THREE.Vector3(-12, 1.8, -12);
+    let camTargetPos = new THREE.Vector3(-12, 8.8, -2);
+
+    function selectObject(key) {
+      const data = targets[key];
+      if (!data) return;
+      document.querySelectorAll('.obj-btn').forEach(b => b.classList.toggle('active', b.dataset.target === key));
+      document.getElementById('card-title').textContent = data.title;
+      document.getElementById('card-specs').textContent = data.specs;
+      document.getElementById('card-desc').textContent = data.desc;
+      document.getElementById('card-features').innerHTML = data.features.replace(/\\n/g, '<br>');
+
+      if (key === 'soldier') {
+        cameraMode = 'soldier';
+      } else {
+        cameraMode = 'inspect';
+        lookTarget.copy(data.pos);
+        camTargetPos.copy(data.pos).add(data.camOffset);
+      }
+    }
+
+    document.querySelectorAll('.obj-btn').forEach(btn => {
+      btn.addEventListener('click', () => selectObject(btn.dataset.target));
+    });
+
+    // --- ПЕРЕКЛЮЧЕНИЕ ВРЕМЕНИ СУТОК ---
+    function setTime(mode) {
+      document.querySelectorAll('.action-btns .btn').forEach(b => {
+        if (b.id.startsWith('btn-day') || b.id.startsWith('btn-sunset') || b.id.startsWith('btn-night')) b.classList.remove('active');
+      });
+      document.getElementById('btn-' + mode).classList.add('active');
+
+      if (mode === 'day') {
+        scene.background.setHex(0x182418);
+        scene.fog.color.setHex(0x182418);
+        hemiLight.intensity = 0.65;
+        hemiLight.color.setHex(0xffffff);
+        dirLight.intensity = 1.3;
+        dirLight.color.setHex(0xfffaed);
+        dirLight.position.set(30, 45, 20);
+        fireLight.intensity = 0.6;
+        cabinLight.intensity = 0.2;
+        outpostLight.intensity = 0.2;
+      } else if (mode === 'sunset') {
+        scene.background.setHex(0x382218);
+        scene.fog.color.setHex(0x382218);
+        hemiLight.intensity = 0.45;
+        hemiLight.color.setHex(0xffaa77);
+        dirLight.intensity = 1.0;
+        dirLight.color.setHex(0xff7733);
+        dirLight.position.set(45, 12, 10);
+        fireLight.intensity = 2.2;
+        cabinLight.intensity = 1.5;
+        outpostLight.intensity = 1.2;
+      } else if (mode === 'night') {
+        scene.background.setHex(0x0a100d);
+        scene.fog.color.setHex(0x0a100d);
+        hemiLight.intensity = 0.15;
+        hemiLight.color.setHex(0x446688);
+        dirLight.intensity = 0.25;
+        dirLight.color.setHex(0x88aacc);
+        dirLight.position.set(-20, 30, -10);
+        fireLight.intensity = 3.5;
+        cabinLight.intensity = 2.5;
+        outpostLight.intensity = 2.2;
+      }
+    }
+    document.getElementById('btn-day').addEventListener('click', () => setTime('day'));
+    document.getElementById('btn-sunset').addEventListener('click', () => setTime('sunset'));
+    document.getElementById('btn-night').addEventListener('click', () => setTime('night'));
+
+    // --- ГЛАВНЫЙ ЦИКЛ ОБНОВЛЕНИЯ ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      const now = performance.now();
+
+      // Движение бойца
+      let mx = 0, mz = 0;
+      if (keys['KeyW'] || keys['ArrowUp']) mz -= 1;
+      if (keys['KeyS'] || keys['ArrowDown']) mz += 1;
+      if (keys['KeyA'] || keys['ArrowLeft']) mx -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) mx += 1;
+      if (moveJoy.active) { mx = moveJoy.dx; mz = moveJoy.dy; }
+
+      const moveLen = Math.hypot(mx, mz);
+      if (moveLen > 0.05) {
+        const speed = 7.5;
+        const nx = (mx / (moveLen > 1 ? moveLen : 1)) * speed * dt;
+        const nz = (mz / (moveLen > 1 ? moveLen : 1)) * speed * dt;
+        soldierGroup.position.x += nx;
+        soldierGroup.position.z += nz;
+
+        // Если не целимся в другую сторону, поворачиваемся по направлению бега
+        if (!fireJoy.active) {
+          soldierGroup.rotation.y = Math.atan2(mx, mz);
+        }
+      }
+
+      // Стрельба
+      if (isFiring && now - lastShotTime > 110) {
+        lastShotTime = now;
+        fireBullet();
+      }
+
+      // Обновление пуль
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.mesh.position.x += b.vx * dt;
+        b.mesh.position.z += b.vz * dt;
+        b.life -= dt;
+
+        // Попадание в зомби
+        for (let j = zombies.length - 1; j >= 0; j--) {
+          const z = zombies[j];
+          if (Math.hypot(b.mesh.position.x - z.group.position.x, b.mesh.position.z - z.group.position.z) < 0.9) {
+            z.hp -= 35;
+            b.life = 0;
+            if (z.hp <= 0) {
+              scene.remove(z.group);
+              zombies.splice(j, 1);
+            }
+            break;
+          }
+        }
+
+        if (b.life <= 0) {
+          scene.remove(b.mesh);
+          bullets.splice(i, 1);
+        }
+      }
+
+      // Обновление зомби (идут к бойцу)
+      for (const z of zombies) {
+        const zdx = soldierGroup.position.x - z.group.position.x;
+        const zdz = soldierGroup.position.z - z.group.position.z;
+        const zdist = Math.hypot(zdx, zdz);
+        if (zdist > 1.2) {
+          z.group.position.x += (zdx / zdist) * z.speed * dt;
+          z.group.position.z += (zdz / zdist) * z.speed * dt;
+          z.group.rotation.y = Math.atan2(zdx, zdz);
+        }
+      }
+
+      // Следование камеры
+      if (cameraMode === 'soldier') {
+        lookTarget.lerp(soldierGroup.position, 0.1);
+        camTargetPos.set(soldierGroup.position.x, soldierGroup.position.y + 14, soldierGroup.position.z + 16);
+      }
+      camera.position.lerp(camTargetPos, 0.08);
+      camera.lookAt(lookTarget);
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    setTime('day');
+    selectObject('cabin');
+    animate();
+  </script>
+</body>
+</html>
