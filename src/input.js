@@ -1,4 +1,4 @@
-// Управление для Android сенсорных экранов (v6.5):
+// Управление для Android сенсорных экранов (v6.6):
 // Левая половина экрана — джойстик ходьбы.
 // Правая половина экрана — плавающий джойстик огня (появляется под пальцем, стреляет сразу туда, куда направлен).
 
@@ -28,12 +28,14 @@ const FIRE_AIM_RADIUS = 44; // px — максимальный ход шляпк
 const zb = document.getElementById('zombie-btn');
 if (zb) zb.addEventListener('click', () => spawnZombie());
 
-let autoFire = false;
 function toggleAutoFire() {
-  autoFire = !autoFire;
+  if (typeof weapon === 'undefined') return;
+  weapon.auto = !weapon.auto;
   const b = document.getElementById('auto-btn');
-  if (b) b.classList.toggle('active', autoFire);
-  if (typeof weapon !== 'undefined') weapon.firing = autoFire;
+  if (b) {
+    b.classList.toggle('active', weapon.auto);
+    b.classList.toggle('on', weapon.auto);
+  }
 }
 const ab = document.getElementById('auto-btn');
 if (ab) ab.addEventListener('click', () => toggleAutoFire());
@@ -47,13 +49,15 @@ if (bm) bm.addEventListener('click', () => toggleBigMap(false));
 // Клавиатура (для тестов): пробел — огонь
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && typeof weapon !== 'undefined') {
+    weapon.manualFire = true;
     weapon.firing = true;
-    weapon.aimAngle = player.angle;
+    weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
   }
 });
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' && typeof weapon !== 'undefined') {
-    weapon.firing = false;
+    weapon.manualFire = false;
+    weapon.firing = !!weapon.auto;
   }
 });
 
@@ -108,7 +112,8 @@ window.addEventListener('touchstart', (e) => {
       fireJoy.startY = t.clientY;
 
       if (typeof weapon !== 'undefined') {
-        weapon.firing = true; // Сразу открывает огонь
+        weapon.manualFire = true;
+        weapon.firing = true;
         weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
       }
 
@@ -163,6 +168,7 @@ window.addEventListener('touchmove', (e) => {
       const dist = Math.hypot(dx, dy);
 
       if (typeof weapon !== 'undefined') {
+        weapon.manualFire = true;
         weapon.firing = true;
         if (dist > 6) {
           weapon.aimAngle = Math.atan2(dy, dx);
@@ -182,7 +188,8 @@ function stopJoy(id) {
     fireJoy.active = false;
     fireJoy.touchId = null;
     if (typeof weapon !== 'undefined') {
-      weapon.firing = autoFire;
+      weapon.manualFire = false;
+      weapon.firing = !!weapon.auto;
     }
     if (fireBtn) {
       fireBtn.classList.remove('active', 'pressed');
