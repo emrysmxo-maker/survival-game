@@ -1,4 +1,4 @@
-// Страховка холста и синхронизация стрельбы с поворотом бойца (v6.0).
+// Страховка холста и синхронизация стрельбы с поворотом бойца (v6.4).
 (function () {
   function fix() {
     if (typeof resize !== 'function' || typeof canvas === 'undefined') return;
@@ -66,6 +66,10 @@
   const origUpdateCharacter = window.updateCharacter;
   if (typeof origUpdateCharacter === 'function') {
     window.updateCharacter = function (dt, isMoving, angle, speed) {
+      if (typeof fireJoy !== 'undefined' && fireJoy.active && typeof weapon !== 'undefined') {
+        weapon.manualFire = true;
+        weapon.firing = true;
+      }
       origUpdateCharacter(dt, isMoving, angle, speed);
       if (typeof weapon !== 'undefined' && weapon.firing && typeof soldierRoot !== 'undefined' && soldierRoot) {
         const aimA = (typeof weapon.aimAngle === 'number') ? weapon.aimAngle : angle;
@@ -84,6 +88,10 @@
   if (typeof origUpdateWeapon === 'function') {
     window.updateWeapon = function (dt) {
       if (typeof weapon === 'undefined') return;
+      if (typeof fireJoy !== 'undefined' && fireJoy.active) {
+        weapon.manualFire = true;
+        weapon.firing = true;
+      }
 
       let facingOk = true;
       if (weapon.firing && typeof soldierRoot !== 'undefined' && soldierRoot && typeof weapon.aimAngle === 'number') {

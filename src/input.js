@@ -1,4 +1,4 @@
-// Управление для Android сенсорных экранов (v6.0):
+// Управление для Android сенсорных экранов (v6.4):
 // Левая половина экрана — джойстик ходьбы.
 // Правая половина экрана — плавающий джойстик огня (появляется под пальцем, стреляет сразу туда, куда направлен).
 
@@ -41,8 +41,16 @@ let autoFire = false;
 function toggleAutoFire() {
   autoFire = !autoFire;
   const b = document.getElementById('auto-btn');
-  if (b) b.classList.toggle('active', autoFire);
-  if (typeof weapon !== 'undefined') weapon.firing = autoFire;
+  if (b) {
+    b.classList.toggle('active', autoFire);
+    b.classList.toggle('on', autoFire);
+  }
+  if (typeof weapon !== 'undefined') {
+    weapon.auto = autoFire;
+    if (!weapon.manualFire) {
+      weapon.firing = autoFire;
+    }
+  }
 }
 const ab = document.getElementById('auto-btn');
 if (ab) ab.addEventListener('click', () => toggleAutoFire());
@@ -58,13 +66,15 @@ document.querySelectorAll('.style-btn').forEach((b) => b.addEventListener('click
 // Клавиатура (для тестов): пробел — огонь
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && typeof weapon !== 'undefined') {
+    weapon.manualFire = true;
     weapon.firing = true;
     weapon.aimAngle = player.angle;
   }
 });
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' && typeof weapon !== 'undefined') {
-    weapon.firing = false;
+    weapon.manualFire = false;
+    weapon.firing = typeof weapon.auto !== 'undefined' ? !!weapon.auto : false;
   }
 });
 
@@ -120,6 +130,7 @@ window.addEventListener('touchstart', (e) => {
       fireJoy.startY = t.clientY;
 
       if (typeof weapon !== 'undefined') {
+        weapon.manualFire = true;
         weapon.firing = true; // Сразу открывает огонь!
         weapon.aimAngle = (typeof player !== 'undefined') ? player.angle : 0;
       }
@@ -168,6 +179,7 @@ window.addEventListener('touchmove', (e) => {
       const dist = Math.hypot(dx, dy);
 
       if (typeof weapon !== 'undefined') {
+        weapon.manualFire = true;
         weapon.firing = true;
         if (dist > 6) {
           weapon.aimAngle = Math.atan2(dy, dx);
@@ -187,7 +199,8 @@ function stopJoy(id) {
     fireJoy.active = false;
     fireJoy.touchId = null;
     if (typeof weapon !== 'undefined') {
-      weapon.firing = autoFire;
+      weapon.manualFire = false;
+      weapon.firing = typeof weapon.auto !== 'undefined' ? !!weapon.auto : false;
     }
     if (fireBtn) {
       fireBtn.classList.remove('active', 'pressed');
