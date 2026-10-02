@@ -4,10 +4,10 @@
 // поляны, каменистые места и холмы (светотень) ещё до того, как туда
 // дойдёшь. Ориентирована как экран (изометрия), боец в центре.
 
-const MINIMAP_RADIUS = 36;     // тайлов от бойца до края мини-карты
-const BIGMAP_RADIUS = 140;     // тайлов — большая карта
+const MINIMAP_RADIUS = 42;     // тайлов от бойца до края мини-карты
+const BIGMAP_RADIUS = 360;     // тайлов — вся карта 1.12 км²
 const MINIMAP_RES = 72;        // точек по стороне
-const BIGMAP_RES = 200;
+const BIGMAP_RES = 240;
 
 const miniCanvas = document.getElementById('minimap-canvas');
 const bigWrap = document.getElementById('bigmap');
@@ -15,35 +15,32 @@ const bigCanvas = document.getElementById('bigmap-canvas');
 let miniAt = { x: 1e9, y: 1e9 }, miniT = 0;
 let bigOpen = false;
 
-// Цвет точки карты по местности.
+// Цвет точки карты по местности
 const _mt = {};
 function mapColor(wx, wy) {
   const t = terrainAt(wx, wy, _mt);
-  let r = 52, g = 78, b = 40;                                  // лес
+  let r = 46, g = 74, b = 36;                                  // лес
   const mix = (k, rr, gg, bb) => { r += (rr - r) * k; g += (gg - g) * k; b += (bb - b) * k; };
-  mix(t.clearing, 150, 165, 95);                                // поляна
-  mix(t.rocky * 0.8, 130, 130, 120);                            // камни
-  mix(t.swamp, 70, 84, 48);                                     // болото
-  mix(Math.max(0, Math.min(1, (1.9 - pathDistAt(wx, wy)) / 1.2)), 190, 160, 105); // тропа
-  mix(t.ravine * 0.35, 40, 52, 34);                             // овраг темнее
-  mix(t.water, 70, 118, 140);                                   // ручей
-  // светотень холмов
-  const hx = terrainHeight(wx + 1, wy) - t.h, hy = terrainHeight(wx, wy + 1) - t.h;
+  mix(t.clearing, 135, 170, 85);                                // поляна под постройки
+  mix(t.rocky * 0.85, 125, 128, 120);                           // скалы и камни
+  mix(t.swamp, 52, 66, 40);                                     // болото
+  mix(t.path, 185, 150, 95);                                    // грунтовые дороги и тропы
+  mix(t.ravine * 0.35, 36, 50, 30);                             // овраг русла
+  mix(t.water, 55, 120, 175);                                   // река Быстрянка
+  // светотень холмов и низин
+  const hx = terrainHeight(wx + 1.2, wy) - t.h, hy = terrainHeight(wx, wy + 1.2) - t.h;
   const sh = Math.max(-0.35, Math.min(0.35, -(hx + hy) * 0.35));
   const k = 1 + sh;
-  return [r * k, g * k, b * k];
+  return [Math.round(r * k), Math.round(g * k), Math.round(b * k)];
 }
 
 // Рисует кусок карты вокруг (cx, cy) в холст (квадрат, изометрия экрана).
 function drawTerrainMap(canvas, cx, cy, radius, res) {
   const g = canvas.getContext('2d');
   const img = g.createImageData(res, res);
-  // точка карты -> экранное смещение -> мир (обратная toScreen)
   const span = radius * 2;
   for (let j = 0; j < res; j++) {
     for (let i = 0; i < res; i++) {
-      // экран: по x ширина тайла TILE_W, по y — TILE_H; нормируем так,
-      // чтобы radius тайлов по горизонтали = половине карты
       const sx = (i / res - 0.5) * span * (TILE_W / 2);
       const sy = (j / res - 0.5) * span * (TILE_W / 2);
       const a = sx / (TILE_W / 2), bb = sy / (TILE_H / 2);
@@ -68,7 +65,16 @@ function mapPoint(canvas, cx, cy, radius, wx, wy) {
   return { x: (sx / span + 0.5) * canvas.width, y: (sy / span + 0.5) * canvas.height };
 }
 
-function drawMarkers(canvas, cx, cy, radius, scale) {
+const MAP_LANDMARKS = [
+  { name: '🏕️ Заимка', x: 0, y: -6 },
+  { name: '🎖️ Блокпост', x: 42, y: -190 },
+  { name: '🌉 Брод', x: 45, y: 62 },
+  { name: '🏚️ Хутор', x: 60, y: 190 },
+  { name: '🚪 Бункер', x: -175, y: 145 },
+  { name: '💥 Воронка', x: 75, y: 165 }
+];
+
+function drawMarkers(canvas, cx, cy, radius, scale, isBig) {
   const g = canvas.getContext('2d');
   if (typeof zombies !== 'undefined') {
     for (const z of zombies) {
@@ -78,7 +84,29 @@ function drawMarkers(canvas, cx, cy, radius, scale) {
       g.beginPath(); g.arc(p.x, p.y, 3.5 * scale, 0, Math.PI * 2); g.fill();
     }
   }
-  // боец — стрелка по направлению взгляда
+
+  // Метки локаций на большой карте
+  if (isBig) {
+    g.font = 'bold 11px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'bottom';
+    for (const lm of MAP_LANDMARKS) {
+      const p = mapPoint(canvas, cx, cy, radius, lm.x, lm.y);
+      if (p.x < 10 || p.x > canvas.width - 10 || p.y < 10 || p.y > canvas.height - 10) continue;
+      // Кружок
+      g.fillStyle = '#f1c40f';
+      g.beginPath(); g.arc(p.x, p.y, 4, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#000'; g.lineWidth = 1.5; g.stroke();
+      // Подпись с фоновой плашкой
+      g.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      const textW = g.measureText(lm.name).width;
+      g.fillRect(p.x - textW / 2 - 3, p.y - 18, textW + 6, 14);
+      g.fillStyle = '#fff';
+      g.fillText(lm.name, p.x, p.y - 6);
+    }
+  }
+
+  // Боец — стрелка по направлению взгляда
   const p = mapPoint(canvas, cx, cy, radius, player.x, player.y);
   g.save();
   g.translate(p.x, p.y);
@@ -103,11 +131,10 @@ function updateMinimap(dt) {
     drawTerrainMap(miniBase, miniAt.x, miniAt.y, MINIMAP_RADIUS, MINIMAP_RES);
   }
   const g = miniCanvas.getContext('2d');
-  // сдвиг подложки, пока не перерисовали (карта «едет» плавно)
   const off = mapPoint(miniCanvas, miniAt.x, miniAt.y, MINIMAP_RADIUS, player.x, player.y);
   g.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
   g.drawImage(miniBase, miniCanvas.width / 2 - off.x, miniCanvas.height / 2 - off.y);
-  drawMarkers(miniCanvas, player.x, player.y, MINIMAP_RADIUS, 1.3);
+  drawMarkers(miniCanvas, player.x, player.y, MINIMAP_RADIUS, 1.3, false);
   if (bigOpen) drawBigMap();
 }
 
@@ -115,14 +142,16 @@ let bigBase = null, bigAt = null;
 function drawBigMap() {
   const size = 600;
   if (bigCanvas.width !== size) { bigCanvas.width = bigCanvas.height = size; }
-  if (!bigBase || Math.hypot(player.x - bigAt.x, player.y - bigAt.y) > 8) {
-    bigAt = { x: player.x, y: player.y };
-    if (!bigBase) { bigBase = document.createElement('canvas'); bigBase.width = bigBase.height = size; }
-    drawTerrainMap(bigBase, bigAt.x, bigAt.y, BIGMAP_RADIUS, BIGMAP_RES);
+  // Вся карта 1.12 км² центрирована в (0,0)
+  if (!bigBase) {
+    bigAt = { x: 0, y: 0 };
+    bigBase = document.createElement('canvas');
+    bigBase.width = bigBase.height = size;
+    drawTerrainMap(bigBase, 0, 0, BIGMAP_RADIUS, BIGMAP_RES);
   }
   const g = bigCanvas.getContext('2d');
   g.drawImage(bigBase, 0, 0);
-  drawMarkers(bigCanvas, bigAt.x, bigAt.y, BIGMAP_RADIUS, 2);
+  drawMarkers(bigCanvas, 0, 0, BIGMAP_RADIUS, 1.8, true);
 }
 
 function toggleBigMap(open) {

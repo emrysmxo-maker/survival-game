@@ -1,13 +1,11 @@
-// Генерация мира: биомы, чанки, деревья и лесной мусор.
+// Генерация мира: 5 логичных связанных экосистем на площади 1.12 км² (±360 тайлов).
 //
-// Реалистичная экологическая генерация (многоярусность и дистанции) —
-// в реальном лесу есть:
-// - Верхний ярус (Великаны: Сосны, Дубы, Кедры, Лиственницы) — растут
-//   просторно (дистанция 3.5 - 6 клеток).
-// - Средний ярус (Березы, Осины, Липы, Рябины) — группируются между
-//   великанами.
-// - Лесной мусор — то, что встречается под ногами: сломанные стволы,
-//   пни, валуны. Редко и не на тропе.
+// 12 пород деревьев распределены по их естественным местам обитания:
+// 1. 🎖️ Северный Скалистый Бор (y < -70): Кедры (9), Лиственницы (10), Сосны (0), Голубые ели (5)
+// 2. 🌲 Центральная Лесная Заимка (y: -70..+30): Сосны (0), Берёзы (2), Липы (11), Рябины (8), Осины (7)
+// 3. 🌊 Долина Реки Быстрянки (вдоль реки): Плакучие ивы (6), Клёны (3), Осины (7), Липы (11)
+// 4. 🌫️ Гиблые Мшистые Топи (x < -60, y: 30..220): Чахлые берёзы (2), Болотные сосны (0), Сухостой (4)
+// 5. 🌾 Заброшенный Дубовый Хутор (y > 110, x > -70): Вековые дубы (1), Клёны (3), Липы (11), Рябины (8)
 
 function pseudoRand(s) {
   const x = Math.sin(s) * 10000;
@@ -17,58 +15,66 @@ function pseudoRand(s) {
 const loadedChunks = new Map();
 
 function getEcosystemAt(cx, cy) {
-  const n = Math.sin(cx * 0.3) + Math.cos(cy * 0.3);
-  if (n > 0.8) return {
-    name: '🌲 Кедрово-сосновый бор',
-    canopy: [0, 9, 10],     // Сосна, Кедр, Лиственница (голубую ель убрали: хвоя «тортом»)
-    subcanopy: [2, 7],      // Береза, Осина
-  };
-  if (n > 0.2) return {
-    name: '🌳 Смешанный вековой лес',
-    canopy: [1, 10, 0],     // Дуб, Лиственница, Сосна
-    subcanopy: [11, 8, 3, 6], // Липа, Рябина, Клен, Ива
-  };
-  if (n > -0.4) return {
-    name: '🪵 Берёзово-осиновая роща',
-    canopy: [2, 7],         // Березы, Осины
-    subcanopy: [8, 11, 6],  // Рябина, Липа, Ива
-  };
-  if (n > -0.9) return {
-    name: '🍁 Осенняя дубрава',
-    canopy: [1, 3],         // Дуб, Клен
-    subcanopy: [8, 2],      // Рябина, Береза
-  };
+  const wx = cx * CHUNK_SIZE, wy = cy * CHUNK_SIZE;
+  if (wy < -70) {
+    return {
+      name: '🎖️ Северный Скалистый Бор',
+      canopy: [9, 10, 0, 5],      // Кедр, Лиственница, Сосна, Голубая ель
+      subcanopy: [8, 2, 4, 7]      // Рябина, Береза, Сухостой, Осина
+    };
+  }
+  if (wy > 110 && wx > -70) {
+    return {
+      name: '🌾 Заброшенный Дубовый Хутор',
+      canopy: [1, 3, 11, 8],      // Дуб, Клен, Липа, Рябина
+      subcanopy: [8, 2, 6, 7]      // Рябина, Береза, Ива, Осина
+    };
+  }
+  // Долина реки
+  const ry = 62.0 + 18.0 * Math.sin(wx * 0.018 + 0.4) + 6.0 * Math.sin(wx * 0.045);
+  if (Math.abs(wy - ry) < 26) {
+    return {
+      name: '🌊 Долина Реки Быстрянки',
+      canopy: [6, 3, 7, 11],      // Ива, Клен, Осина, Липа
+      subcanopy: [6, 2, 11]        // Ива, Береза, Липа
+    };
+  }
+  if (wx < -60 && wy >= 30 && wy <= 220) {
+    return {
+      name: '🌫️ Гиблые Мшистые Топи',
+      canopy: [2, 0, 4],          // Береза, Болотная сосна, Сухостой
+      subcanopy: [2, 4, 7]         // Береза, Сухостой, Осина
+    };
+  }
   return {
-    name: '⚡ Выгоревшая гарь',
-    canopy: [4, 4, 0],      // Сухостой
-    subcanopy: [4, 0],
+    name: '🌲 Центральная Лесная Заимка',
+    canopy: [0, 2, 11, 8],        // Сосна, Береза, Липа, Рябина
+    subcanopy: [2, 7, 3, 8]        // Береза, Осина, Клен, Рябина
   };
 }
 
-// Можно ли тут стоять дереву (рельеф): не в воде и не на дне оврага,
-// не на поляне; в болоте — реже. Возвращает null (нельзя) или признаки места.
+// Проверка места для дерева: не в воде, не на дне оврага, не на дороге, не на поляне застройки
 const _tp = {};
 function treeSpot(wx, wy, r) {
   const t = terrainAt(wx, wy, _tp);
   if (t.water > 0.05 || t.ravine > 0.8) return null;
-  if (t.clearing > 0.45) return null;
+  if (t.path > 0.35) return null;      // дороги и тропы чистые
+  if (t.clearing > 0.35) return null;  // поляны под будущие дома чистые
   if (t.swamp > 0.5 && r > 0.45) return null;
-  if (t.rocky > 0.6 && r > 0.6) return null;
+  if (t.rocky > 0.65 && r > 0.6) return null;
   return t;
 }
-// В болоте растут в основном берёзы и чахлые сосны.
-const SWAMP_TREES = [2, 2, 0, 7];
 
-// Тестовая карта (TEST_MAP в ground.js): рощи — по одной породе на участок
-// 15×20 тайлов, всего 12 участков = все породы; за краем карты ничего нет.
-const TEST_SPECIES = [0, 9, 10, 5, 1, 3, 11, 6, 2, 7, 8, 4];
-function testSpeciesAt(x, y) {
-  const i = Math.min(3, Math.max(0, Math.floor((x + TEST_MAP_R) / 15)));
-  const j = Math.min(2, Math.max(0, Math.floor((y + TEST_MAP_R) / 20)));
-  return TEST_SPECIES[j * 4 + i];
+const SWAMP_TREES = [2, 0, 4];
+
+function inWorldMap(x, y, m) {
+  const r = (typeof MAP_RADIUS !== 'undefined') ? MAP_RADIUS : 360;
+  return Math.abs(x) < r - (m || 0) && Math.abs(y) < r - (m || 0);
 }
-function inTestMap(x, y, m) {
-  return Math.abs(x) < TEST_MAP_R - (m || 0) && Math.abs(y) < TEST_MAP_R - (m || 0);
+
+function isBrokenRoll(type, roll) {
+  if (typeof BROKEN_TREE_CHANCE === 'number' && roll < BROKEN_TREE_CHANCE) return true;
+  return false;
 }
 
 function generateChunk(cx, cy) {
@@ -89,27 +95,12 @@ function generateChunk(cx, cy) {
   const startY = cy * CHUNK_SIZE;
   let seed = Math.abs(cx * 73856093 ^ cy * 19349663);
 
-  // Тип земли больше не хранится по клеткам — земля рисуется плавными
-  // масками прямо по пикселям (см. render.js/drawGround). По клеткам нужно
-  // только знать, где тропа, чтобы не ставить на неё деревья и мусор.
-  for (let x = 0; x < CHUNK_SIZE; x++) {
-    chunk.tiles[x] = [];
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-      const wx = startX + x;
-      const wy = startY + y;
-      chunk.tiles[x][y] = { isPath: pathDistAt(wx, wy) < 1.2 };
-    }
-  }
-
-  // 1. ВЕРХНИЙ ЯРУС (Великаны) — спавнятся с дистанцией отталкивания > 3.0 клеток
+  // 1. ВЕРХНИЙ ЯРУС (Великаны)
   const giantCount = 2 + Math.floor(pseudoRand(seed++) * 3);
   for (let g = 0; g < giantCount; g++) {
     const gx = startX + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
     const gy = startY + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
-
-    const localX = Math.floor(gx - startX);
-    const localY = Math.floor(gy - startY);
-    if (chunk.tiles[localX] && chunk.tiles[localX][localY].isPath) continue; // Не на тропе
+    if (!inWorldMap(gx, gy, 1)) continue;
 
     let tooClose = false;
     for (const t of chunk.trees) {
@@ -119,8 +110,7 @@ function generateChunk(cx, cy) {
     const spot = treeSpot(gx, gy, pseudoRand(seed++));
     if (!tooClose && spot) {
       const pool = spot.swamp > 0.5 ? SWAMP_TREES : eco.canopy;
-      let type = pool[Math.floor(pseudoRand(seed++) * pool.length)];
-      if (TEST_MAP) type = testSpeciesAt(gx, gy);
+      const type = pool[Math.floor(pseudoRand(seed++) * pool.length)];
       chunk.trees.push({
         x: gx, y: gy,
         type: type,
@@ -129,18 +119,18 @@ function generateChunk(cx, cy) {
         isGiant: true
       });
 
-      // 2. СРЕДНИЙ ЯРУС ВОКРУГ ВЕЛИКАНА (Кластеры в радиусе 1.8 - 2.8)
+      // 2. СРЕДНИЙ ЯРУС ВОКРУГ ВЕЛИКАНА
       const satelliteCount = 1 + Math.floor(pseudoRand(seed++) * 3);
       for (let sIdx = 0; sIdx < satelliteCount; sIdx++) {
         const ang = pseudoRand(seed++) * Math.PI * 2;
         const dist = 1.8 + pseudoRand(seed++) * 1.6;
         const sx = gx + Math.cos(ang) * dist;
         const sy = gy + Math.sin(ang) * dist;
+        if (!inWorldMap(sx, sy, 1)) continue;
         const sSpot = treeSpot(sx, sy, pseudoRand(seed++));
         if (!sSpot) continue;
         const sPool = sSpot.swamp > 0.5 ? SWAMP_TREES : eco.subcanopy;
-        let subType = sPool[Math.floor(pseudoRand(seed++) * sPool.length)];
-        if (TEST_MAP) subType = testSpeciesAt(gx, gy);
+        const subType = sPool[Math.floor(pseudoRand(seed++) * sPool.length)];
         chunk.trees.push({
           x: sx, y: sy, type: subType,
           scale: 0.88 + pseudoRand(seed++) * 0.1,
@@ -150,112 +140,63 @@ function generateChunk(cx, cy) {
     }
   }
 
-  // 1.5. РЕДКИЕ СУХОСТОИ: одиночное мёртвое/сломанное дерево может реалистично
-  // встретиться в любом биоме, не только в выгоревшей гари — но нечасто.
+  // Редкий сухостой
   if (pseudoRand(seed++) < 0.22) {
     const dx = startX + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
     const dy = startY + 1.5 + pseudoRand(seed++) * (CHUNK_SIZE - 3);
-    const localX = Math.floor(dx - startX);
-    const localY = Math.floor(dy - startY);
-    const onPath = chunk.tiles[localX] && chunk.tiles[localX][localY].isPath;
-    let tooClose = false;
-    for (const t of chunk.trees) {
-      if (Math.hypot(t.x - dx, t.y - dy) < 3.0) { tooClose = true; break; }
-    }
-    if (!onPath && !tooClose && treeSpot(dx, dy, 0)) {
-      chunk.trees.push({ x: dx, y: dy, type: 4, scale: 0.95 + pseudoRand(seed++) * 0.1, isGiant: true });
+    if (inWorldMap(dx, dy, 1)) {
+      const spot = treeSpot(dx, dy, pseudoRand(seed++));
+      if (spot) {
+        let tooClose = false;
+        for (const t of chunk.trees) {
+          if (Math.hypot(t.x - dx, t.y - dy) < 3.0) { tooClose = true; break; }
+        }
+        if (!tooClose) {
+          chunk.trees.push({ x: dx, y: dy, type: 4, scale: 0.95 + pseudoRand(seed++) * 0.1, isGiant: true });
+        }
+      }
     }
   }
 
-  // 3. ЛЕСНОЙ МУСОР: сломанные стволы под ногами. Редко и не на тропе.
-  const CLUTTER_KINDS = ['broken_trunk'];
-  const CLUTTER_WEIGHTS = [1];
-  for (let x = 0; x < CHUNK_SIZE; x++) {
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-      if (chunk.tiles[x][y].isPath) continue; // Не на тропе
-      if (pseudoRand(seed++) > CLUTTER_CHANCE) continue; // доля клеток (часть отсеется у деревьев)
-
-      const wx = startX + x + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
-      const wy = startY + y + 0.5 + (pseudoRand(seed++) - 0.5) * 0.7;
-
-      // Не у края чанка — туда могут дотягиваться деревья соседнего чанка,
-      // которых отсюда не видно.
-      if (x < 2 || y < 2 || x >= CHUNK_SIZE - 2 || y >= CHUNK_SIZE - 2) continue;
-
-      // Держимся подальше от ВСЕХ деревьев (и крупных, и подлеска): иначе
-      // сломанный ствол с наклоном вставал вплотную и будто лежал на
-      // соседнем дереве.
-      let tooCloseToTree = false;
-      for (const t of chunk.trees) {
-        if (Math.hypot(t.x - wx, t.y - wy) < 2.0) { tooCloseToTree = true; break; }
-      }
-      if (tooCloseToTree) continue;
-
-      let roll = pseudoRand(seed++);
-      let kind = CLUTTER_KINDS[CLUTTER_KINDS.length - 1];
-      for (let i = 0; i < CLUTTER_WEIGHTS.length; i++) {
-        if (roll < CLUTTER_WEIGHTS[i]) { kind = CLUTTER_KINDS[i]; break; }
-        roll -= CLUTTER_WEIGHTS[i];
-      }
-
-      const def = CLUTTER_TYPES[kind];
-      chunk.clutter.push({
-        x: wx, y: wy, kind,
-        variant: Math.floor(pseudoRand(seed++) * def.files.length),
-        scale: def.scale[0] + pseudoRand(seed++) * (def.scale[1] - def.scale[0]),
-        flip: pseudoRand(seed++) > 0.5,
-        tilt: (pseudoRand(seed++) - 0.5) * 2 * (def.tilt || 0)
+  // Валуны на каменистых участках
+  const rockRoll = pseudoRand(seed++);
+  if (rockRoll < 0.35 && typeof ROCK_TYPES !== 'undefined') {
+    const rx = startX + 2 + pseudoRand(seed++) * (CHUNK_SIZE - 4);
+    const ry = startY + 2 + pseudoRand(seed++) * (CHUNK_SIZE - 4);
+    const t = terrainAt(rx, ry, _tp);
+    if (t.rocky > 0.3 && t.water < 0.05 && t.path < 0.35 && inWorldMap(rx, ry, 1)) {
+      chunk.rocks.push({
+        x: rx, y: ry,
+        type: Math.floor(pseudoRand(seed++) * ROCK_TYPES.length),
+        scale: 0.85 + pseudoRand(seed++) * 0.3,
+        flip: pseudoRand(seed++) > 0.5
       });
     }
   }
 
-  // 4. ВАЛУНЫ: на каменистых местах часто, в остальном лесу — изредка;
-  // не в воде, не на тропе, не вплотную к деревьям.
-  const rockTries = 6;
-  for (let r = 0; r < rockTries; r++) {
-    const rx = startX + 1 + pseudoRand(seed++) * (CHUNK_SIZE - 2);
-    const ry = startY + 1 + pseudoRand(seed++) * (CHUNK_SIZE - 2);
-    const t = terrainAt(rx, ry, _tp);
-    const chance = t.rocky > 0.4 ? 0.55 : 0.04;
-    if (pseudoRand(seed++) > chance) continue;
-    if (t.water > 0.05 || t.swamp > 0.4 || pathDistAt(rx, ry) < 1.6) continue;
-    if (chunk.trees.some((tr) => Math.hypot(tr.x - rx, tr.y - ry) < 1.6)) continue;
-    if (chunk.rocks.some((o) => Math.hypot(o.x - rx, o.y - ry) < 1.8)) continue;
-    chunk.rocks.push({
-      x: rx, y: ry,
-      type: Math.floor(pseudoRand(seed++) * ROCK_TYPES.length),
-      scale: 0.75 + pseudoRand(seed++) * 0.5,
-      flip: pseudoRand(seed++) > 0.5
-    });
-  }
-
-  generateCover(chunk, startX, startY, seed + 7777);
-  if (TEST_MAP) {
-    // за краем тестовой карты — пусто; сухостой только в своей роще
-    chunk.trees = chunk.trees.filter((t) => inTestMap(t.x, t.y, 1) && (t.type !== 4 || testSpeciesAt(t.x, t.y) === 4));
-    chunk.rocks = chunk.rocks.filter((t) => inTestMap(t.x, t.y, 1));
-    chunk.cover = chunk.cover.filter((t) => inTestMap(t.x, t.y, 0.5));
+  if (typeof generateCover === 'function') {
+    generateCover(chunk, startX, startY, seed + 7777);
   }
 
   loadedChunks.set(key, chunk);
   return chunk;
 }
 
-// Панель с биомом/координатами обновляем только когда значения меняются —
-// запись в DOM каждый кадр на телефоне тоже стоит заметно.
 const infoCache = {};
 function setInfo(id, text) {
   if (infoCache[id] === text) return;
   infoCache[id] = text;
-  document.getElementById(id).textContent = text;
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
 function updateWorldChunks() {
   const pChunkX = Math.floor(player.x / CHUNK_SIZE);
   const pChunkY = Math.floor(player.y / CHUNK_SIZE);
 
-  for (let dx = -CHUNK_RADIUS; dx <= CHUNK_RADIUS; dx++) {
-    for (let dy = -CHUNK_RADIUS; dy <= CHUNK_RADIUS; dy++) {
+  const R = (typeof CHUNK_RADIUS !== 'undefined') ? CHUNK_RADIUS : 2;
+  for (let dx = -R; dx <= R; dx++) {
+    for (let dy = -R; dy <= R; dy++) {
       generateChunk(pChunkX + dx, pChunkY + dy);
     }
   }
@@ -266,7 +207,7 @@ function updateWorldChunks() {
     }
   }
 
-  const curEco = TEST_MAP ? { name: '🧪 Тестовая карта' } : getEcosystemAt(pChunkX, pChunkY);
+  const curEco = getEcosystemAt(pChunkX, pChunkY);
   let totalTrees = 0;
   loadedChunks.forEach(c => {
     totalTrees += c.trees.length;
