@@ -1,11 +1,9 @@
-// Диагностика (отдельный файл): кнопка ⚙ слева открывает панель
-// переключателей. Каждый отключает один механизм игры. Значения запоминаются в браузере.
-const DBG = { noPieces: false, noWind: false, noSunShadow: false, noSlopeLight: true, loOnly: false, noHole: false, noZoom: false, noPlants: false };
+const DBG = { noPieces: false, noWind: false, noSunShadow: false, noSlopeLight: false, loOnly: false, noHole: false, noZoom: false, noPlants: false };
 const DBG_LABELS = {
-  noPieces: 'Без раздвигания кустов (только целые)',
+  noPieces: 'Без отклонения кустов (стоят неподвижно)',
   noWind: 'Без ветра (кусты и деревья не качаются)',
   noSunShadow: 'Без теней от солнца (деревья, боец, кусты)',
-  noSlopeLight: 'Без света/тени склонов (без тумана)',
+  noSlopeLight: 'Без светотени склонов и ям',
   loOnly: 'Земля только в одном качестве',
   noHole: 'Без окошка в кроне над бойцом',
   noZoom: 'Без зума камеры в ямах',
@@ -15,10 +13,13 @@ const DBG_LABELS = {
   try {
     const saved = JSON.parse(localStorage.getItem('dbg') || '{}');
     Object.assign(DBG, saved);
-    // Возвращаем полноценную физику раздвигания кустов
-    DBG.noPieces = false;
-    // Свет склонов отключен по умолчанию, чтобы не было тумана
-    if (saved.noSlopeLight === undefined) DBG.noSlopeLight = true;
+    if (!saved._v70_relief) {
+      DBG.noSlopeLight = false;
+      saved._v70_relief = true;
+      saved.noSlopeLight = false;
+      localStorage.setItem('dbg', JSON.stringify(saved));
+    }
+    if (saved.noPieces === undefined) DBG.noPieces = false;
   } catch (e) { /* нет хранилища */ }
   const save = () => { try { localStorage.setItem('dbg', JSON.stringify(DBG)); } catch (e) { /* ignore */ } };
   const box = document.createElement('div');
