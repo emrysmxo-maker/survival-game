@@ -1,0 +1,103 @@
+name: Build Android APK (TWA Bubblewrap)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - 'manifest.webmanifest'
+      - 'twa-manifest.json'
+      - 'src/**'
+      - 'index.html'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Signed TWA APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Android SDK environment
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> $GITHUB_ENV
+          if [ -d "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" ]; then
+            echo "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          fi
+          if [ -d "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platform-tools" ]; then
+            echo "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platform-tools" >> $GITHUB_PATH
+          fi
+          yes | sdkmanager --licenses 2>/dev/null || true
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Configure Bubblewrap paths
+        run: |
+          mkdir -p ~/.bubblewrap
+          cat <<EOF > ~/.bubblewrap/config.json
+          {
+            "jdkPath": "${JAVA_HOME}",
+            "androidSdkPath": "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          }
+          EOF
+
+      - name: Create Keystore for Signing
+        run: |
+          keytool -genkeypair -v \
+            -keystore android.keystore \
+            -alias survivalgame \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass survivalpass123 \
+            -keypass survivalpass123 \
+            -dname "CN=Survival Game, OU=Mobile, O=emrysmxo, L=Earth, S=World, C=US"
+
+      - name: Generate Android Project with Bubblewrap
+        run: |
+          bubblewrap update --skipPwaValidation
+
+      - name: Verify Hardware Acceleration in AndroidManifest
+        run: |
+          if [ -f app/src/main/AndroidManifest.xml ]; then
+            if ! grep -q "android:hardwareAccelerated" app/src/main/AndroidManifest.xml; then
+              sed -i 's/<application/<application android:hardwareAccelerated="true"/g' app/src/main/AndroidManifest.xml
+            fi
+          fi
+
+      - name: Build Signed APK
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: survivalpass123
+          BUBBLEWRAP_KEY_PASSWORD: survivalpass123
+        run: |
+          export BUBBLEWRAP_KEYSTORE_PASSWORD=survivalpass123
+          export BUBBLEWRAP_KEY_PASSWORD=survivalpass123
+          printf "survivalpass123\nsurvivalpass123\n" | bubblewrap build --skipPwaValidation || {
+            echo "Fallback to Gradle assembleRelease..."
+            chmod +x gradlew
+            ./gradlew assembleRelease
+          }
+          mkdir -p output-apk
+          find . -maxdepth 5 -name "*.apk" -exec cp {} output-apk/ \;
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: survival-game-twa-apk
+          path: output-apk/*.apk
+          retention-days: 30
