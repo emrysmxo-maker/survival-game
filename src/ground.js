@@ -22,7 +22,6 @@ const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
 const GROUND_WARP_CELLS = 4;
 const RELIEF_PX_PER_M = 32;
 const RELIEF_MARGIN = 176;
-var METERS_PER_TILE = 1.39;
 const GROUND_CHUNK_CSS_W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
 const GROUND_CHUNK_CSS_H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2 + RELIEF_MARGIN * 2;
 if (typeof window !== 'undefined') {
@@ -97,13 +96,13 @@ function pathDistAt(wx, wy) {
 function soilNoise(wx, wy) {
   return (
     Math.sin(wx * 0.03 + wy * 0.017) +
-    Math.sin(wx * 0.017 - wy * 0.035) * 1.3 +
-    Math.sin(wx * 0.06 + wy * 0.045) * 0.5
-  ) / 2.8;
+    Math.sin(wx * 0.071 - wy * 0.053 + 1.2) * 0.5 +
+    Math.sin(wx * 0.13 + wy * 0.11 + 2.4) * 0.25
+  ) / 1.75;
 }
 
 function smoothstep(e0, e1, x) {
-  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
 }
 
@@ -204,8 +203,7 @@ function chunkBakeOrigin(cx, cy) {
 function createGroundBaker(makeCanvas, textures, scale) {
   const W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
   const H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2;
-  const mw = Math.ceil(CHUNK_PX_W / GROUND_MASK_STEP) + 1;
-  const mh = Math.ceil(CHUNK_PX_H / GROUND_MASK_STEP) + 1;
+  const mw = Math.ceil(W / GROUND_MASK_STEP), mh = Math.ceil(H / GROUND_MASK_STEP);
   const mask = makeCanvas(mw, mh);
   const mctx = mask.getContext('2d');
   const maskData = {};
@@ -247,12 +245,12 @@ function createGroundBaker(makeCanvas, textures, scale) {
         const gxm = hx / 0.6 / 1.39 * 1.6, gym = hy / 0.6 / 1.39 * 1.6;
         const extra = {
           water: weights.t.water * 0.82,
-          gx: 0.5 + 0.5 * Math.max(-1, Math.min(1, gxm)),
-          gy: 0.5 + 0.5 * Math.max(-1, Math.min(1, gym)),
-          puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8
+          puddle: weights.t.swamp * smoothstep(0.35, 0.75, Math.sin(wx * 0.7 + Math.sin(wy * 0.5) * 2) * Math.sin(wy * 0.63 + 1.3 + Math.sin(wx * 0.41) * 2)) * 0.8,
+          gx: Math.max(0, Math.min(255, Math.round(128 + gxm * 90))),
+          gy: Math.max(0, Math.min(255, Math.round(128 + gym * 90)))
         };
         for (const t in extra) {
-          const a = Math.round(extra[t] * 255);
+          const a = Math.round(extra[t]);
           maskData[t].data[idx] = a;
           if (a > maxA[t]) maxA[t] = a;
         }
@@ -336,13 +334,12 @@ function createGroundBaker(makeCanvas, textures, scale) {
       ctx2.moveTo(p0[0] * D, p0[1] * D); ctx2.lineTo(p1[0] * D, p1[1] * D); ctx2.lineTo(p2[0] * D, p2[1] * D);
       ctx2.closePath();
       ctx2.clip();
-      ctx2.setTransform(m11 * D, m12 * D, m21 * D, m22 * D, e * D, f * D);
-      const mg = Math.ceil(gr / Math.min(1, Math.abs(m11) + 0.3)) + 1;
-      const bx0 = Math.floor(Math.min(sx0, sx1, sx2)) - mg, by0 = Math.floor(Math.min(sy0, sy1, sy2)) - mg;
-      const bw = Math.ceil(Math.max(sx0, sx1, sx2)) - bx0 + 2 * mg, bh = Math.ceil(Math.max(sy0, sy1, sy2)) - by0 + 2 * mg;
-      ctx2.drawImage(src, bx0 * srcK, by0 * srcK, bw * srcK, bh * srcK, bx0, by0, bw, bh);
+      ctx2.setTransform(m11 * D / srcK, m12 * D / srcK, m21 * D / srcK, m22 * D / srcK, e * D, f * D);
+      ctx2.drawImage(src, 0, 0);
       ctx2.restore();
     };
+
+    rctx.imageSmoothingEnabled = true;
     for (let sum = 0; sum <= 2 * G - 2; sum++) {
       for (let i = Math.max(0, sum - G + 1); i <= Math.min(G - 1, sum); i++) {
         const j = sum - i;

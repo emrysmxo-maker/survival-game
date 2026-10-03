@@ -1,4 +1,4 @@
-// Инициализация, управление экраном и главный цикл игры (v7.1.1).
+// Инициализация, управление экраном и главный цикл игры (v7.1).
 
 let canvas, ctx;
 const view = { w: 0, h: 0, dpr: 1 };
@@ -27,7 +27,7 @@ const PLAYER_START_ACCEL = 14;
 const CAMERA_ZOOM_PER_M = 0.12, CAMERA_ZOOM_MAX = 1.22, CAMERA_ZOOM_RATE = 1.4;
 
 function update(dt) {
-  if (typeof player === 'undefined') return;
+  if (typeof player === 'undefined' || !player) return;
   let wantX = 0, wantY = 0;
   if (typeof joystick !== 'undefined' && joystick.active) {
     const mf = Math.hypot(joystick.dx, joystick.dy) < 0.28 ? 0.45 : 0.72;
@@ -88,16 +88,22 @@ function update(dt) {
   camera.y = (player.x + player.y) * (th / 2);
 
   if (typeof updateWeapon === 'function') updateWeapon(dt);
-  if (typeof updateZombies === 'function') updateZombies(dt);
+  if (typeof updateZombies === 'function') {
+    try {
+      updateZombies(dt);
+    } catch (e) {
+      console.warn('updateZombies error:', e);
+    }
+  }
   if (typeof updateMinimap === 'function') updateMinimap(dt);
   if (typeof updateDayNight === 'function') updateDayNight(dt);
   if (typeof updateWorldChunks === 'function') updateWorldChunks();
 }
 
 function gameLoop(time) {
+  const dt = Math.min((time - lastTime) / 1000, 0.1);
+  lastTime = time;
   try {
-    const dt = Math.min((time - lastTime) / 1000, 0.1);
-    lastTime = time;
     update(dt);
     if (typeof render === 'function') render();
   } catch (err) {

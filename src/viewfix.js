@@ -10,13 +10,13 @@
     if (typeof resize !== 'function' || typeof canvas === 'undefined') return;
     const w = window.innerWidth, h = window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, (typeof MAX_DPR !== 'undefined' ? MAX_DPR : 3.3));
-    const bad = canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr) ||
-                canvas.style.width !== w + 'px' || canvas.style.height !== h + 'px';
-    if (bad) {
-      if (typeof view !== 'undefined') view.w = 0;
+    const cw = Math.round(w * dpr), ch = Math.round(h * dpr);
+    if (canvas.width !== cw || canvas.height !== ch || view.w !== w || view.h !== h) {
       resize();
     }
   }
+
+  window.addEventListener('resize', fix);
   window.addEventListener('orientationchange', () => { fix(); setTimeout(fix, 300); setTimeout(fix, 900); });
   document.addEventListener('fullscreenchange', () => { fix(); setTimeout(fix, 300); setTimeout(fix, 900); });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fix);
@@ -35,7 +35,10 @@
     const e = sun.e !== undefined ? sun.e : 0.5;
 
     // Рельефные ямы и воронки в мире
-    const pits = [\n      { x: 75, y: 165, r: 8.0, depth: 3.2, name: 'crater' },\n      { x: -25, y: -45, r: 6.5, depth: 2.5, name: 'pit' }\n    ];
+    const pits = [
+      { x: 75, y: 165, r: 8.0, depth: 3.2, name: 'crater' },
+      { x: -25, y: -45, r: 6.5, depth: 2.5, name: 'pit' }
+    ];
 
     for (const pItem of pits) {
       const pBottom = toScreen(pItem.x, pItem.y, -pItem.depth);
@@ -79,15 +82,15 @@
         const litDist = rx * 0.38;
         const litX = sun.sxs * litDist;
         const litY = sun.sys * litDist;
-        const gLit = c.createRadialGradient(litX, litY, 0, litX, litY, rx * 0.72);
-        const litAlpha = (0.22 * Math.min(1.0, sunK)).toFixed(3);
-        gLit.addColorStop(0, `rgba(255, 246, 210, ${litAlpha})`);
-        gLit.addColorStop(0.5, `rgba(255, 246, 210, ${(litAlpha * 0.4).toFixed(3)})`);
-        gLit.addColorStop(1.0, 'rgba(255, 246, 210, 0.0)');
+        const gLit = c.createRadialGradient(litX, litY, 0, litX, litY, rx * 0.7);
+        const litAlpha = (0.28 * Math.min(1.0, sunK)).toFixed(3);
+        gLit.addColorStop(0, `rgba(255, 246, 215, ${litAlpha})`);
+        gLit.addColorStop(0.6, `rgba(255, 246, 215, ${(litAlpha * 0.3).toFixed(3)})`);
+        gLit.addColorStop(1.0, 'rgba(255, 246, 215, 0.0)');
         c.globalCompositeOperation = 'soft-light';
         c.fillStyle = gLit;
         c.beginPath();
-        c.arc(litX, litY, rx * 0.72, 0, Math.PI * 2);
+        c.arc(litX, litY, rx * 0.7, 0, Math.PI * 2);
         c.fill();
         c.globalCompositeOperation = 'source-over';
       }
@@ -98,8 +101,8 @@
       c.save();
       c.translate(pRim.x, pRim.y);
       c.scale(1, 0.5);
-      c.lineWidth = 3.2;
-      c.strokeStyle = 'rgba(8, 16, 10, 0.22)';
+      c.strokeStyle = 'rgba(20, 32, 22, 0.28)';
+      c.lineWidth = 2.0;
       c.beginPath();
       c.arc(0, 0, rx * 0.98, 0, Math.PI * 2);
       c.stroke();
