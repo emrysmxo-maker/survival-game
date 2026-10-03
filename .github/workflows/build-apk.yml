@@ -70,7 +70,7 @@ jobs:
 
       - name: Generate Android Project with Bubblewrap
         run: |
-          bubblewrap update --skipPwaValidation
+          printf "\n\n\n\n\n" | bubblewrap update --skipPwaValidation
 
       - name: Verify Hardware Acceleration in AndroidManifest
         run: |
@@ -94,6 +94,7 @@ jobs:
           }
           mkdir -p output-apk
           find . -maxdepth 5 -name "*.apk" -exec cp {} output-apk/ \;
+          ls -la output-apk/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
