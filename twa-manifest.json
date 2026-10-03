@@ -1,0 +1,38 @@
+{
+  "packageId": "com.emrysmxo.survivalgame",
+  "host": "emrysmxo-maker.github.io",
+  "name": "Survival Game",
+  "launcherName": "Survival",
+  "themeColor": "#0c120c",
+  "themeColorDark": "#0c120c",
+  "navigationColor": "#0c120c",
+  "navigationColorDark": "#0c120c",
+  "navigationDividerColor": "#00000000",
+  "navigationDividerColorDark": "#00000000",
+  "backgroundColor": "#0c120c",
+  "enableNotifications": false,
+  "startUrl": "/survival-game/",
+  "iconUrl": "https://emrysmxo-maker.github.io/survival-game/assets/icons/icon-512.png",
+  "maskableIconUrl": "https://emrysmxo-maker.github.io/survival-game/assets/icons/icon-512-maskable.png",
+  "appVersionName": "7.1.0",
+  "appVersionCode": 71,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://emrysmxo-maker.github.io/survival-game/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://emrysmxo-maker.github.io/survival-game/",
+  "orientation": "landscape",
+  "displayMode": "fullscreen",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "survivalgame"
+  },
+  "appVersion": "7.1.0"
+}
