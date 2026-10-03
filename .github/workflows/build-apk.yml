@@ -70,7 +70,7 @@ jobs:
 
       - name: Generate Android Project with Bubblewrap
         run: |
-          printf "\n\n\n\n\n" | bubblewrap update --skipPwaValidation
+          printf "7.1.0\n71\n" | bubblewrap update --skipPwaValidation
 
       - name: Verify Hardware Acceleration in AndroidManifest
         run: |
