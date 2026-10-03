@@ -94,10 +94,17 @@ function update(dt) {
 }
 
 function gameLoop(time) {
-  const dt = Math.min((time - lastTime) / 1000, 0.1);
-  lastTime = time;
-  update(dt);
-  if (typeof render === 'function') render();
+  try {
+    const dt = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    update(dt);
+    if (typeof render === 'function') render();
+  } catch (err) {
+    console.error('gameLoop error:', err);
+    if (typeof window !== 'undefined' && typeof window.showErrorToast === 'function') {
+      window.showErrorToast(err.message || String(err));
+    }
+  }
   requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);

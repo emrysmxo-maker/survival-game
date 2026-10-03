@@ -88,7 +88,8 @@ function generateChunk(cx, cy) {
     tiles: [],
     trees: [],
     clutter: [],
-    rocks: []
+    rocks: [],
+    cover: []
   };
 
   const startX = cx * CHUNK_SIZE;

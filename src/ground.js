@@ -22,6 +22,12 @@ const CHUNK_PX_H = CHUNK_SIZE * TILE_H;
 const GROUND_WARP_CELLS = 4;
 const RELIEF_PX_PER_M = 32;
 const RELIEF_MARGIN = 176;
+const GROUND_CHUNK_CSS_W = CHUNK_PX_W + GROUND_BAKE_MARGIN * 2;
+const GROUND_CHUNK_CSS_H = CHUNK_PX_H + GROUND_BAKE_MARGIN * 2 + RELIEF_MARGIN * 2;
+if (typeof window !== 'undefined') {
+  window.GROUND_CHUNK_CSS_W = GROUND_CHUNK_CSS_W;
+  window.GROUND_CHUNK_CSS_H = GROUND_CHUNK_CSS_H;
+}
 
 // ---------------- Полноценный Лесной Мир (1-2 км², 5 связанных локаций) ----------------
 const MAP_RADIUS = 360; // ±360 тайлов ≈ 1000м x 1000м (1.0 км² - 1.2 км²)
