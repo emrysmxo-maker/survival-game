@@ -374,3 +374,40 @@ function createGroundBaker(makeCanvas, textures, scale) {
     return res;
   };
 }
+
+// Скорость перемещения бойца по рельефу (вода замедляет на 50%, болото на 35%, подъём в гору)
+const _ts = {};
+function terrainSpeed(x, y, mx, my) {
+  if (typeof terrainAt !== 'function') return 1;
+  const t = terrainAt(x, y, _ts);
+  let k = 1 - 0.5 * (t.water || 0);
+  k *= 1 - 0.35 * (t.swamp || 0);
+  const l = Math.hypot(mx || 0, my || 0);
+  if (l > 1e-6 && typeof terrainHeight === 'function') {
+    const e = 0.5, ux = (mx || 0) / l, uy = (my || 0) / l;
+    const slope = (terrainHeight(x + ux * e, y + uy * e) - terrainHeight(x - ux * e, y - uy * e)) / (2 * e);
+    k *= slope > 0 ? Math.max(0.55, 1 - slope * 0.55) : Math.min(1.12, 1 - slope * 0.15);
+  }
+  return Math.max(0.35, Math.min(1.2, k));
+}
+window.terrainSpeed = terrainSpeed;
+
+// Безопасная обработка коллизий с деревьями и препятствиями
+function collidePlayer(prevX, prevY) {
+  if (typeof forNearbyObstacles === 'function') {
+    forNearbyObstacles((list, radiusFn) => {
+      if (!list) return;
+      for (const obj of list) {
+        const r = typeof radiusFn === 'function' ? radiusFn(obj) : (obj.radius || 0.6);
+        const dx = player.x - obj.x, dy = player.y - obj.y;
+        const d = Math.hypot(dx, dy);
+        const minDist = r + (player.radius || 0.45);
+        if (d < minDist && d > 1e-4) {
+          player.x = obj.x + (dx / d) * minDist;
+          player.y = obj.y + (dy / d) * minDist;
+        }
+      }
+    });
+  }
+}
+window.collidePlayer = collidePlayer;

@@ -35,10 +35,7 @@
     const e = sun.e !== undefined ? sun.e : 0.5;
 
     // Рельефные ямы и воронки в мире
-    const pits = [
-      { x: 75, y: 165, r: 8.0, depth: 3.2, name: 'crater' },
-      { x: -25, y: -45, r: 6.5, depth: 2.5, name: 'pit' }
-    ];
+    const pits = [\n      { x: 75, y: 165, r: 8.0, depth: 3.2, name: 'crater' },\n      { x: -25, y: -45, r: 6.5, depth: 2.5, name: 'pit' }\n    ];
 
     for (const pItem of pits) {
       const pBottom = toScreen(pItem.x, pItem.y, -pItem.depth);
@@ -142,5 +139,13 @@
       origDrawGroundLayer(c);
     }
   };
+
+  const origDrawGround = window.drawGround;
+  if (typeof origDrawGround === 'function') {
+    window.drawGround = function () {
+      origDrawGround();
+      if (typeof ctx !== 'undefined') drawTerrainRelief(ctx);
+    };
+  }
 
 })();

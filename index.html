@@ -27,6 +27,7 @@
       <div>🌲 Деревьев в кадре: <span id="info-trees" class="badge">0</span></div>
     </div>
 
+    
     <div id="minimap"><canvas id="minimap-canvas" width="180" height="180"></canvas></div>
     <div id="bigmap"><canvas id="bigmap-canvas"></canvas><div id="bigmap-legend">
       <span style="color:#4a7a8c">■</span> ручей · <span style="color:#4b5a34">■</span> болото ·
@@ -59,7 +60,7 @@
     // main запускает игровой цикл и должен идти последним.
     // document.write гарантирует, что скрипты подключатся и выполнятся
     // строго по порядку, как обычные <script> теги.
-    ['version', 'dbg', 'ground', 'config', 'sprites-data', 'assets', 'character', 'cover', 'effects', 'daynight', 'world', 'player', 'weapon', 'zombie', 'minimap', 'input', 'render', 'update', 'main', 'perf', 'viewfix'].forEach((name) => {
+    ['version', 'dbg', 'ground', 'config', 'sprites-data', 'assets', 'character', 'cover', 'effects', 'daynight', 'world', 'player', 'weapon', 'zombie', 'minimap', 'input', 'render', 'main', 'perf', 'viewfix'].forEach((name) => {
       document.write(`<script src="src/${name}.js?v=${window.BUILD_VERSION}"><\/script>`);
     });
   </script>
