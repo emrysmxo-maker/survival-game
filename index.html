@@ -8,10 +8,14 @@
         if (!el) {
           el = document.createElement('div');
           el.id = 'error-toast';
-          el.style.cssText = 'position:fixed;top:6px;left:6px;right:6px;padding:8px 12px;background:rgba(220,38,38,0.92);color:#fff;font:12px monospace;z-index:999999;border-radius:6px;word-break:break-all;box-shadow:0 4px 12px rgba(0,0,0,0.5);pointer-events:auto;';
+          el.style.cssText = 'position:fixed;top:6px;left:6px;right:6px;padding:8px 12px;background:rgba(220,38,38,0.92);color:#fff;font:12px monospace;z-index:999999;border-radius:6px;word-break:break-all;box-shadow:0 4px 12px rgba(0,0,0,0.5);pointer-events:auto;white-space:pre-wrap;';
           (document.body || document.documentElement).appendChild(el);
         }
-        el.textContent = '⚠️ ' + msg;
+        if (!el.textContent) {
+          el.textContent = '⚠️ ' + msg;
+        } else if (el.textContent.indexOf(msg) === -1) {
+          el.textContent += '\n⚠️ ' + msg;
+        }
       } catch (e) {}
     };
     window.onerror = function (msg, url, line, col, err) {

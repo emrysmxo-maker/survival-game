@@ -27,6 +27,7 @@ const PLAYER_START_ACCEL = 14;
 const CAMERA_ZOOM_PER_M = 0.12, CAMERA_ZOOM_MAX = 1.22, CAMERA_ZOOM_RATE = 1.4;
 
 function update(dt) {
+  if (typeof player === 'undefined') return;
   let wantX = 0, wantY = 0;
   if (typeof joystick !== 'undefined' && joystick.active) {
     const mf = Math.hypot(joystick.dx, joystick.dy) < 0.28 ? 0.45 : 0.72;
@@ -102,7 +103,7 @@ function gameLoop(time) {
   } catch (err) {
     console.error('gameLoop error:', err);
     if (typeof window !== 'undefined' && typeof window.showErrorToast === 'function') {
-      window.showErrorToast(err.message || String(err));
+      window.showErrorToast((err && (err.stack || err.message)) || String(err));
     }
   }
   requestAnimationFrame(gameLoop);
