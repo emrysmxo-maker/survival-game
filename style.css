@@ -245,3 +245,6 @@ html, body {
   #auto-btn { right: 150px; bottom: 30px; width: 60px; height: 60px; font-size: 10px; }
   #version-tag { right: auto; left: 8px; bottom: auto; top: 76px; }
 }
+
+/* большая карта поверх ползунка времени */
+#bigmap { z-index: 45 !important; }

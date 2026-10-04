@@ -43,8 +43,8 @@
     for (const pItem of pits) {
       const pBottom = toScreen(pItem.x, pItem.y, -pItem.depth);
       const pRim = toScreen(pItem.x, pItem.y, 0);
-      const rx = pItem.r * 32 * 1.414;
-      const ry = pItem.r * 16 * 1.414;
+      const rx = pItem.r * (TILE_W / 2) * 1.414;
+      const ry = pItem.r * (TILE_H / 2) * 1.414;
 
       if (pRim.x < -rx - 80 || pRim.x > view.w + rx + 80 || pRim.y < -ry - 80 || pRim.y > view.h + ry + 80) continue;
 
