@@ -3,7 +3,7 @@
 // растения. Картинки нарисованы под угол камеры, поэтому выглядят объёмно.
 // INSTANCE_CUSTOM: x — фаза, y — 1/-1 (зеркало), z — высота верха над точкой земли (м), w — 1 = лежит на земле.
 shader_type spatial;
-render_mode skip_vertex_transform, cull_disabled, diffuse_lambert, specular_disabled, depth_draw_opaque;
+render_mode skip_vertex_transform, cull_disabled, diffuse_lambert, specular_disabled, depth_draw_opaque, alpha_to_coverage;
 
 uniform sampler2D tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform float sway = 0.0;
@@ -64,6 +64,7 @@ void fragment() {
 }
 
 void light() {
-	// без зависимости от угла: картинка уже нарисована со светом; только тень и сила солнца
-	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * light_gain / PI;
+	// без зависимости от угла: картинка уже нарисована со светом. Днём на солнце —
+	// яркость как у исходной картинки; в тени — ~60%, как были тени в браузерной версии.
+	DIFFUSE_LIGHT += LIGHT_COLOR * mix(0.45, 1.0, ATTENUATION) * light_gain * 2.6 / PI;
 }

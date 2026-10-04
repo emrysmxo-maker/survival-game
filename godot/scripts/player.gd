@@ -8,7 +8,8 @@ const ACCEL := 14.0
 const BODY_TURN_RATE := 5.5        # рад/с — поворот тела при стрельбе
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
-const MODEL_YAW_OFFSET := 0.0      # если модель смотрит «спиной» — PI
+const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
+const RUN_ANIM_MPS := 2.94         # скорость шага в клипе Run при speed_scale 1 (замер по стопе)
 
 var world
 var tile := Vector2.ZERO
@@ -41,11 +42,17 @@ const RIFLE_PORT := Vector3(0.03, 0.03, -0.02)
 
 func _ready() -> void:
 	var scn: PackedScene = load("res://assets/character/Soldier.glb")
-	model = scn.instantiate()
+	# модель в файле смотрит в -Z: кладём её в «опору», развёрнутую на 180°,
+	# у опоры +Z — лицо бойца (на опору опираются автомат и прицел)
+	model = Node3D.new()
+	model.scale = Vector3.ONE * CHAR_SCALE
 	add_child(model)
-	skel = _find(model, "Skeleton3D")
-	anim = _find(model, "AnimationPlayer")
-	_recolor(model)
+	var glb: Node3D = scn.instantiate()
+	glb.rotation.y = PI
+	model.add_child(glb)
+	skel = _find(glb, "Skeleton3D")
+	anim = _find(glb, "AnimationPlayer")
+	_recolor(glb)
 	_make_rifle()
 	if skel:
 		var ik = load("res://scripts/rifle_ik.gd").new()
@@ -205,7 +212,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		yaw = wrapf(yaw + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
 	elif moving:
 		yaw = lerp_angle(yaw, body_target, minf(1.0, 14.0 * dt))
-	model.rotation.y = yaw + MODEL_YAW_OFFSET
+	model.rotation.y = yaw
 
 	# ноги: вперёд или пятится (если тело смотрит назад от движения)
 	backpedal = false
@@ -213,8 +220,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		var rel := absf(wrapf(move_yaw - yaw, -PI, PI))
 		backpedal = rel > 1.75
 	if moving and real_speed > 0.15:
-		var spd := real_speed / 2.85
-		_play("Run", -1.0 * clampf(spd * 1.1, 0.5, 1.4) if backpedal else clampf(spd * 1.1, 0.5, 1.4))
+		# ноги в клипе идут с той же скоростью, что боец по земле — без «коньков»
+		var mps := real_speed * WorldGen.T
+		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.3, 1.6)
+		_play("Run", -k if backpedal else k)
 	else:
 		_play("Idle", 1.0)
 

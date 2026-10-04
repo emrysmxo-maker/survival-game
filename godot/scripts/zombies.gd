@@ -59,10 +59,15 @@ func spawn() -> void:
 	z.tile = player.tile + Vector2(cos(a), sin(a)) * d
 	z.node = Node3D.new()
 	add_child(z.node)
-	z.model = _scene.instantiate()
+	# модель в файле смотрит в -Z — разворачиваем внутри опоры
+	z.model = Node3D.new()
+	z.model.scale = Vector3.ONE * 0.8
 	z.node.add_child(z.model)
-	z.anim = _find(z.model, "AnimationPlayer")
-	z.skel = _find(z.model, "Skeleton3D")
+	var glb: Node3D = _scene.instantiate()
+	glb.rotation.y = PI
+	z.model.add_child(glb)
+	z.anim = _find(glb, "AnimationPlayer")
+	z.skel = _find(glb, "Skeleton3D")
 	for p in PARTS:
 		if p[3] > 0.0:
 			z.parts[p[0]] = p[3]
@@ -118,8 +123,8 @@ func update_zombies(dt: float) -> void:
 			if z.anim and z.anim.current_animation != "Idle":
 				z.anim.play("Idle", 0.2)
 		if z.anim:
-			z.anim.speed_scale = 0.45 if z.crawl else 0.8
-		z.model.rotation.x = -1.25 if z.crawl else 0.0
+			z.anim.speed_scale = 0.35 if z.crawl else 0.75
+		z.model.rotation.x = 1.25 if z.crawl else 0.0
 		_place(z)
 	for i in range(_decals.size() - 1, -1, -1):
 		var d: Dictionary = _decals[i]
