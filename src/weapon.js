@@ -70,10 +70,12 @@ function updateWeapon(dt) {
   weapon.cooldown -= dt;
   // Стреляем, когда автомат поднят к плечу (см. charAimBlend в character.js).
   const ready = typeof charAimBlend === 'undefined' || charAimBlend > 0.75;
-  // автострельба: не палить в воздух, пока ствол не довёрнут на цель (~10°)
+  // не стрелять, пока ствол не довёрнут на цель (~14°): пуля летит туда, куда смотрит
+  // ствол, поэтому при беге вперёд и стике огня назад боец сначала разворачивается,
+  // и только потом открывает огонь (v7.5; раньше так было только у автострельбы)
   let onTarget = true;
-  if (weapon.auto && !weapon.manualFire && typeof charAimWorld !== 'undefined' && charAimWorld !== null) {
-    onTarget = Math.abs(wrapAngle(charAimWorld - screenAngleToYaw(weapon.aimAngle))) < 0.18;
+  if (weapon.firing && typeof charAimWorld !== 'undefined' && charAimWorld !== null) {
+    onTarget = Math.abs(wrapAngle(charAimWorld - screenAngleToYaw(weapon.aimAngle))) < 0.25;
   }
   if (weapon.firing && ready && onTarget && weapon.cooldown <= 0) {
     shootBullet();
