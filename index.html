@@ -85,7 +85,7 @@
     // main запускает игровой цикл и должен идти последним.
     // document.write гарантирует, что скрипты подключатся и выполнятся
     // строго по порядку, как обычные <script> теги.
-    ['version', 'dbg', 'ground', 'config', 'sprites-data', 'assets', 'character', 'cover', 'effects', 'daynight', 'world', 'player', 'weapon', 'zombie', 'minimap', 'input', 'render', 'update', 'main', 'perf', 'viewfix'].forEach((name) => {
+    ['version', 'dbg', 'ground', 'config', 'sprites-data', 'assets', 'character', 'cover', 'effects', 'daynight', 'world', 'player', 'weapon', 'zombie', 'minimap', 'input', 'render', 'update', 'main', 'perf', 'viewfix','teleport'].forEach((name) => {
       document.write(`<script src="src/${name}.js?v=${window.BUILD_VERSION}"><\/script>`);
     });
   </script>
