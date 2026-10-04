@@ -1,0 +1,75 @@
+name: Build Godot APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'godot/**'
+      - '.github/workflows/build-godot-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.3"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK (build-tools 34, platform 34)
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-34" "platform-tools" "cmdline-tools;latest" >/dev/null
+
+      - name: Godot + export templates
+        run: |
+          mkdir -p ~/godot ~/.local/share/godot/export_templates ~/.config/godot
+          cd ~/godot
+          curl -sL -o godot.zip https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot && chmod +x godot
+          curl -sL -o tpz.zip https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip -q tpz.zip && mv templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          cat > ~/.config/godot/editor_settings-4.tres <<EOT
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOT
+          sed -i 's/^ *//' ~/.config/godot/editor_settings-4.tres
+
+      - name: Import and export APK
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ github.workspace }}/android/android.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: survivalgame
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: survivalpass123
+        run: |
+          cd godot
+          mkdir -p build
+          ~/godot/godot --headless --path . --import || true
+          ~/godot/godot --headless --path . --export-release "Android" build/survival-godot.apk
+          ls -la build
+
+      - name: Publish APK to repository
+        run: |
+          mkdir -p apk
+          cp godot/build/survival-godot.apk apk/survival-godot.apk
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add apk/survival-godot.apk
+          git commit -m "CI: Godot APK" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: survival-godot-apk
+          path: godot/build/survival-godot.apk
