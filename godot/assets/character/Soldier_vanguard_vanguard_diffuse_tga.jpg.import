@@ -2,23 +2,22 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bxmnqby7yxpq8"
-path="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.ctex"
+uid="uid://clb0ckx4csfkw"
+path.s3tc="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.s3tc.ctex"
+path.etc2="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.etc2.ctex"
 metadata={
-"vram_texture": false
-}
-generator_parameters={
-"md5": "48f3ea86b56ac184b64ed3487294eff4"
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/character/Soldier_vanguard_vanguard_diffuse_tga.jpg"
-dest_files=["res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.ctex"]
+dest_files=["res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.s3tc.ctex", "res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/hdr_compression=1

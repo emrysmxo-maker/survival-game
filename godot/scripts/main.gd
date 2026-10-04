@@ -1,171 +1,156 @@
 extends Node3D
-# Сцена собирается кодом: земля, свет, камера, боец, деревья, джойстик.
-# Единицы — метры (в браузерной версии 1 тайл = 1.39 м).
+# Главная сцена: мир, боец, оружие, зомби, эффекты, день/ночь, интерфейс, камера.
 
-const CAMERA_ELEV_DEG := 46.8         # угол камеры над землёй: asin(54/74), как в браузерной версии
-const CAMERA_YAW_DEG := 45.0          # ромбовидная изометрия
-const VIEW_HEIGHT_M := 9.0           # сколько метров по вертикали видно на экране
-const PLAYER_SPEED := 4.0             # м/с (2.85 тайла/с)
-const TREE_COUNT := 260
-const WORLD_R := 150.0
+const CAM_ELEV_DEG := 46.8          # угол камеры над землёй (asin(54/74)), как в браузерной версии
+const CAM_YAW_DEG := 45.0
+const CAM_SIZE := 7.0               # метров по вертикали на экране (боец ~1/6 высоты экрана, как раньше)
 
+var world
+var player
+var weapon
+var zombies
+var effects
+var daynight
+var hud
 var cam: Camera3D
-var player: Node3D
-var anim: AnimationPlayer
-var joy
-var _cur_anim := ""
-var _shot_frames := -1
+var stick_l
+var stick_r
+var cam_h := 0.0
+var _shot := ""
+var _shot_frames := 0
+var _test_script := ""
+var _shot_at := 2.0
+var _clock := 0.0
 
 func _ready() -> void:
-	_make_env()
-	_make_ground()
-	_make_trees()
-	_make_player()
-	_make_camera()
-	_make_ui()
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--shot="):
-			_shot_frames = 90
-
-func _make_env() -> void:
-	var we := WorldEnvironment.new()
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.07, 0.05)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.62, 0.55)
-	env.ambient_light_energy = 0.55
-	we.environment = env
-	add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-38, -45, 0)   # солнце сверху-слева экрана
-	sun.light_energy = 0.9
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 60.0
-	add_child(sun)
-
-func _make_ground() -> void:
-	var mi := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(WORLD_R * 4, WORLD_R * 4)
-	mi.mesh = plane
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = load("res://assets/ground/grass.jpg")
-	mat.uv1_scale = Vector3(WORLD_R * 4 / 6.0, WORLD_R * 4 / 6.0, 1)
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	mat.albedo_color = Color(0.62, 0.66, 0.55)
-	mat.roughness = 1.0
-	mi.material_override = mat
-	add_child(mi)
-
-func _make_trees() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 12345
-	var texs: Array = []
-	for i in 12:
-		var n := "res://assets/trees/%02d_" % i
-		for f in DirAccess.get_files_at("res://assets/trees"):
-			if f.begins_with("%02d_" % i) and f.ends_with(".png"):
-				texs.append(load("res://assets/trees/" + f))
-	if texs.is_empty():
-		return
-	for i in TREE_COUNT:
-		var p := Vector2(rng.randf_range(-WORLD_R, WORLD_R), rng.randf_range(-WORLD_R, WORLD_R))
-		if p.length() < 4.0:
-			continue
-		var tex: Texture2D = texs[rng.randi() % texs.size()]
-		var s := Sprite3D.new()
-		s.texture = tex
-		var h_m := rng.randf_range(5.0, 8.0)
-		s.pixel_size = h_m / tex.get_height()
-		s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-		s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-		s.shaded = false
-		s.centered = true
-		s.offset = Vector2(0, tex.get_height() * 0.5)   # основание ствола — в точке на земле
-		s.position = Vector3(p.x, 0, p.y)
-		add_child(s)
-
-func _make_player() -> void:
-	player = Node3D.new()
+	daynight = load("res://scripts/daynight.gd").new()
+	add_child(daynight)
+	daynight.setup(self)
+	world = load("res://scripts/world.gd").new()
+	add_child(world)
+	effects = load("res://scripts/effects.gd").new()
+	add_child(effects)
+	player = load("res://scripts/player.gd").new()
+	player.world = world
 	add_child(player)
-	var scn: PackedScene = load("res://assets/character/Soldier.glb")
-	if scn:
-		var model := scn.instantiate()
-		player.add_child(model)
-		anim = _find_anim(model)
-		if anim:
-			print("ANIMS: ", anim.get_animation_list())
-	else:
-		push_warning("Soldier.glb не загрузился")
+	weapon = load("res://scripts/weapon.gd").new()
+	weapon.player = player
+	weapon.world = world
+	add_child(weapon)
+	effects.weapon = weapon
+	zombies = load("res://scripts/zombies.gd").new()
+	zombies.player = player
+	zombies.world = world
+	zombies.weapon = weapon
+	zombies.effects = effects
+	add_child(zombies)
+	weapon.zombies = zombies
 
-func _find_anim(n: Node) -> AnimationPlayer:
-	if n is AnimationPlayer:
-		return n
-	for c in n.get_children():
-		var r := _find_anim(c)
-		if r:
-			return r
-	return null
-
-func _make_camera() -> void:
 	cam = Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size = VIEW_HEIGHT_M
-	cam.near = 0.5
-	cam.far = 300.0
-	cam.rotation_degrees = Vector3(-CAMERA_ELEV_DEG, CAMERA_YAW_DEG, 0)
+	cam.size = CAM_SIZE
+	cam.near = 1.0
+	cam.far = 200.0
+	cam.rotation_degrees = Vector3(-CAM_ELEV_DEG, CAM_YAW_DEG, 0)
 	add_child(cam)
+
+	hud = load("res://scripts/hud.gd").new()
+	hud.main = self
+	add_child(hud)
+	var ui := CanvasLayer.new()
+	ui.layer = 0
+	add_child(ui)
+	stick_l = load("res://scripts/joystick.gd").new()
+	stick_r = load("res://scripts/joystick.gd").new()
+	stick_r.right_side = true
+	ui.add_child(stick_l)
+	ui.add_child(stick_r)
+	var rects: Array = hud.ui_rects()
+	stick_l.blocked_rects = rects
+	stick_r.blocked_rects = rects
+
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--shot="):
+			_shot = a.substr(7)
+			_shot_frames = 1
+		if a.begins_with("--at="):
+			_shot_at = float(a.substr(5))
+		if a.begins_with("--cam="):
+			cam.size = float(a.substr(6))
+		if a.begins_with("--time="):
+			daynight.t = float(a.substr(7)); daynight.auto = false
+		if a.begins_with("--test="):
+			_test_script = a.substr(7)
+	teleport(Vector2(10, 10))
+
+func teleport(t: Vector2) -> void:
+	world.ensure_now(t, 2)
+	player.set_tile(t)
+	cam_h = player.global_position.y
 	_follow(1.0)
 
 func _follow(k: float) -> void:
-	var target := player.global_position
-	var back := cam.global_transform.basis.z
-	cam.global_position = cam.global_position.lerp(target + back * 60.0, k)
-
-func _make_ui() -> void:
-	var layer := CanvasLayer.new()
-	add_child(layer)
-	joy = preload("res://scripts/joystick.gd").new()
-	layer.add_child(joy)
-
-func _input_dir() -> Vector2:
-	var v: Vector2 = joy.vec
-	var k := Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_up", "ui_down"))
-	if k != Vector2.ZERO:
-		v = k
-	return v
+	var p: Vector3 = player.global_position
+	cam_h = lerpf(cam_h, p.y, k)
+	var target := Vector3(p.x, cam_h, p.z)
+	cam.global_position = target + cam.global_transform.basis.z * 60.0
 
 func _physics_process(dt: float) -> void:
-	var v := _input_dir()
-	var moving := v.length() > 0.05
-	if moving:
-		# экранный «вверх» = вперёд по взгляду камеры
-		var right := cam.global_transform.basis.x
-		right.y = 0
-		right = right.normalized()
-		var fwd := -cam.global_transform.basis.z
-		fwd.y = 0
-		fwd = fwd.normalized()
-		var dir: Vector3 = (right * v.x + fwd * (-v.y)).limit_length(1.0)
-		player.global_position += dir * PLAYER_SPEED * dt * minf(1.0, v.length() * 1.2)
-		var want := atan2(dir.x, dir.z)
-		player.rotation.y = lerp_angle(player.rotation.y, want, minf(1.0, 14.0 * dt))
-	_play("Run" if moving else "Idle")
-	_follow(minf(1.0, 12.0 * dt))
+	var move: Vector2 = stick_l.vec
+	var kb := Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_up", "ui_down"))
+	if kb != Vector2.ZERO:
+		move = kb.limit_length(1.0)
+	var aim_active: bool = stick_r.active
+	var aim: Vector2 = stick_r.vec
+	var fire: bool = stick_r.active and stick_r.len_px > 18.0
+	if not aim_active:
+		var at = weapon.auto_target()
+		if at != null:
+			aim_active = true
+			aim = at
+			fire = true
+	player.step(dt, move, aim, aim_active, fire)
+	effects.step(player, player.tile, dt, false)
+	weapon.update_weapon(dt, player.firing)
+	zombies.update_zombies(dt)
+	world.update_world(player.tile)
+	RenderingServer.global_shader_parameter_set("player_pos", player.global_position)
+	_follow(minf(1.0, 2.6 * dt))
 
-func _play(name: String) -> void:
-	if anim == null or name == _cur_anim:
-		return
-	if anim.has_animation(name):
-		anim.play(name, 0.15)
-		_cur_anim = name
-
-func _process(_dt: float) -> void:
-	if _shot_frames > 0:
-		_shot_frames -= 1
-		if _shot_frames == 0:
-			var img := get_viewport().get_texture().get_image()
-			img.save_png("/tmp/claude-0/godot/shot.png")
+func _process(dt: float) -> void:
+	hud.update_hud(dt, player.tile, world.ecosystem_at(player.tile), world.count_trees())
+	if _test_script != "":
+		_run_test(dt)
+	_clock += dt
+	if _shot != "" and _clock > _shot_at and _shot_frames > 0:
+		_shot_frames = 0
+		if true:
+			get_viewport().get_texture().get_image().save_png(_shot)
 			get_tree().quit()
+
+# --- проверки без экрана (запуск с --test=...) ---
+var _tt := 0.0
+func _run_test(dt: float) -> void:
+	_tt += dt
+	match _test_script:
+		"run":
+			stick_l.active = true
+			stick_l.vec = Vector2(0, -1)
+		"fireback":
+			stick_l.vec = Vector2(0, -1)
+			if _tt > 0.5:
+				stick_r.active = true
+				stick_r.vec = Vector2(0.6, 0.8)
+				stick_r.len_px = 60.0
+			if _tt > 0.3 and zombies.list.is_empty():
+				zombies.spawn()
+		"zombie":
+			if zombies.list.is_empty():
+				zombies.spawn(); zombies.spawn()
+				zombies.list[0].tile = player.tile + Vector2(3, 1)
+				zombies.list[1].tile = player.tile + Vector2(-1, 3)
+			weapon.auto = _tt > 1.0
+		"aim":
+			stick_r.active = true
+			stick_r.vec = Vector2(1, 0.3)
+			stick_r.len_px = 10.0
