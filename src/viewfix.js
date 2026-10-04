@@ -22,11 +22,13 @@
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fix);
   setInterval(fix, 500);
 
-  // Старый per-frame вызов отключен — рельеф рисуется стабильным слоем в drawGroundLayer
-  window.drawGroundLight = function () {};
+  // Освещение склонов от солнца (render.js drawGroundLight) снова включено (v7.3).
+  // Упрощённые овалы Gemini (ниже) по умолчанию выключены: настоящая светотень их заменяет.
+  // Вернуть овалы: window.SIMPLE_RELIEF = true.
 
   // Плавный, высококонтрастный и стабильный 3D-рельеф ям, оврагов и склонов
   function drawTerrainRelief(c) {
+    if (!window.SIMPLE_RELIEF) return;
     if (typeof DBG !== 'undefined' && DBG.noSlopeLight) return;
     if (typeof toScreen !== 'function' || typeof view === 'undefined') return;
 
