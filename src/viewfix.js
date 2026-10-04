@@ -28,8 +28,8 @@
 
   // Плавный, высококонтрастный и стабильный 3D-рельеф ям, оврагов и склонов
   function drawTerrainRelief(c) {
-    if (!window.SIMPLE_RELIEF) return;
-    if (typeof DBG !== 'undefined' && DBG.noSlopeLight) return;
+    // простые тени ям/реки от солнца рисуются, когда сложная светотень склонов выключена (по умолчанию)
+    if (typeof DBG !== 'undefined' && !DBG.noSlopeLight) return;
     if (typeof toScreen !== 'function' || typeof view === 'undefined') return;
 
     const sun = (typeof sunLight === 'function') ? sunLight() : { dx: -0.7071, dy: -0.7071, sxs: -0.7071, sys: -0.7071, k: 0.9, e: 0.5 };

@@ -3,7 +3,7 @@ const DBG_LABELS = {
   noPieces: 'Без отклонения кустов (стоят неподвижно)',
   noWind: 'Без ветра (кусты и деревья не качаются)',
   noSunShadow: 'Без теней от солнца (деревья, боец, кусты)',
-  noSlopeLight: 'Без светотени склонов и ям',
+  noSlopeLight: 'Без светотени склонов (включена = простые тени ям от солнца)',
   loOnly: 'Земля только в одном качестве',
   noHole: 'Без окошка в кроне над бойцом',
   noZoom: 'Без зума камеры в ямах',
@@ -17,6 +17,12 @@ const DBG_LABELS = {
       DBG.noSlopeLight = false;
       saved._v70_relief = true;
       saved.noSlopeLight = false;
+      localStorage.setItem('dbg', JSON.stringify(saved));
+    }
+    if (!saved._v741_slope) {   // v7.4.1: по умолчанию светотень склонов ВЫКЛ (мерцала и тормозила), включается галочкой
+      DBG.noSlopeLight = true;
+      saved._v741_slope = true;
+      saved.noSlopeLight = true;
       localStorage.setItem('dbg', JSON.stringify(saved));
     }
     if (saved.noPieces === undefined) DBG.noPieces = false;

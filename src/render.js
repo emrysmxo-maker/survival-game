@@ -132,7 +132,6 @@ function drawGround() {
   const drawList = [];
   for (const chunk of loadedChunks.values()) if (chunk.ground) drawList.push(chunk);
   drawList.sort((p, q) => (p.cx + p.cy) - (q.cx + q.cy));
-  lightBegin();
   for (const chunk of drawList) {
     const x = chunk.groundOrigin.x - camX;
     const y = chunk.groundOrigin.y - camY;
@@ -158,7 +157,6 @@ function drawGround() {
     ctx.drawImage(chunk.ground, x, y, gw, gh);
     drawGroundLight(chunk, x, y, gw, gh);
   }
-  lightEnd();
 }
 
 // Освещение склонов от солнца: 4 карты наклона (+x, −x, +y, −y) складываются
@@ -166,52 +164,15 @@ function drawGround() {
 // солнцу светлее, от солнца — темнее; утром и вечером сильнее, ночью почти нет.
 const _sunDefault = { dx: -0.7071, dy: -0.7071, k: 0.9 };
 const GROUND_LIGHT_GAIN = 1.6;   // сила светотени склонов
-// v7.4: свет склонов собирается в ОДИН отдельный слой (вдвое меньше экрана, он плавный)
-// из серых карт наклона чанков и накладывается на землю ОДИН раз за кадр. Раньше
-// каждый чанк накладывал свою soft-light-карту отдельно: на стыках чанков и при
-// смене качества земли (грубая → чёткая) свет удваивался/мигал.
-const LIGHT_LAYER_SCALE = 0.5;
-let lightCv = null, lightCtx = null, lightOn = false;
-function lightBegin() {
-  lightOn = false;
-  if (DBG.noSlopeLight) return;
-  const sun = typeof sunLight === 'function' ? sunLight() : _sunDefault;
-  if (sun.k < 0.01) return;
-  const w = Math.ceil(view.w * LIGHT_LAYER_SCALE), h = Math.ceil(view.h * LIGHT_LAYER_SCALE);
-  if (!lightCv) { lightCv = document.createElement('canvas'); lightCtx = lightCv.getContext('2d'); }
-  if (lightCv.width !== w || lightCv.height !== h) { lightCv.width = w; lightCv.height = h; }
-  lightCtx.setTransform(LIGHT_LAYER_SCALE, 0, 0, LIGHT_LAYER_SCALE, 0, 0);
-  lightCtx.globalAlpha = 1;
-  lightCtx.fillStyle = 'rgb(128,128,128)';   // нейтральный серый: soft-light его не меняет
-  lightCtx.fillRect(0, 0, view.w, view.h);
-  lightOn = true;
-}
-function lightEnd() {
-  if (!lightOn) return;
-  const sun = typeof sunLight === 'function' ? sunLight() : _sunDefault;
-  ctx.save();
-  ctx.globalCompositeOperation = 'soft-light';
-  let rem = GROUND_LIGHT_GAIN * Math.min(1, sun.k);
-  while (rem > 0.01) {
-    ctx.globalAlpha = Math.min(1, rem);
-    ctx.drawImage(lightCv, 0, 0, view.w, view.h);
-    rem -= 1;
-  }
-  ctx.restore();
-  lightOn = false;
-}
 function drawGroundLight(chunk, x, y, gw, gh) {
   const L = chunk.groundLight;
-  if (!L || !lightOn) return;
+  if (!L || DBG.noSlopeLight) return;
   const sun = typeof sunLight === 'function' ? sunLight() : _sunDefault;
-  // карты: [gx, 255−gx, gy, 255−gy]; по каждой оси берём карту со стороны солнца
-  const wx = -sun.dx, wy = -sun.dy;
-  const ax = Math.abs(wx), ay = Math.abs(wy);
-  if (ax + ay < 0.02) return;
-  const imgX = wx > 0 ? L[0] : L[1], imgY = wy > 0 ? L[2] : L[3];
-  const tY = ay / (ax + ay);          // доля оси Y в смеси
-  // только внутри контура своего чанка (с рельефом): иначе карты (непрозрачные
-  // прямоугольники) затрут соседей
+  if (sun.k < 0.01) return;
+  // освещение = −(gx·dx + gy·dy)·k; карты: [gx, 255−gx, gy, 255−gy]
+  const wx = -sun.dx * sun.k, wy = -sun.dy * sun.k;
+  // только внутри контура своего чанка (с рельефом): иначе на стыках чанков
+  // полупрозрачные карты ложатся дважды или оставляют щель — видны линии
   if (!chunk.lightPoly) {
     const G = GROUND_WARP_CELLS, cs = CHUNK_SIZE / G, sx = chunk.cx * CHUNK_SIZE, sy = chunk.cy * CHUNK_SIZE;
     const pts = [];
@@ -220,6 +181,8 @@ function drawGroundLight(chunk, x, y, gw, gh) {
     for (let j = 0; j < G; j++) add(G, j);
     for (let i = G; i > 0; i--) add(i, G);
     for (let j = G; j > 0; j--) add(0, j);
+    // раздуть на ~1.2 px, как раздута сама земля при запекании: её полоска на
+    // стыке перекрывает соседний кусок — туда же должен лечь и свет этого куска
     let cx = 0, cy = 0;
     for (let k = 0; k < pts.length; k += 2) { cx += pts[k]; cy += pts[k + 1]; }
     cx /= pts.length / 2; cy /= pts.length / 2;
@@ -230,18 +193,27 @@ function drawGroundLight(chunk, x, y, gw, gh) {
     chunk.lightPoly = pts;
   }
   const P = chunk.lightPoly, ox = x - chunk.groundOrigin.x, oy = y - chunk.groundOrigin.y;
-  const c = lightCtx;
-  c.save();
-  c.beginPath();
-  c.moveTo(P[0] + ox, P[1] + oy);
-  for (let k = 2; k < P.length; k += 2) c.lineTo(P[k] + ox, P[k + 1] + oy);
-  c.closePath();
-  c.clip();
-  c.imageSmoothingEnabled = true;
-  c.globalAlpha = 1;
-  if (imgX) c.drawImage(imgX, x, y, gw, gh);
-  if (imgY && tY > 0.01) { c.globalAlpha = tY; c.drawImage(imgY, x, y, gw, gh); }
-  c.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(P[0] + ox, P[1] + oy);
+  for (let k = 2; k < P.length; k += 2) ctx.lineTo(P[k] + ox, P[k + 1] + oy);
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalCompositeOperation = 'soft-light';
+  for (const [wgt, a, b] of [[wx, L[0], L[1]], [wy, L[2], L[3]]]) {
+    if (Math.abs(wgt) < 0.02) continue;
+    const img = wgt > 0 ? a : b;
+    if (!img) continue;
+    let rem = Math.abs(wgt) * GROUND_LIGHT_GAIN;        // >1 — кладём дважды (soft-light мягкий)
+    while (rem > 0.01) {
+      ctx.globalAlpha = Math.min(1, rem);
+      ctx.drawImage(img, x, y, gw, gh);
+      rem -= 1;
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
 }
 
 function render() {
