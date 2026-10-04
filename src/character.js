@@ -427,7 +427,18 @@ function updateCharacter(dt, isMoving, angle, speed, slopeAlong) {
   charHipFire += ((firingNow && st.hip ? 1 : 0) - charHipFire) * Math.min(1, 6 * dt);
 
   // Тело: при стрельбе поворачивается с ограниченной скоростью, без стрельбы — как раньше.
-  if (firingNow) charYaw = wrapAngle(turnToward(charYaw, bodyYaw, BODY_TURN_RATE * dt));
+  if (firingNow) {
+    // разворот тела на ~180° (бежит вперёд, стик огня назад): направление выбираем по
+    // той стороне, куда смотрит цель, а не как выпадет у wrapAngle (иначе боец мог
+    // крутиться «в обход», в противоположную от прицела сторону)
+    let d = wrapAngle(bodyYaw - charYaw);
+    if (Math.abs(d) > 2.9 && charAimWorld !== null) {
+      const side = Math.sign(wrapAngle(charAimWorld - charYaw)) || Math.sign(d);
+      if (Math.sign(d) !== side) d += side * 2 * Math.PI;
+    }
+    const step = BODY_TURN_RATE * dt;
+    charYaw = wrapAngle(charYaw + Math.max(-step, Math.min(step, d)));
+  }
   else charYaw += wrapAngle(bodyYaw - charYaw) * Math.min(1, 24 * dt);
 
   // Угол ствола относительно ног: добирают корпус и руки, дальше — не довернуть.
