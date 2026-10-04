@@ -2,6 +2,8 @@ package com.emrysmxo.survivalgame.local;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Build;
+import android.view.Display;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
@@ -20,7 +22,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        boost();
         web = new WebView(this);
+        web.setLayerType(View.LAYER_TYPE_HARDWARE, null);   // отрисовка на видеокарте
         web.setBackgroundColor(0xFF0C120C);
         setContentView(web);
 
@@ -40,6 +44,28 @@ public class MainActivity extends Activity {
         });
         web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
         hideBars();
+    }
+
+    // Максимум от телефона: самая высокая частота экрана (90/120/144 Гц) и устойчивая
+    // производительность (система не душит процессор/видеокарту так, как у обычных приложений).
+    private void boost() {
+        try {
+            if (Build.VERSION.SDK_INT >= 24) getWindow().setSustainedPerformanceMode(true);
+        } catch (Throwable t) { /* не поддерживается */ }
+        try {
+            if (Build.VERSION.SDK_INT >= 23) {
+                Display d = getWindowManager().getDefaultDisplay();
+                Display.Mode best = d.getMode();
+                for (Display.Mode m : d.getSupportedModes()) {
+                    if (m.getPhysicalWidth() == best.getPhysicalWidth() && m.getPhysicalHeight() == best.getPhysicalHeight()
+                            && m.getRefreshRate() > best.getRefreshRate()) best = m;
+                }
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.preferredDisplayModeId = best.getModeId();
+                if (Build.VERSION.SDK_INT >= 30) lp.preferredRefreshRate = best.getRefreshRate();
+                getWindow().setAttributes(lp);
+            }
+        } catch (Throwable t) { /* оставим как есть */ }
     }
 
     private void hideBars() {
