@@ -33,15 +33,13 @@ jobs:
 
       - name: Set up Android SDK environment
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> $GITHUB_ENV
-          if [ -d "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" ]; then
-            echo "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          fi
-          if [ -d "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platform-tools" ]; then
-            echo "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platform-tools" >> $GITHUB_PATH
-          fi
-          yes | sdkmanager --licenses 2>/dev/null || true
+          SDK=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}
+          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $SDK/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-34" "platforms;android-35" > /dev/null
+          # Bubblewrap проверяет старую папку SDK «tools» — без неё «androidSdk isn't correct»
+          ln -sfn $SDK/cmdline-tools/latest $SDK/tools
 
       - name: Install Bubblewrap CLI
         run: npm install -g @bubblewrap/cli
@@ -56,21 +54,16 @@ jobs:
           }
           EOF
 
-      - name: Create Keystore for Signing
+      - name: Use repository signing key
         run: |
-          keytool -genkeypair -v \
-            -keystore android.keystore \
-            -alias survivalgame \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass survivalpass123 \
-            -keypass survivalpass123 \
-            -dname "CN=Survival Game, OU=Mobile, O=emrysmxo, L=Earth, S=World, C=US"
+          # постоянный ключ из репозитория: APK одной подписи обновляется поверх установленного
+          cp android/android.keystore android.keystore
 
       - name: Generate Android Project with Bubblewrap
         run: |
-          printf "7.1.0\n71\n" | bubblewrap update --skipPwaValidation
+          V=$(grep -oP "GAME_VERSION = '\K[0-9.]+" src/version.js)
+          echo "version $V"
+          printf "$V\n" | bubblewrap update --skipPwaValidation
 
       - name: Verify Hardware Acceleration in AndroidManifest
         run: |
@@ -87,13 +80,9 @@ jobs:
         run: |
           export BUBBLEWRAP_KEYSTORE_PASSWORD=survivalpass123
           export BUBBLEWRAP_KEY_PASSWORD=survivalpass123
-          printf "survivalpass123\nsurvivalpass123\n" | bubblewrap build --skipPwaValidation || {
-            echo "Fallback to Gradle assembleRelease..."
-            chmod +x gradlew
-            ./gradlew assembleRelease
-          }
+          printf "survivalpass123\nsurvivalpass123\n" | bubblewrap build --skipPwaValidation
           mkdir -p output-apk
-          find . -maxdepth 5 -name "*.apk" -exec cp {} output-apk/ \;
+          cp app-release-signed.apk output-apk/survival-game.apk
           ls -la output-apk/
 
       - name: Upload APK Artifact
