@@ -1,0 +1,41 @@
+plugins { id 'com.android.application' }
+
+// Игра кладётся ВНУТРЬ APK (assets/www): работает без интернета.
+// Берём файлы из корня репозитория; test3d (тестовые модели) и служебное не включаем.
+tasks.register('copyGame', Copy) {
+    from("${rootDir}/..") {
+        include 'index.html', 'style.css', 'manifest.webmanifest', 'src/**', 'assets/**'
+        exclude 'assets/test3d/**'
+    }
+    into "${buildDir}/generated/www/www"
+}
+
+android {
+    namespace 'com.emrysmxo.survivalgame.local'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.emrysmxo.survivalgame.local'
+        minSdk 21
+        targetSdk 34
+        versionCode Integer.parseInt(System.getenv('APP_VERSION_CODE') ?: '1')
+        versionName System.getenv('APP_VERSION_NAME') ?: '1.0'
+    }
+    signingConfigs {
+        release {
+            storeFile file("${rootDir}/../android/android.keystore")
+            storePassword 'survivalpass123'
+            keyAlias 'survivalgame'
+            keyPassword 'survivalpass123'
+        }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.release; minifyEnabled false }
+    }
+    sourceSets { main { assets.srcDirs += "${buildDir}/generated/www" } }
+    packagingOptions { jniLibs { useLegacyPackaging = true } }
+    lint { checkReleaseBuilds false; abortOnError false }
+    androidResources { noCompress 'glb', 'png', 'jpg', 'js', 'html' }
+}
+tasks.named('preBuild') { dependsOn 'copyGame' }
+
+dependencies { implementation 'androidx.webkit:webkit:1.11.0' }
