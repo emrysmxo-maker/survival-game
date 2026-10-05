@@ -53,6 +53,8 @@ jobs:
           GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: survivalpass123
         run: |
           cd godot
+          # версия в углу экрана = номер сборки + коммит (вручную менять не нужно)
+          sed -i "s/^const VERSION := .*/const VERSION := \"сборка ${{ github.run_number }} · ${GITHUB_SHA::7}\"/" scripts/hud.gd
           mkdir -p build
           ~/godot/godot --headless --path . --import || true
           ~/godot/godot --headless --path . --export-release "Android" build/survival-godot.apk
@@ -65,6 +67,7 @@ jobs:
           # APK больше 100 МБ — в репозиторий не помещается, выкладываем в «Releases»
           gh release view godot-latest >/dev/null 2>&1 || gh release create godot-latest --title "Survival (Godot) — последняя сборка" --notes "Автосборка из main. Скачать: survival-godot.apk"
           gh release upload godot-latest godot/build/survival-godot.apk --clobber
+          gh release edit godot-latest --notes "Последняя сборка: №${{ github.run_number }}, коммит ${GITHUB_SHA::7}, $(date -u '+%d.%m %H:%M') UTC. Скачать: survival-godot.apk. Эта же надпись («сборка № · коммит») в углу экрана игры."
 
       - uses: actions/upload-artifact@v4
         with:
