@@ -145,7 +145,7 @@ func _update_camera(dt: float) -> void:
 	cam.size = cam_size
 	player.AIM_ELEV_K = sin(deg_to_rad(cam_elev))
 	player.cam_yaw = deg_to_rad(cam_yaw)
-	daynight.sun.directional_shadow_max_distance = clampf(cam_size * 3.2, 22.0, 60.0)
+	daynight.sun.directional_shadow_max_distance = clampf(roundf(cam_size * 3.2 / 6.0) * 6.0, 24.0, 60.0)
 
 func _process_game(dt: float) -> void:
 	_update_camera(dt)

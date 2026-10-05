@@ -109,11 +109,27 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 		mm.mesh = _foliage_mesh(src, cat, top * bs) if is_leaf else src
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# листва-иглы тени не даёт (тонкие карточки мерцают) — тень кроны от простого эллипсоида
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if (shadow and not is_leaf) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.extra_cull_margin = 16384.0
 		add_child(mmi)
 		mmis.append(mmi)
-	kinds[key] = {"mmis": mmis, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
+	var proxy: MultiMeshInstance3D = null
+	if shadow and not leaf.is_empty():
+		var pm := MultiMesh.new()
+		pm.transform_format = MultiMesh.TRANSFORM_3D
+		var sph := SphereMesh.new()
+		sph.radius = 1.0
+		sph.height = 2.0
+		sph.radial_segments = 10
+		sph.rings = 5
+		pm.mesh = sph
+		proxy = MultiMeshInstance3D.new()
+		proxy.multimesh = pm
+		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		proxy.extra_cull_margin = 16384.0
+		add_child(proxy)
+	kinds[key] = {"proxy": proxy, "mmis": mmis, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
 
 # ---------- чанки ----------
 func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
@@ -283,6 +299,24 @@ func _rebuild_sprites() -> void:
 				mm.instance_count = n
 			if n > 0:
 				mm.buffer = buf
+		var px: MultiMeshInstance3D = kinds[key].proxy
+		if px:
+			var pb := PackedFloat32Array()
+			pb.resize(n * 12)
+			var kd: Dictionary = kinds[key]
+			var tall: bool = kd.cat == "tree"
+			for i in n:
+				var o := i * 12
+				var sc: float = sqrt(buf[o] * buf[o] + buf[o + 4] * buf[o + 4] + buf[o + 8] * buf[o + 8]) / kd.bs
+				var rh: float = kd.cr * sc
+				var rv: float = kd.top * (0.3 if tall else 0.5) * sc
+				var ey: float = kd.top * (0.62 if tall else 0.5) * sc
+				pb[o] = rh; pb[o + 5] = rv; pb[o + 10] = rh
+				pb[o + 3] = buf[o + 3]; pb[o + 7] = buf[o + 7] + ey; pb[o + 11] = buf[o + 11]
+			if px.multimesh.instance_count != n:
+				px.multimesh.instance_count = n
+			if n > 0:
+				px.multimesh.buffer = pb
 
 # ---------- запросы ----------
 # Закрывает ли крона/куст бойца на экране: точки тела (ноги, пояс, грудь, голова) попадают
