@@ -204,7 +204,8 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		var mf := 1.0
 		if aiming:
 			mf = BACK_SPEED if backpedal else FIRE_SPEED
-		want = screen_to_tiles(stick) * SPEED * mf
+		# лёгкий наклон стика — шаг (не меньше 55% скорости), чтобы не топтаться на месте
+		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.55, 1.0, clampf((stick.length() - 0.1) / 0.7, 0.0, 1.0))
 		want *= _terrain_speed(want)
 		move_dir = want.normalized()
 		vel += (want - vel) * minf(1.0, ACCEL * dt)
@@ -239,6 +240,9 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		backpedal = rel > (REACH - 0.17 if backpedal else REACH)
 		if backpedal:
 			legs = wrapf(move_yaw + PI, -PI, PI)
+		else:
+			# ноги доворачиваются к цели на треть (до 25°): корпус смотрит в сторону стрельбы, а не боком
+			legs = move_yaw + clampf(wrapf(aim_yaw - move_yaw, -PI, PI) * 0.33, -0.44, 0.44)
 	elif aiming:
 		backpedal = false
 		legs = aim_yaw                        # стоит — весь корпус к цели
@@ -266,7 +270,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		# шаг анимации = шагу по земле (без «коньков»); пятясь — тот же клип назад
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)   # сглаженно: без дёрганья темпа шага
 		var mps := anim_speed * WorldGen.T
-		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.5, 1.6)
+		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.35, 1.6)
 		_play("Run", -k if backpedal else k)
 	else:
 		anim_speed = 0.0
