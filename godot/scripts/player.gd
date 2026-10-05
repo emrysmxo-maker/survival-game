@@ -227,6 +227,15 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	else:
 		_play("Idle", 1.0)
 
+func foot_offset() -> float:
+	# высота самой низкой точки стоп над точкой земли (м, мир)
+	var lo := 1e9
+	for n in ["LeftFoot", "LeftToeBase", "RightFoot", "RightToeBase"]:
+		var b := skel.find_bone("mixamorig_" + n)
+		if b >= 0:
+			lo = minf(lo, (skel.global_transform * skel.get_bone_global_pose(b).origin).y)
+	return lo - global_position.y
+
 func barrel_on_target() -> bool:
 	return absf(wrapf(aim_yaw - yaw, -PI, PI)) < 0.25
 

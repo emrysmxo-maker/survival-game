@@ -22,7 +22,7 @@ const FEATURES := {
 }
 const LANDMARKS := ["cabin", "post", "ford", "ruins", "bunker", "crater"]
 
-# Породы деревьев (картинки assets/trees/NN_*.png)
+# Породы деревьев (3D-модели assets/trees3d, список — TREE_MODELS в world.gd)
 const TREE_FILES := ["00_pine", "01_oak", "02_birch", "03_maple", "04_deadwood", "05_bluespruce",
 	"06_willow", "07_aspen", "08_rowan", "09_cedar", "10_larch", "11_linden"]
 const TREE_DRAW_W := 214.0

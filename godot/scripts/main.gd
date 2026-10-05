@@ -95,7 +95,7 @@ func _follow(k: float) -> void:
 	var target := Vector3(p.x, cam_h, p.z)
 	cam.global_position = target + cam.global_transform.basis.z * 60.0
 
-func _physics_process(dt: float) -> void:
+func _process_game(dt: float) -> void:
 	var move: Vector2 = stick_l.vec
 	var kb := Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_up", "ui_down"))
 	if kb != Vector2.ZERO:
@@ -117,11 +117,17 @@ func _physics_process(dt: float) -> void:
 	RenderingServer.global_shader_parameter_set("player_pos", player.global_position)
 	_follow(minf(1.0, 2.6 * dt))
 
-func _process(dt: float) -> void:
+var _fo_n := 0
+func _process(dt_raw: float) -> void:
+	var dt := minf(dt_raw, 0.05)      # всё считаем каждый кадр (145 fps), без шагов физики 60 Гц — иначе рывки
+	_process_game(dt)
+	if _test_script == "run" and Engine.get_process_frames() % 20 == 0 and _fo_n < 12:
+		_fo_n += 1
+		print("FOOT ", player.foot_offset(), " moving=", player.moving, " anim=", player._cur_anim)
 	hud.update_hud(dt, player.tile, world.ecosystem_at(player.tile), world.count_trees())
 	if _test_script != "":
 		_run_test(dt)
-	_clock += dt
+	_clock = Time.get_ticks_msec() / 1000.0
 	if _shot != "" and _clock > _shot_at and _shot_frames > 0:
 		_shot_frames = 0
 		if true:

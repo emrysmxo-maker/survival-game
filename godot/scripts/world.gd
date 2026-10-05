@@ -28,6 +28,87 @@ func _ready() -> void:
 	sprite_meta = JSON.parse_string(f.get_as_text())
 	_make_kinds()
 
+# ---------- настоящие 3D-деревья ----------
+# порода (0..11) -> [файл, высота дерева (м), ширина-коэф., сила ветра, яркость]
+const TREE_MODELS := [
+	["tree_16_ponderosa_pine", 7.2, 0.72, 0.7, 0.95, 0.80, false],
+	["tree_12_oak_green", 5.9, 0.72, 1.0, 0.95, 0.80, false],
+	["tree_07_birch_cluster", 6.5, 0.72, 1.0, 1.0, 0.80, false],
+	["tree_10_red_maple", 5.6, 0.72, 1.0, 0.85, 0.55, false],
+	["tree_12_oak_green", 5.2, 0.72, 0.0, 1.0, 0.8, true],
+	["tree_02_colorado_blue_spruce", 6.7, 0.72, 0.6, 0.95, 0.75, false],
+	["tree_12_oak_green", 5.4, 0.83, 1.2, 1.0, 0.85, false],
+	["tree_08_columnar_green", 6.8, 0.72, 1.0, 0.95, 0.80, false],
+	["tree_14_autumn_rust", 5.0, 0.72, 1.0, 0.80, 0.50, false],
+	["tree_22_black_spruce", 7.4, 0.72, 0.6, 0.9, 0.75, false],
+	["tree_43_sitka_spruce", 7.4, 0.72, 0.6, 0.9, 0.75, false],
+	["tree_09_round_green", 5.9, 0.72, 1.0, 0.95, 0.80, false],
+]
+var tree_mesh := {}        # порода -> Mesh
+var tree_mat := {}         # порода -> Material
+var tree_pivot := {}       # порода -> смещение низа модели (м, на единицу высоты)
+
+func _load_tree_models() -> void:
+	var tree_shader: Shader = load("res://shaders/tree.gdshader")
+	var cache := {}
+	for i in TREE_MODELS.size():
+		var m: Array = TREE_MODELS[i]
+		if not cache.has(m[0]):
+			var scn2: PackedScene = load("res://assets/trees3d/%s.glb" % m[0])
+			var inst2: Node = scn2.instantiate()
+			var mi2 := _first_mesh(inst2)
+			var bm: StandardMaterial3D = mi2.mesh.surface_get_material(0)
+			var sm := ShaderMaterial.new()
+			sm.shader = tree_shader
+			sm.set_shader_parameter("albedo_tex", bm.albedo_texture)
+			if bm.normal_enabled and bm.normal_texture:
+				sm.set_shader_parameter("normal_tex", bm.normal_texture)
+				sm.set_shader_parameter("has_normal", true)
+			var bb2: AABB = mi2.mesh.get_aabb()
+			cache[m[0]] = {"mesh": mi2.mesh, "mat": sm, "pivot": [bb2.position.y, bb2.size.y]}
+			inst2.free()      # меш — ресурс, он остаётся у нас
+		var c: Dictionary = cache[m[0]]
+		tree_mesh[i] = c.mesh
+		var mat: ShaderMaterial = c.mat.duplicate()
+		mat.set_shader_parameter("sway", m[3])
+		mat.set_shader_parameter("gain", m[4])
+		mat.set_shader_parameter("sat", m[5])
+		mat.set_shader_parameter("leafless", m[6])
+		if m[0] == "tree_14_autumn_rust" or m[0] == "tree_10_red_maple":
+			mat.set_shader_parameter("tint", Vector3(1.0, 0.92, 0.72))
+		tree_mat[i] = mat
+		tree_pivot[i] = c.pivot
+
+func _first_mesh(n: Node) -> MeshInstance3D:
+	if n is MeshInstance3D:
+		return n
+	for c in n.get_children():
+		var r := _first_mesh(c)
+		if r:
+			return r
+	return null
+
+func _spawn_trees(k: Vector2i, trees: Array) -> Array:
+	var nodes := []
+	for t in trees:
+		var type: int = t.type
+		var m: Array = TREE_MODELS[type]
+		var node := MeshInstance3D.new()
+		node.mesh = tree_mesh[type]
+		if tree_mat[type] != null:
+			node.material_override = tree_mat[type]
+		var pv: Array = tree_pivot[type]
+		var h_m: float = m[1] * t.scale
+		var sc: float = h_m / maxf(pv[1], 0.001)
+		node.scale = Vector3(sc * m[2], sc, sc * m[2])
+		var pos := Vector3(t.x * WorldGen.T, t.h - pv[0] * sc, t.y * WorldGen.T)
+		node.position = pos
+		node.rotation.y = WorldGen.prand(int(t.x * 13.0 + t.y * 7.0)) * TAU
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(node)
+		nodes.append(node)
+	return nodes
+
 # ---------- виды спрайтов ----------
 func _quad(w: float, h: float, ax: float, ay: float) -> ArrayMesh:
 	# размеры в «px» старой игры -> метры; точка земли (ax, ay) — от левого верхнего угла
@@ -53,7 +134,7 @@ func _add_kind(key: String, tex_path: String, w: float, h: float, ax: float, ay:
 	mat.set_shader_parameter("sway", sway)
 	mat.set_shader_parameter("push", push)
 	mat.set_shader_parameter("light_gain", gain)
-	mat.set_shader_parameter("hole", 1.0 if key.begins_with("tree") else 0.0)
+	mat.set_shader_parameter("hole", 1.0 if (key.begins_with("bush") or key.begins_with("sapling") or key.begins_with("fern") or key.begins_with("nettle")) else 0.0)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
@@ -67,10 +148,7 @@ func _add_kind(key: String, tex_path: String, w: float, h: float, ax: float, ay:
 	kinds[key] = {"mm": mmi, "top": ay * WorldGen.PX, "flat": flat}
 
 func _make_kinds() -> void:
-	for i in WorldGen.TREE_FILES.size():
-		_add_kind("tree%d" % i, "res://assets/trees/%s.png" % WorldGen.TREE_FILES[i],
-			WorldGen.TREE_DRAW_W, WorldGen.TREE_DRAW_H, WorldGen.TREE_DRAW_W / 2.0, WorldGen.TREE_DRAW_H * WorldGen.TREE_BASE_FRAC,
-			0.45, 0.0, false, true, 1.0)
+	_load_tree_models()
 	var cov: Dictionary = sprite_meta.cover
 	for kind in WorldGen.COVER_KINDS:
 		var def: Dictionary = WorldGen.COVER_KINDS[kind]
@@ -94,6 +172,8 @@ func update_world(tile_pos: Vector2) -> void:
 		for k in chunks.keys():
 			if absi(k.x - c.x) > DROP_R or absi(k.y - c.y) > DROP_R:
 				chunks[k].mesh.queue_free()
+				for tn in chunks[k].trees:
+					tn.queue_free()
 				chunks.erase(k)
 				_dirty = true
 	# новые задачи — ближние первыми, не больше 4 одновременно
@@ -208,7 +288,7 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 	mi.material_override = ground_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-	chunks[k] = {"mesh": mi, "c": data.content}
+	chunks[k] = {"mesh": mi, "c": data.content, "trees": _spawn_trees(k, data.content.trees)}
 	_dirty = true
 
 func _rebuild_sprites() -> void:
@@ -219,8 +299,6 @@ func _rebuild_sprites() -> void:
 		lists[key] = []
 	for k in chunks:
 		var c: Dictionary = chunks[k].c
-		for t in c.trees:
-			lists["tree%d" % t.type].append(t)
 		for r in c.rocks:
 			var rk: String = WorldGen.ROCK_TYPES[r.type][0]
 			if lists.has(rk):
