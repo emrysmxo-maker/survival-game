@@ -22,6 +22,12 @@ func _process_modification() -> void:
 	if spine2 < 0 or r_arm < 0 or l_arm < 0:
 		return
 	var model: Node3D = player.model
+	# скручивание позвоночника к цели (корпус добирает до TWIST, остальное — руки)
+	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
+	for pair in [["Spine", 0.3], ["Spine1", 0.35], ["Spine2", 0.35]]:
+		var bi := _bone(pair[0])
+		if bi >= 0:
+			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(Vector3.UP, tw * pair[1]))
 	var to_model := model.global_transform.affine_inverse() * skel.global_transform
 	var chest: Vector3 = to_model * skel.get_bone_global_pose(spine2).origin
 	var side := signf((to_model * skel.get_bone_global_pose(r_arm).origin).x)
@@ -29,9 +35,7 @@ func _process_modification() -> void:
 		side = 1.0
 	var k: float = player.aim_blend
 	var rc: float = player.recoil
-	var ay := 0.0
-	if player.aiming:
-		ay = clampf(wrapf(player.aim_yaw - player.yaw, -PI, PI), -0.6, 0.6)
+	var ay: float = player.aim_local
 	var cx := side * (0.05 + 0.04 * k)
 	var cy := -0.21 + 0.31 * k
 	var cz := 0.26 + 0.07 * k - 0.035 * rc

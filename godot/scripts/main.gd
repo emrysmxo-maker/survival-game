@@ -4,6 +4,10 @@ extends Node3D
 const CAM_ELEV_DEG := 46.8          # угол камеры над землёй (asin(54/74)), как в браузерной версии
 const CAM_YAW_DEG := 45.0
 const CAM_SIZE := 7.6               # метров по вертикали на экране (боец ~1/6 высоты экрана, как раньше)
+const CAM_SIZE_MIN := 3.2           # приближение
+const CAM_SIZE_MAX := 16.0          # отдаление
+const CAM_ROT_SPEED := 150.0        # °/с при полном отклонении джойстика камеры
+const CAM_ZOOM_SPEED := 1.1         # скорость приближения (экспонента)
 
 var world
 var player
@@ -17,6 +21,9 @@ var cam: Camera3D
 var stick_l
 var stick_r
 var cam_h := 0.0
+var cam_yaw := CAM_YAW_DEG
+var cam_size := CAM_SIZE
+var camctl
 var _shot := ""
 var _shot_frames := 0
 var _test_script := ""
@@ -74,7 +81,13 @@ func _ready() -> void:
 	stick_r.right_side = true
 	ui.add_child(stick_l)
 	ui.add_child(stick_r)
+	camctl = load("res://scripts/camctl.gd").new()
+	camctl.reset_view.connect(func():
+		cam_yaw = CAM_YAW_DEG
+		cam_size = CAM_SIZE)
+	ui.add_child(camctl)
 	var rects: Array = hud.ui_rects()
+	rects.append(func(): return camctl.rect())
 	stick_l.blocked_rects = rects
 	stick_r.blocked_rects = rects
 
@@ -89,7 +102,9 @@ func _ready() -> void:
 		if a.begins_with("--at="):
 			_shot_at = float(a.substr(5))
 		if a.begins_with("--cam="):
-			cam.size = float(a.substr(6))
+			cam_size = float(a.substr(6))
+		if a.begins_with("--camyaw="):
+			cam_yaw = float(a.substr(9))
 		if a.begins_with("--time="):
 			daynight.t = float(a.substr(7)); daynight.auto = false
 		if a.begins_with("--test="):
@@ -110,7 +125,20 @@ func _follow(k: float) -> void:
 	var target := Vector3(p.x, cam_h, p.z)
 	cam.global_position = target + cam.global_transform.basis.z * 60.0
 
+func _update_camera(dt: float) -> void:
+	var v: Vector2 = camctl.vec
+	if v.length() > 0.12:
+		cam_yaw = fposmod(cam_yaw - v.x * CAM_ROT_SPEED * dt, 360.0)
+		cam_size = clampf(cam_size * exp(v.y * CAM_ZOOM_SPEED * dt), CAM_SIZE_MIN, CAM_SIZE_MAX)
+	if Input.is_key_pressed(KEY_Q): cam_yaw = fposmod(cam_yaw + 90.0 * dt, 360.0)
+	if Input.is_key_pressed(KEY_E): cam_yaw = fposmod(cam_yaw - 90.0 * dt, 360.0)
+	cam.rotation_degrees = Vector3(-CAM_ELEV_DEG, cam_yaw, 0)
+	cam.size = cam_size
+	player.cam_yaw = deg_to_rad(cam_yaw)
+	daynight.sun.directional_shadow_max_distance = clampf(cam_size * 3.2, 22.0, 60.0)
+
 func _process_game(dt: float) -> void:
+	_update_camera(dt)
 	var move: Vector2 = stick_l.vec
 	var kb := Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_up", "ui_down"))
 	if kb != Vector2.ZERO:
@@ -201,6 +229,15 @@ func _run_test(dt: float) -> void:
 					var back: Vector3 = cam.global_transform.basis.z
 					var bt := Vector2(back.x, back.z).normalized()
 					player.set_tile(Vector2(best.x, best.y) - bt * 1.6)
+		"runaim", "runback":
+			stick_l.active = true
+			stick_l.vec = Vector2(0, -1)
+			stick_r.active = true
+			stick_r.vec = Vector2(1, 0) if _test_script == "runaim" else Vector2(0.2, 1)
+			stick_r.len_px = 60.0
+			if Engine.get_process_frames() % 20 == 0 and _tt > 1.0:
+				var bd: Vector3 = player.barrel_dir()
+				print("RUNAIM t=", snappedf(_tt, 0.1), " legs=", snappedf(rad_to_deg(player.yaw), 1), " move=", snappedf(rad_to_deg(WorldGen_yaw(player.move_dir)), 1), " aim=", snappedf(rad_to_deg(player.aim_yaw), 1), " twist=", snappedf(rad_to_deg(player.aim_local), 1), " barrel=", snappedf(rad_to_deg(atan2(bd.x, bd.z)), 1), " back=", player.backpedal, " anim=", player.anim.current_animation, " spd=", snappedf(player.anim.speed_scale, 0.01), " bullets=", weapon.bullets.size())
 		"aim":
 			stick_r.active = true
 			stick_r.vec = Vector2(1, 0.3)
@@ -211,3 +248,6 @@ func _set_xray_node(n: Node, on: bool) -> void:
 		n.set_instance_shader_parameter("xray_on", 1.0 if on else 0.0)
 	for c in n.get_children():
 		_set_xray_node(c, on)
+
+func WorldGen_yaw(d: Vector2) -> float:
+	return atan2(d.x, d.y)

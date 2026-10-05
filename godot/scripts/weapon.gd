@@ -56,8 +56,7 @@ func auto_target():
 	if best == null:
 		return null
 	var d2: Vector2 = best.tile - player.tile
-	# тайлы -> экранный вектор стика (обратное к screen_to_tiles)
-	return Vector2(d2.x - d2.y, d2.x + d2.y).normalized()
+	return player.tiles_to_aim(d2)
 
 func update_weapon(dt: float, firing: bool) -> void:
 	cooldown -= dt

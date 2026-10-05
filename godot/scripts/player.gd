@@ -6,6 +6,16 @@ extends Node3D
 const SPEED := 2.0                 # тайлов/с по каждой оси (как в v7: ~2.85 тайла/с по диагонали)
 const ACCEL := 14.0
 const BODY_TURN_RATE := 5.5        # рад/с — поворот тела при стрельбе
+# Стрельба на ходу (стиль «Корпус 90° → пятится» из браузерной версии):
+# НОГИ ВСЕГДА ИДУТ ПО НАПРАВЛЕНИЮ ДВИЖЕНИЯ — лицом вперёд или спиной вперёд (тот же
+# бег, проигранный назад). К цели поворачивается только верх: корпус (скручивание
+# позвоночника до TWIST) и руки (ещё ARMS). Цель дальше — боец разворачивается и пятится.
+const TWIST := 1.5708              # 90°
+const ARMS := 0.2618               # 15°
+const REACH := TWIST + ARMS
+const FIRE_SPEED := 0.65           # скорость бега при прицеле (×)
+const BACK_SPEED := 0.45           # скорость пятясь (×)
+const AIM_ELEV_K := 0.7297         # sin(46.8°): по вертикали экрана земля сжата — поправка прицела
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
@@ -25,6 +35,8 @@ var aim_blend := 0.0
 var recoil := 0.0
 var backpedal := false
 var slope_along := 0.0
+var aim_local := 0.0              # на сколько ствол повёрнут относительно ног (рад): корпус + руки
+var cam_yaw := 0.7853982          # поворот камеры (рад), задаёт main.gd
 
 var model: Node3D
 var skel: Skeleton3D
@@ -154,9 +166,21 @@ func shot_fired() -> void:
 		muzzle_flash.scale = Vector3(k, k, k)
 		muzzle_flash.rotation.z = randf() * TAU
 
-# экранный вектор стика -> направление в мире (тайлы): как в браузерной версии
-static func screen_to_tiles(v: Vector2) -> Vector2:
-	return Vector2(v.x + v.y, v.y - v.x)
+# экранный вектор стика -> направление в мире (тайлы). «Вверх» — туда, куда смотрит камера.
+func screen_to_tiles(v: Vector2) -> Vector2:
+	var fwd := Vector2(-sin(cam_yaw), -cos(cam_yaw))
+	var right := Vector2(cos(cam_yaw), -sin(cam_yaw))
+	return (right * v.x + fwd * (-v.y)) * 1.4142
+
+# то же для прицела: с поправкой на сжатие земли по вертикали экрана
+func aim_to_tiles(v: Vector2) -> Vector2:
+	return screen_to_tiles(Vector2(v.x, v.y / AIM_ELEV_K))
+
+# обратное (для автострельбы): направление на цель в тайлах -> «стик» прицела
+func tiles_to_aim(d: Vector2) -> Vector2:
+	var fwd := Vector2(-sin(cam_yaw), -cos(cam_yaw))
+	var right := Vector2(cos(cam_yaw), -sin(cam_yaw))
+	return Vector2(d.dot(right), -d.dot(fwd) * AIM_ELEV_K).normalized()
 
 static func tiles_to_yaw(d: Vector2) -> float:
 	# тайлы (x, y) -> Godot (x, z); yaw: +Z = 0
@@ -177,8 +201,8 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	moving = stick.length() > 0.01
 	if moving:
 		var mf := 1.0
-		if firing:
-			mf = 0.45 if stick.length() < 0.28 else 0.72
+		if aiming:
+			mf = BACK_SPEED if backpedal else FIRE_SPEED
 		want = screen_to_tiles(stick) * SPEED * mf
 		want *= _terrain_speed(want)
 		move_dir = want.normalized()
@@ -199,8 +223,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	aiming = aim_active
 	firing = fire_now and aim_active
 	if aim_active and aim_stick.length() > 0.01:
-		var d := screen_to_tiles(aim_stick)
-		aim_yaw = tiles_to_yaw(d)
+		aim_yaw = tiles_to_yaw(aim_to_tiles(aim_stick))
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, dt * 9.0 * (1.0 if aiming else 0.6))
 	recoil = maxf(0.0, recoil - dt * 14.0)
 	flash_t = maxf(0.0, flash_t - dt)
@@ -208,24 +231,38 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 
 	# --- тело ---
 	var move_yaw := tiles_to_yaw(move_dir) if moving else yaw
-	var body_target := move_yaw
+	var legs := move_yaw                      # куда смотрят ноги
+	if aiming and moving:
+		# цель дальше, чем доворачивают корпус и руки — разворот к цели и бег спиной вперёд
+		var rel := absf(wrapf(aim_yaw - move_yaw, -PI, PI))
+		backpedal = rel > (REACH - 0.17 if backpedal else REACH)
+		if backpedal:
+			legs = wrapf(move_yaw + PI, -PI, PI)
+	elif aiming:
+		backpedal = false
+		legs = aim_yaw                        # стоит — весь корпус к цели
+	else:
+		backpedal = false
 	if aiming:
-		body_target = aim_yaw
-	if aiming:
-		# разворот почти на 180° — в сторону прицела, а не как выпадет
-		var d2 := wrapf(body_target - yaw, -PI, PI)
+		# поворот ног ограничен по скорости; на ~180° — в сторону прицела, а не как выпадет
+		var d2 := wrapf(legs - yaw, -PI, PI)
+		if absf(d2) > 2.9:
+			var side := signf(wrapf(aim_yaw - yaw, -PI, PI))
+			if side != 0.0 and signf(d2) != side:
+				d2 += side * TAU
 		yaw = wrapf(yaw + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
 	elif moving:
-		yaw = lerp_angle(yaw, body_target, minf(1.0, 14.0 * dt))
+		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
 	model.rotation.y = yaw
 
-	# ноги: вперёд или пятится (если тело смотрит назад от движения)
-	backpedal = false
-	if moving and aiming:
-		var rel := absf(wrapf(move_yaw - yaw, -PI, PI))
-		backpedal = rel > 1.75
+	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
+	var aim_rel := 0.0
+	if aiming:
+		aim_rel = clampf(wrapf(aim_yaw - yaw, -PI, PI), -REACH, REACH)
+	aim_local += (aim_rel - aim_local) * minf(1.0, (12.0 if aiming else 8.0) * dt)
+
 	if moving and real_speed > 0.15:
-		# ноги в клипе идут с той же скоростью, что боец по земле — без «коньков»
+		# шаг анимации = шагу по земле (без «коньков»); пятясь — тот же клип назад
 		var mps := real_speed * WorldGen.T
 		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.3, 1.6)
 		_play("Run", -k if backpedal else k)
@@ -242,7 +279,8 @@ func foot_offset() -> float:
 	return lo - global_position.y
 
 func barrel_on_target() -> bool:
-	return absf(wrapf(aim_yaw - yaw, -PI, PI)) < 0.25
+	# ствол реально смотрит туда, куда прицел (с допуском ~11°)
+	return absf(wrapf(aim_yaw - (yaw + aim_local), -PI, PI)) < 0.2
 
 func _play(n: String, speed: float) -> void:
 	if anim == null:
