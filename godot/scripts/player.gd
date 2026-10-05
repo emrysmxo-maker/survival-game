@@ -259,21 +259,34 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	# --- тело: точный перенос браузерной версии (src/character.js) ---
 	# Ноги — строго по движению; цель дальше REACH — разворот лицом к цели и шаг назад.
 	# Тело поворачивается с ограниченной скоростью (5.5 рад/с), на ~180° — в сторону прицела.
+	# Важно: при беге назад + стрельба в сторону, ноги не должны разворачиваться на 180°
+	# вместе с корпусом — в противном случае получается «шпагат». Делим поворот на два этапа:
+	# 1) ноги остаются по движению; 2) корпус и ствол плавно догоняют цель.
 	var move_yaw := tiles_to_yaw(move_dir) if moving else yaw
 	var legs := move_yaw
 	if aiming and moving:
 		var rel := absf(wrapf(aim_world - move_yaw, -PI, PI))
-		backpedal = rel > (REACH - 0.17 if backpedal else REACH)   # гистерезис 10°
+		# Порог гистерезиса: если цель почти сзади, включаем состояние пятканья, но не
+		# переворачиваем ноги на 180° в одну фазу. Ноги остаются по направлению движения.
+		backpedal = rel > (REACH - 0.17 if backpedal else REACH)
 		if backpedal:
-			legs = wrapf(move_yaw + PI, -PI, PI)
+			legs = move_yaw
 	elif aiming:
 		backpedal = false
 		legs = aim_world
 	else:
 		backpedal = false
 	if aiming:
+		# Корпус вращается к цели, но не пытается сразу переломить ноги на 180°.
 		var d2 := wrapf(legs - yaw, -PI, PI)
-		if absf(d2) > 2.9:
+		if backpedal:
+			var body_target := wrapf(aim_world - yaw, -PI, PI)
+			# Когда цель почти сзади, делаем поворот корпуса в два шага: сначала на 90°,
+			# затем остальное, чтобы не возникал «шпагат» на бегу.
+			var t := clampf(absf(body_target) / (PI * 0.75), 0.0, 1.0)
+			var max_step := BODY_TURN_RATE * dt * lerpf(0.5, 1.0, t)
+			d2 = clampf(body_target, -max_step, max_step)
+		elif absf(d2) > 2.9:
 			var side := signf(wrapf(aim_world - yaw, -PI, PI))
 			if side != 0.0 and signf(d2) != side:
 				d2 += side * TAU
