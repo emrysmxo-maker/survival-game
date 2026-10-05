@@ -32,16 +32,16 @@ const ASPEN := ["aspen0_0", "aspen1_0"]
 const DEAD := ["dead0_0", "dead1_0", "dead2_0"]
 const SAP_SMALL := ["firsap_a", "firsap_b", "firsap_c", "pinesap_a", "pinesap_b", "pinesap_c"]
 const SAP_MED := ["firsapm_a", "firsapm_b", "firsapm_c", "pinesapm_a", "pinesapm_b", "pinesapm_c"]
-const SHRUB := ["shrub1", "shrub2_a", "shrub2_b", "shrub2_c", "shrub2_d", "shrub3_a", "shrub3_b", "shrub3_c", "shrub3_d", "shrub4"]
+const SHRUB := ["shrub2_a", "shrub2_b", "shrub2_c", "shrub2_d", "shrub3_a", "shrub3_b", "shrub3_c", "shrub3_d", "shrub4"]
 const FERN := ["fern_a", "fern_b", "fern_c", "fern_d"]
 const NETTLE := ["nettle_medium_a", "nettle_medium_b", "nettle_small_a", "nettle_small_b", "nettle_tall_a", "nettle_tall_b"]
-const GRASS := ["grass1_small_a", "grass1_mid_b", "grass1_tall_a", "grass1_tall_b", "grass1_large_b", "grass1_small_b", "grass2_a", "grass2_b", "grass2_c", "grass2_d", "grass2_e", "weed_a", "weed_b", "weed_c", "weed_d", "weed_e"]
-const FLOWERS := ["celandine_a", "celandine_b", "celandine_c", "celandine_d", "celandine_e", "dandelion_a", "dandelion_b", "dandelion_c", "dandelion_d", "dandelion_e", "sorrel_a", "sorrel_b", "sorrel_c", "sorrel_d", "sorrel_e", "sorrel_f"]
-const MOSS := ["moss_a", "moss_b", "moss_c", "moss_d", "moss_e", "moss_f", "moss_g", "moss_h"]
+const GRASS := ["grass1_small_a", "grass1_mid_b", "grass1_tall_a", "grass1_tall_b", "grass1_large_b", "grass1_small_b", "grass2_a", "grass2_b", "grass2_c", "grass2_d", "grass2_e"]
+const FLOWERS := ["celandine_a", "celandine_b", "celandine_c", "celandine_d", "celandine_e", "dandelion_a", "dandelion_b", "dandelion_c", "dandelion_d", "dandelion_e"]
+const MOSS := []   # мох — слой текстуры земли
 const STUMP := ["stump1", "stump2"]
 const LOG := ["log1", "log1b", "log2", "log2b"]
 const BRANCH := ["branches_a", "branches_b", "branches_c"]
-const ROOTS := ["pineroots_a", "pineroots_b", "rootcl1", "rootcl2_a", "rootcl2_b", "rootcl2_c", "root1"]
+const ROOTS := []  # корни убраны (выглядели как «тарелки» земли)
 const ROCK := ["boulder1", "mrock1", "mrock2", "mrock3", "mrock4", "mrock5", "mrock6", "mrock7", "mrock8", "mrock9", "mrock10", "mrock11", "mrock12", "mrock13", "rock7", "stone1"]
 # что лежит на земле (рисуется «на земле», без раздвигания) и что твёрдое (столкновения), радиус — тайлы
 const FLAT_CATS := ["moss", "branch", "roots", "log"]
@@ -248,7 +248,6 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 			"grass": (0.25 + clearing * 1.2 + t4[3] * 0.6) * eco.grass,
 			"flower": clearing * 0.45 * eco.grass,
 			"nettle": (0.05 + clearing * 0.15 + t4[2] * 0.3) * (1.0 - t4[3]),
-			"moss": (0.15 + t4[3] * 0.6 + t4[5] * 0.4) * eco.moss,
 		}
 		var sum := 0.0
 		for kk in w:
@@ -262,7 +261,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 				kind = kk
 				break
 			pick -= w[kk]
-		var lst: Array = {"fern": FERN, "grass": GRASS, "flower": FLOWERS, "nettle": NETTLE, "moss": MOSS}[kind]
+		var lst: Array = {"fern": FERN, "grass": GRASS, "flower": FLOWERS, "nettle": NETTLE}[kind]
 		var sk: float = 0.7 if kind == "fern" else 1.0
 		objs.append(_obj(rng, x4, y4, lst[int(rng.randf() * lst.size())], kind, (0.8 + rng.randf() * 0.4) * sk))
 	# 4) валежник: пни, брёвна, ветки, корни
@@ -282,7 +281,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if rng.randf() < 0.6 and terrain(x7, y7)[1] < 0.02 and path_dist(x7, y7) > 1.2:
 			objs.append(_obj(rng, x7, y7, BRANCH[int(rng.randf() * BRANCH.size())], "branch", 0.8 + rng.randf() * 0.4))
 	for t in trees:
-		if rng.randf() < 0.35:
+		if not ROOTS.is_empty() and rng.randf() < 0.35:
 			var a := rng.randf() * TAU
 			objs.append(_obj(rng, t.x + cos(a) * 0.3, t.y + sin(a) * 0.3, ROOTS[int(rng.randf() * ROOTS.size())], "roots", 0.7 + rng.randf() * 0.3))
 	# 5) камни: на каменистых местах — валуны, везде — редкие камешки

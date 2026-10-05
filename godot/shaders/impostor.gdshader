@@ -73,7 +73,6 @@ void fragment() {
 	if (c.a < 0.5) { discard; }
 	bool shadow_pass = dot(normalize(INV_VIEW_MATRIX[2].xyz), cam_back) < 0.995;
 	// крона перед бойцом — полупрозрачная (дизеринг всего дерева, без «дырки»); тень остаётся целой
-	if (!shadow_pass && v_vis < 0.999) { discard; }
 	vec4 nd = texture(ndt_tex, UV);
 	vec2 nxy = nd.rg * 2.0 - 1.0;
 	nxy.x *= v_flip;

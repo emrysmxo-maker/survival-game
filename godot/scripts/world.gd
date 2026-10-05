@@ -5,12 +5,13 @@ extends Node3D
 # здесь они освещаются солнцем по-настоящему и пересекаются по глубине.
 # Чанки считаются в фоновых потоках, в главном — только сборка меша.
 
-const LOAD_R := 3          # чанков вокруг бойца (7×7)
+var load_radius := 3       # чанков вокруг бойца (5×5 / 7×7, настройка качества)
 const DROP_R := 5
 const GRID := 24           # клеток сетки земли на чанк (шаг 0.5 тайла)
 # яркость по видам (модели сняты с разной экспозицией)
-const GAIN := {"pine": 1.6, "fir": 1.3, "pinesap": 1.4, "pinesapm": 1.4, "firsap": 1.2, "firsapm": 1.2, "broad1": 1.2, "broad2": 1.2, "smalltree": 1.15, "birch0": 1.1, "birch1": 1.1, "birch2": 1.1, "oak0": 1.15, "oak1": 1.15}
-const CAT_GAIN := {"tree": 1.45, "dead": 1.2, "sap": 1.3, "sapm": 1.35, "shrub": 1.25, "fern": 1.1, "nettle": 1.1}
+const GAIN := {}
+const CAT_GAIN := {"tree": 1.1, "dead": 1.0, "sap": 1.05, "sapm": 1.05, "shrub": 1.05}
+const OCCLUDERS := ["tree", "dead", "sapm", "shrub"]
 const GROUND_LAYERS := ["floor", "grass", "moss", "ash", "rocky", "swamp", "path", "riverbed"]
 
 var chunks := {}           # Vector2i -> {"mesh": MeshInstance3D, "c": content}
@@ -20,12 +21,12 @@ var _mutex := Mutex.new()
 var ground_mat: ShaderMaterial
 var kinds := {}            # ключ импостора -> {"mmi", "top", "flat", "cat"}
 var imp_meta := {}
+var gallery := OS.get_cmdline_user_args().has("--gallery")
 var density := 1.0         # доля травяного яруса (настройка качества)
 var _dirty := false
 var _rebuild_t := 0.0
 var center := Vector2i(999999, 999999)
 var player_tile := Vector2.ZERO
-var _fade := {}            # объект -> текущая видимость (для дерева перед бойцом)
 
 func _ready() -> void:
 	ground_mat = ShaderMaterial.new()
@@ -69,6 +70,9 @@ func _add_kind(key: String, m: Dictionary) -> void:
 	mat.set_shader_parameter("ndt_tex", load("res://assets/imp/%s_ndt.png" % key))
 	mat.set_shader_parameter("depth_range", m.R)
 	mat.set_shader_parameter("gain", GAIN.get(key.split("_")[0], 1.0) * CAT_GAIN.get(cat, 1.0))
+	# запись глубины в шейдере отключает ранний тест глубины (дорого на телефоне):
+	# нужна только объёмным объектам; трава/цветы/ветки/брёвна рисуются плоско
+	mat.set_shader_parameter("use_depth", not (cat in ["grass", "flower", "fern", "nettle", "branch", "log"]))
 	mat.set_shader_parameter("sway", WorldGen.SWAY.get(cat, 0.0))
 	mat.set_shader_parameter("push", WorldGen.PUSH.get(cat, 0.0))
 	mat.set_shader_parameter("translucency", 0.3 if cat in ["tree", "sap", "sapm", "shrub", "fern", "nettle", "grass", "flower"] else 0.0)
@@ -84,25 +88,10 @@ func _add_kind(key: String, m: Dictionary) -> void:
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.extra_cull_margin = 16384.0
 	add_child(mmi)
-	var fmmi: MultiMeshInstance3D = null
-	if cat in ["tree", "dead", "sapm", "shrub"]:
-		# полупрозрачная копия для деревьев перед бойцом
-		var fmat: ShaderMaterial = mat.duplicate()
-		fmat.shader = load("res://shaders/impostor_fade.gdshader")
-		var fmm := MultiMesh.new()
-		fmm.transform_format = MultiMesh.TRANSFORM_3D
-		fmm.use_custom_data = true
-		fmm.mesh = mm.mesh
-		fmmi = MultiMeshInstance3D.new()
-		fmmi.multimesh = fmm
-		fmmi.material_override = fmat
-		fmmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		fmmi.extra_cull_margin = 16384.0
-		add_child(fmmi)
-	kinds[key] = {"mmi": mmi, "fmmi": fmmi, "top": m.ay / m.ppm, "flat": flat, "cat": cat}
+	kinds[key] = {"mmi": mmi, "top": m.ay / m.ppm, "flat": flat, "cat": cat}
 
 # ---------- чанки ----------
-func update_world(tile_pos: Vector2, cam: Camera3D) -> void:
+func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 	player_tile = tile_pos
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))
 	if c != center:
@@ -115,8 +104,8 @@ func update_world(tile_pos: Vector2, cam: Camera3D) -> void:
 	if pending.size() < 4:
 		var best := Vector2i.ZERO
 		var bd := 1e9
-		for dx in range(-LOAD_R, LOAD_R + 1):
-			for dy in range(-LOAD_R, LOAD_R + 1):
+		for dx in range(-load_radius, load_radius + 1):
+			for dy in range(-load_radius, load_radius + 1):
 				var k := Vector2i(c.x + dx, c.y + dy)
 				if chunks.has(k) or pending.has(k):
 					continue
@@ -141,7 +130,6 @@ func update_world(tile_pos: Vector2, cam: Camera3D) -> void:
 	_rebuild_t -= get_process_delta_time()
 	if _dirty and _rebuild_t <= 0.0:
 		_rebuild_sprites()
-	_update_fade(cam)
 
 func ensure_now(tile_pos: Vector2, r: int) -> void:
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))
@@ -166,7 +154,6 @@ func set_density(d: float) -> void:
 	for k in chunks.keys():
 		chunks[k].mesh.queue_free()
 	chunks.clear()
-	_fade.clear()
 	center = Vector2i(999999, 999999)
 	ensure_now(player_tile, 2)
 
@@ -208,8 +195,21 @@ func _build_chunk(k: Vector2i) -> void:
 			var a := j * n + i
 			idx.append_array([a, a + 1, a + n + 1, a, a + n + 1, a + n])
 	var content := WorldGen.chunk_content(k.x, k.y, density)
+	if gallery:
+		content = _gallery_content(k)
+	# готовые данные для MultiMesh по видам: 12 чисел матрицы + 4 своих на экземпляр
+	var bufs := {}
 	for o in content.objs:
 		o["h"] = WorldGen.height(o.x, o.y) * WorldGen.HK
+		var kd: Dictionary = kinds.get(o.key, {})
+		if kd.is_empty():
+			continue
+		if not bufs.has(o.key):
+			bufs[o.key] = PackedFloat32Array()
+		var s: float = o.scale
+		var c := _custom(o, kd)
+		bufs[o.key].append_array([s, 0.0, 0.0, o.x * WorldGen.T, 0.0, s, 0.0, o.h, 0.0, 0.0, s, o.y * WorldGen.T, c.r, c.g, c.b, c.a])
+	content["bufs"] = bufs
 	var data := {"v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "i": idx, "content": content}
 	_mutex.lock()
 	results[k] = data
@@ -237,106 +237,67 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 func _rebuild_sprites() -> void:
 	_dirty = false
 	_rebuild_t = 0.25
-	var lists := {}
-	for key in kinds:
-		lists[key] = []
+	var all := {}
 	for k in chunks:
-		for o in chunks[k].c.objs:
-			if lists.has(o.key):
-				lists[o.key].append(o)
+		var bufs: Dictionary = chunks[k].c.bufs
+		for key in bufs:
+			if not all.has(key):
+				all[key] = PackedFloat32Array()
+			all[key].append_array(bufs[key])
 	for key in kinds:
-		var kd: Dictionary = kinds[key]
-		var mm: MultiMesh = kd.mmi.multimesh
-		var arr: Array = lists[key]
-		mm.instance_count = arr.size()
-		for i in arr.size():
-			var o: Dictionary = arr[i]
-			o["mi"] = i
-			var s: float = o.scale
-			var pos := Vector3(o.x * WorldGen.T, o.h, o.y * WorldGen.T)
-			mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(s, s, s)), pos))
-			mm.set_instance_custom_data(i, _custom(o, kd, 1.0 if _fade.get(o, 1.0) >= 0.999 else 0.0))
+		var mm: MultiMesh = kinds[key].mmi.multimesh
+		var buf: PackedFloat32Array = all.get(key, PackedFloat32Array())
+		var n := buf.size() / 16
+		if mm.instance_count != n:
+			mm.instance_count = n
+		if n > 0:
+			mm.buffer = buf
 
-func _custom(o: Dictionary, kd: Dictionary, vis: float) -> Color:
+func _custom(o: Dictionary, kd: Dictionary) -> Color:
 	var flip := -1.0 if o.flip else 1.0
-	return Color(o.x * 0.55 + o.y * 0.35, flip * (1.0 + vis), kd.top * o.scale, 1.0 if kd.flat else 0.0)
+	return Color(o.x * 0.55 + o.y * 0.35, flip * 2.0, kd.top * o.scale, 1.0 if kd.flat else 0.0)
 
-# Дерево/куст, закрывающее бойца, становится полупрозрачным (вместо «дырки» в кроне)
-func _update_fade(cam: Camera3D) -> void:
-	if cam == null or OS.get_cmdline_user_args().has("--nofade"):
-		return
-	var dt := get_process_delta_time()
-	var pp := WorldGen.to_world(player_tile.x, player_tile.y, WorldGen.height(player_tile.x, player_tile.y))
+# ---------- запросы ----------
+# Закрывает ли крона/куст бойца на экране: точки тела (ноги, пояс, грудь, голова)
+# проверяются по маске непрозрачности картинки (meta.json → mask)
+func occluded(pos: Vector3, h: float, cam: Camera3D) -> bool:
 	var right := cam.global_transform.basis.x
 	var up := cam.global_transform.basis.y
-	var back := cam.global_transform.basis.z           # к камере
-	var want := {}
-	var pc := Vector2i(floori(player_tile.x / WorldGen.CHUNK), floori(player_tile.y / WorldGen.CHUNK))
+	var back := cam.global_transform.basis.z
+	var t := Vector2(pos.x / WorldGen.T, pos.z / WorldGen.T)
+	var pc := Vector2i(floori(t.x / WorldGen.CHUNK), floori(t.y / WorldGen.CHUNK))
+	var hits := 0
 	for dx in range(-1, 3):
 		for dy in range(-1, 3):
 			var k := Vector2i(pc.x + dx, pc.y + dy)
 			if not chunks.has(k):
 				continue
 			for o in chunks[k].c.objs:
-				if not (o.cat in ["tree", "dead", "sapm", "shrub"]):
+				if not (o.cat in OCCLUDERS):
 					continue
-				var d := Vector3(o.x * WorldGen.T, o.h, o.y * WorldGen.T) - pp
-				if d.dot(back) < 0.3:          # не перед бойцом
+				var d := Vector3(o.x * WorldGen.T, o.h, o.y * WorldGen.T) - pos
+				if d.dot(back) < 0.2:
 					continue
-				var kd: Dictionary = kinds.get(o.key, {})
-				if kd.is_empty():
+				var m: Dictionary = imp_meta.get(o.key, {})
+				if m.is_empty() or not m.has("mask"):
 					continue
-				var top: float = kd.top * o.scale
-				var x := d.dot(right)
-				var y := d.dot(up)                 # низ дерева на экране относительно бойца
-				var half_w := top * 0.32
-				# боец на экране: от y=0 до y=1.5 (м), по x ±0.4
-				if absf(x) < half_w + 0.4 and -y + 1.5 > 0.0 and -y < top:
-					want[o] = 0.35
-	var changed := []
-	for o in want.keys():
-		if not _fade.has(o):
-			_fade[o] = 1.0
-	for o in _fade.keys():
-		var target: float = want.get(o, 1.0)
-		var v: float = move_toward(_fade[o], target, dt * 3.0)
-		if v != _fade[o] or target < 1.0:
-			_fade[o] = v
-			changed.append(o)
-		if v >= 1.0 and target >= 1.0:
-			_fade.erase(o)
-			changed.append(o)
-	if changed.is_empty():
-		return
-	var per_kind := {}
-	for o in changed:
-		var kd2: Dictionary = kinds.get(o.key, {})
-		if kd2.is_empty() or not o.has("mi"):
-			continue
-		var mm: MultiMesh = kd2.mmi.multimesh
-		var f: float = _fade.get(o, 1.0)
-		if o.mi < mm.instance_count:
-			# основной экземпляр: 1 — виден, иначе не рисуется (тень остаётся)
-			mm.set_instance_custom_data(o.mi, _custom(o, kd2, 1.0 if f >= 0.999 else 0.0))
-		per_kind[o.key] = true
-	# полупрозрачные копии
-	for key in per_kind:
-		var kd3: Dictionary = kinds[key]
-		if kd3.fmmi == null:
-			continue
-		var list := []
-		for o in _fade:
-			if o.key == key and _fade[o] < 0.999:
-				list.append(o)
-		var fm: MultiMesh = kd3.fmmi.multimesh
-		fm.instance_count = list.size()
-		for i in list.size():
-			var o2: Dictionary = list[i]
-			var s2: float = o2.scale
-			fm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(s2, s2, s2)), Vector3(o2.x * WorldGen.T, o2.h, o2.y * WorldGen.T)))
-			fm.set_instance_custom_data(i, _custom(o2, kd3, _fade[o2]))
+				var ppm: float = m.ppm
+				var s: float = o.scale
+				var fl := -1.0 if o.flip else 1.0
+				var rx: float = -d.dot(right) / s * fl
+				for fy in [0.15, 0.5, 0.85, 1.05]:
+					var ry: float = (-d.dot(up) + h * fy) / s
+					var u: float = (rx + m.ax / ppm) / (m.w / ppm)
+					var v: float = (m.ay / ppm - ry) / (m.h / ppm)
+					if u < 0.0 or u >= 1.0 or v < 0.0 or v >= 1.0:
+						continue
+					var mi: int = int(v * m.mask_h) * int(m.mask_w) + int(u * m.mask_w)
+					if m.mask.unicode_at(mi) == 49:
+						hits += 1
+						if hits >= 2:
+							return true
+	return false
 
-# ---------- запросы ----------
 func ecosystem_at(tile: Vector2) -> String:
 	return WorldGen.ecosystem(floori(tile.x / WorldGen.CHUNK), floori(tile.y / WorldGen.CHUNK)).name
 
@@ -357,3 +318,21 @@ func obstacles_near(tile: Vector2) -> Array:
 			if chunks.has(k):
 				out.append_array(chunks[k].c.solid)
 	return out
+
+# --- проверка: все объекты рядами у старта (запуск с --gallery) ---
+func _gallery_content(k: Vector2i) -> Dictionary:
+	var objs := []
+	if k == Vector2i(0, 0) or k == Vector2i(1, 0) or k == Vector2i(0, 1) or k == Vector2i(1, 1):
+		var keys := imp_meta.keys()
+		keys.sort()
+		var i := 0
+		for key in keys:
+			var cat: String = imp_meta[key].spec.cat
+			var step := 4.0 if cat in ["tree", "dead"] else 1.6
+			var x := 2.0 + float(i % 12) * 2.0
+			var y := 2.0 + float(i / 12) * 2.0
+			i += 1
+			if floori(x / WorldGen.CHUNK) != k.x or floori(y / WorldGen.CHUNK) != k.y:
+				continue
+			objs.append({"x": x, "y": y, "key": key, "cat": cat, "scale": 1.0, "flip": false})
+	return {"objs": objs, "trees": [], "solid": [], "eco": "gallery"}

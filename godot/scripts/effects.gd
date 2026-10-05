@@ -17,7 +17,7 @@ func _ready() -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	var q := PlaneMesh.new()
-	q.size = Vector2(0.11, 0.24)
+	q.size = Vector2(0.13, 0.28)
 	mm.mesh = q
 	_mm = MultiMeshInstance3D.new()
 	_mm.multimesh = mm
@@ -74,7 +74,9 @@ func step(ent, tile: Vector2, dt: float, heavy: bool) -> void:
 				weapon._puff(pos, Vector3(randf_range(-0.4, 0.4), randf_range(0.4, 0.9), randf_range(-0.4, 0.4)), Color(0.75, 0.85, 0.9, 0.5), 0.06, 0.5)
 		return
 	var soft := clampf(L[0] + L[1] + L[2] * 0.8, 0.0, 1.0)
-	var a := lerpf(0.10, 0.42, soft) * (1.3 if heavy else 1.0)
+	var a := lerpf(0.28, 0.6, soft) * (1.2 if heavy else 1.0)
+	if not heavy:
+		_step_sound(soft)
 	_prints.append({"pos": pos, "yaw": atan2(n.x, n.y), "a": a, "age": 0.0})
 	if _prints.size() > PRINT_MAX:
 		_prints.remove_at(0)
@@ -98,4 +100,43 @@ func _process(dt: float) -> void:
 		var p: Dictionary = _prints[i]
 		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, p.yaw), p.pos))
 		var fade := 1.0 - clampf((p.age - PRINT_LIFE * 0.6) / (PRINT_LIFE * 0.4), 0.0, 1.0)
-		mm.set_instance_color(i, Color(0.16, 0.12, 0.08, p.a * fade))
+		mm.set_instance_color(i, Color(0.10, 0.07, 0.04, p.a * fade))
+
+# --- звук шагов: короткий шорох (шум с затуханием), синтезируется при запуске ---
+var _steps: Array = []
+var _players: Array = []
+var _pi := 0
+func _make_steps() -> void:
+	for v in 4:
+		var rate := 22050
+		var n := int(rate * 0.11)
+		var data := PackedByteArray()
+		data.resize(n * 2)
+		var lp := 0.0
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 77 + v
+		for i in n:
+			var t := float(i) / n
+			var env := pow(1.0 - t, 3.0) * minf(1.0, t * 40.0)
+			lp += (rng.randf_range(-1.0, 1.0) - lp) * (0.18 + 0.06 * v)
+			var x := int(clampf(lp * env * 2.2, -1.0, 1.0) * 32000.0)
+			data.encode_s16(i * 2, x)
+		var st := AudioStreamWAV.new()
+		st.format = AudioStreamWAV.FORMAT_16_BITS
+		st.mix_rate = rate
+		st.data = data
+		_steps.append(st)
+	for i in 3:
+		var p := AudioStreamPlayer.new()
+		p.volume_db = -16.0
+		add_child(p)
+		_players.append(p)
+
+func _step_sound(soft: float) -> void:
+	if _steps.is_empty():
+		_make_steps()
+	var p: AudioStreamPlayer = _players[_pi % _players.size()]
+	_pi += 1
+	p.stream = _steps[randi() % _steps.size()]
+	p.pitch_scale = randf_range(0.85, 1.15) * (0.85 if soft > 0.5 else 1.0)
+	p.play()

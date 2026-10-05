@@ -22,6 +22,10 @@ var _shot_frames := 0
 var _test_script := ""
 var _shot_at := 2.0
 var _clock := 0.0
+var _xray_t := 0.0
+var _shots := 1
+var _shot_i := 0
+var _fixed_dt := 0.0
 
 func _ready() -> void:
 	RenderingServer.global_shader_parameter_set("gl_compat", RenderingServer.get_rendering_device() == null)
@@ -78,6 +82,10 @@ func _ready() -> void:
 		if a.begins_with("--shot="):
 			_shot = a.substr(7)
 			_shot_frames = 1
+		if a.begins_with("--shots="):
+			_shots = int(a.substr(8))
+		if a.begins_with("--fixeddt="):
+			_fixed_dt = float(a.substr(10))
 		if a.begins_with("--at="):
 			_shot_at = float(a.substr(5))
 		if a.begins_with("--cam="):
@@ -121,6 +129,13 @@ func _process_game(dt: float) -> void:
 	weapon.update_weapon(dt, player.firing)
 	zombies.update_zombies(dt)
 	world.update_world(player.tile, cam)
+	_xray_t -= dt
+	if _xray_t <= 0.0:
+		_xray_t = 0.1
+		player.set_xray(world.occluded(player.global_position, 1.5, cam))
+		for z in zombies.list:
+			if not z.dead:
+				_set_xray_node(z.node, world.occluded(z.node.global_position, 1.5, cam))
 	RenderingServer.global_shader_parameter_set("cam_back", cam.global_transform.basis.z)
 	RenderingServer.global_shader_parameter_set("player_pos", player.global_position)
 	_follow(minf(1.0, 2.6 * dt))
@@ -128,18 +143,23 @@ func _process_game(dt: float) -> void:
 var _fo_n := 0
 func _process(dt_raw: float) -> void:
 	var dt := minf(dt_raw, 0.05)      # всё считаем каждый кадр (145 fps), без шагов физики 60 Гц — иначе рывки
+	if _fixed_dt > 0.0:
+		dt = _fixed_dt
 	_process_game(dt)
 	if _test_script == "run" and Engine.get_process_frames() % 20 == 0 and _fo_n < 12:
 		_fo_n += 1
 		print("FOOT ", player.foot_offset(), " moving=", player.moving, " anim=", player._cur_anim)
-	hud.update_hud(dt, player.tile, world.ecosystem_at(player.tile), world.count_trees())
+	if hud.due(dt):
+		hud.update_hud(0.25, player.tile, world.ecosystem_at(player.tile), world.count_trees())
 	if _test_script != "":
 		_run_test(dt)
 	_clock = Time.get_ticks_msec() / 1000.0
 	if _shot != "" and _clock > _shot_at and _shot_frames > 0:
-		_shot_frames = 0
-		if true:
-			get_viewport().get_texture().get_image().save_png(_shot)
+		var path := _shot if _shots <= 1 else _shot.replace(".png", "_%02d.png" % _shot_i)
+		get_viewport().get_texture().get_image().save_png(path)
+		_shot_i += 1
+		if _shot_i >= _shots:
+			_shot_frames = 0
 			get_tree().quit()
 
 # --- проверки без экрана (запуск с --test=...) ---
@@ -164,7 +184,29 @@ func _run_test(dt: float) -> void:
 				zombies.list[0].tile = player.tile + Vector2(3, 1)
 				zombies.list[1].tile = player.tile + Vector2(-1, 3)
 			weapon.auto = _tt > 1.0
+		"behind":
+			if not has_meta("done"):
+				set_meta("done", true)
+				# встать за ближайшее дерево (дальше от камеры)
+				var best = null
+				var bd := 1e9
+				for o in world.obstacles_near(player.tile):
+					if o.tree:
+						var d: float = Vector2(o.x, o.y).distance_to(player.tile)
+						if d < bd:
+							bd = d
+							best = o
+				if best != null:
+					var back: Vector3 = cam.global_transform.basis.z
+					var bt := Vector2(back.x, back.z).normalized()
+					player.set_tile(Vector2(best.x, best.y) - bt * 1.6)
 		"aim":
 			stick_r.active = true
 			stick_r.vec = Vector2(1, 0.3)
 			stick_r.len_px = 10.0
+
+func _set_xray_node(n: Node, on: bool) -> void:
+	if n is GeometryInstance3D:
+		n.set_instance_shader_parameter("xray_on", 1.0 if on else 0.0)
+	for c in n.get_children():
+		_set_xray_node(c, on)

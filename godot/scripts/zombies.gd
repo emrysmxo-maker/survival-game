@@ -66,6 +66,8 @@ func spawn() -> void:
 	var glb: Node3D = _scene.instantiate()
 	glb.rotation.y = PI
 	z.model.add_child(glb)
+	player.add_xray(glb)
+	z.node.add_child(player.make_blob(0.8))
 	z.anim = _find(glb, "AnimationPlayer")
 	z.skel = _find(glb, "Skeleton3D")
 	for p in PARTS:

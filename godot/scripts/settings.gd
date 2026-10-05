@@ -25,6 +25,8 @@ func apply(l: int) -> void:
 	RenderingServer.global_shader_parameter_set("q_ground_normals", l >= 1)
 	Engine.max_fps = [60, 90, 0][l]
 	if main and main.world:
+		main.world.load_radius = [2, 3, 3][l]
+	if main and main.world:
 		main.world.set_density([0.5, 0.8, 1.0][l])
 	var cf := ConfigFile.new()
 	cf.set_value("gfx", "level", l)

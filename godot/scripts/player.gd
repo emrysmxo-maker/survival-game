@@ -33,6 +33,7 @@ var rifle_rig: Node3D
 var muzzle_flash: Node3D
 var flash_t := 0.0
 var _cur_anim := ""
+var blob: MeshInstance3D
 var _anim_speed := 1.0
 
 const RIFLE_GRIP := Vector3(0, -0.10, -0.125)
@@ -54,6 +55,9 @@ func _ready() -> void:
 	anim = _find(glb, "AnimationPlayer")
 	_recolor(glb)
 	_make_rifle()
+	add_xray(model)
+	blob = make_blob(0.75)
+	add_child(blob)
 	if skel:
 		var ik = load("res://scripts/rifle_ik.gd").new()
 		ik.player = self
@@ -294,3 +298,48 @@ func port_world() -> Vector3:
 
 func barrel_dir() -> Vector3:
 	return (rifle_rig.global_transform.basis * Vector3(0, 0, 1)).normalized()
+
+# --- тень-пятно под ногами и силуэт сквозь деревья (общие для бойца и зомби) ---
+static func make_blob(size: float) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var q := PlaneMesh.new()
+	q.size = Vector2(size, size)
+	m.mesh = q
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/blob.gdshader")
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.position.y = 0.07
+	return m
+
+static func add_xray(n: Node) -> void:
+	var xr := ShaderMaterial.new()
+	xr.shader = load("res://shaders/xray.gdshader")
+	xr.render_priority = 10
+	_xray_walk(n, xr)
+
+static func _xray_walk(n: Node, xr: ShaderMaterial) -> void:
+	if n is MeshInstance3D and n.mesh:
+		for i in n.mesh.get_surface_count():
+			var m: Material = n.get_active_material(i)
+			if m == null:
+				continue
+			if n.get_surface_override_material(i) == null:
+				m = m.duplicate()
+				n.set_surface_override_material(i, m)
+			m.next_pass = xr
+	for c in n.get_children():
+		_xray_walk(c, xr)
+
+var _xray := false
+func set_xray(on: bool) -> void:
+	if on == _xray:
+		return
+	_xray = on
+	_xr_set(model, on)
+
+func _xr_set(n: Node, on: bool) -> void:
+	if n is GeometryInstance3D:
+		n.set_instance_shader_parameter("xray_on", 1.0 if on else 0.0)
+	for c in n.get_children():
+		_xr_set(c, on)

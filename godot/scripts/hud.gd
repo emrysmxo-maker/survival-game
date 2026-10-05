@@ -2,7 +2,7 @@ extends CanvasLayer
 # Интерфейс: экосистема/координаты/деревья, версия и fps, мини-карта (тап — большая
 # карта с 5 локациями), телепорт 📍, «ЗОМБИ +», «АВТО ОГОНЬ», время суток с паузой.
 
-const VERSION := "G0.5"
+const VERSION := "G0.6"
 var main
 var info: Label
 var ver: Label
@@ -197,6 +197,15 @@ func ui_rects() -> Array:
 	out.append(func(): return q_panel.get_global_rect() if q_panel.visible else Rect2())
 	out.append(func(): return get_viewport().get_visible_rect() if big.visible else Rect2())
 	return out
+
+var _hud_t := 0.0
+# true раз в 0.25 с: подписи и карта обновляются редко (не каждый кадр)
+func due(dt: float) -> bool:
+	_hud_t -= dt
+	if _hud_t > 0.0:
+		return false
+	_hud_t = 0.25
+	return true
 
 func update_hud(dt: float, tile: Vector2, eco: String, trees: int) -> void:
 	info.text = "Экосистема: %s\nКоординаты: X: %d, Y: %d\nДеревьев рядом: %d" % [eco, roundi(tile.x), roundi(tile.y), trees]
