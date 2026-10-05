@@ -28,7 +28,9 @@ var anim_speed := 0.0
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
-var aim_yaw := 0.0                 # куда смотрит ствол
+var aim_yaw := 0.0                 # куда целится игрок (цель)
+var aim_world := NAN               # куда ствол довернулся сейчас (плавно, как в старой версии: 260°/с)
+const AIM_TURN := 4.54             # рад/с
 var aiming := false                # правый стик нажат (автомат поднят)
 var firing := false                # стик за порогом — огонь
 var aim_world_dir := Vector3.FORWARD
@@ -226,6 +228,12 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	firing = fire_now and aim_active
 	if aim_active and aim_stick.length() > 0.01:
 		aim_yaw = tiles_to_yaw(aim_to_tiles(aim_stick))
+	if aiming:
+		if is_nan(aim_world):
+			aim_world = yaw + aim_local
+		aim_world = wrapf(aim_world + clampf(wrapf(aim_yaw - aim_world, -PI, PI), -AIM_TURN * dt, AIM_TURN * dt), -PI, PI)
+	else:
+		aim_world = NAN
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, dt * 9.0 * (1.0 if aiming else 0.6))
 	recoil = maxf(0.0, recoil - dt * 14.0)
 	flash_t = maxf(0.0, flash_t - dt)
@@ -236,27 +244,23 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	var legs := move_yaw                      # куда смотрят ноги
 	if aiming and moving:
 		# цель дальше, чем доворачивают корпус и руки — разворот к цели и бег спиной вперёд
-		var rel := absf(wrapf(aim_yaw - move_yaw, -PI, PI))
+		var rel := absf(wrapf(aim_world - move_yaw, -PI, PI))
 		backpedal = rel > (REACH - 0.17 if backpedal else REACH)
 		if backpedal:
 			legs = wrapf(move_yaw + PI, -PI, PI)
-		else:
-			# ноги доворачиваются к цели на треть (до 25°): корпус смотрит в сторону стрельбы, а не боком
-			legs = move_yaw + clampf(wrapf(aim_yaw - move_yaw, -PI, PI) * 0.33, -0.44, 0.44)
 	elif aiming:
 		backpedal = false
-		legs = aim_yaw                        # стоит — весь корпус к цели
+		legs = aim_world                        # стоит — весь корпус к цели
 	else:
 		backpedal = false
 	if aiming:
 		# поворот ног ограничен по скорости; на ~180° — в сторону прицела, а не как выпадет
 		var d2 := wrapf(legs - yaw, -PI, PI)
 		if absf(d2) > 2.9:
-			var side := signf(wrapf(aim_yaw - yaw, -PI, PI))
+			var side := signf(wrapf(aim_world - yaw, -PI, PI))
 			if side != 0.0 and signf(d2) != side:
 				d2 += side * TAU
-		# на бегу разворот ног быстрый (≈0.2 с на 180°): медленный разворот при беге раздвигал ноги в стороны
-		var rate := BODY_TURN_RATE * (2.6 if moving else 1.0)
+		var rate := BODY_TURN_RATE
 		yaw = wrapf(yaw + clampf(d2, -rate * dt, rate * dt), -PI, PI)
 	elif moving:
 		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
@@ -265,7 +269,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
 	var aim_rel := 0.0
 	if aiming:
-		aim_rel = clampf(wrapf(aim_yaw - yaw, -PI, PI), -REACH, REACH)
+		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -REACH, REACH)
 	aim_local += (aim_rel - aim_local) * minf(1.0, (12.0 if aiming else 8.0) * dt)
 
 	if moving and real_speed > 0.15:
