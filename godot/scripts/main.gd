@@ -34,11 +34,13 @@ var _test_script := ""
 var _shot_at := 2.0
 var _clock := 0.0
 var _xray_t := 0.0
+var _start := Vector2(4, 6)          # старт — Лагерь выживших
 var _shots := 1
 var _shot_i := 0
 var _fixed_dt := 0.0
 
 func _ready() -> void:
+	WorldGen.init()
 	RenderingServer.global_shader_parameter_set("gl_compat", RenderingServer.get_rendering_device() == null)
 	daynight = load("res://scripts/daynight.gd").new()
 	add_child(daynight)
@@ -111,6 +113,9 @@ func _ready() -> void:
 			_shot_at = float(a.substr(5))
 		if a.begins_with("--cam="):
 			cam_size = float(a.substr(6))
+		if a.begins_with("--tp="):
+			var xy := a.substr(5).split(",")
+			_start = Vector2(float(xy[0]), float(xy[1]))
 		if a.begins_with("--camelev="):
 			cam_elev = float(a.substr(10))
 		if a.begins_with("--camyaw="):
@@ -121,7 +126,9 @@ func _ready() -> void:
 			_test_script = a.substr(7)
 	settings.load_saved()
 	hud._refresh_q()
-	teleport(Vector2(10, 10))
+	teleport(_start)
+	if OS.get_cmdline_user_args().has("--bigmap"):
+		hud._open_big()
 
 func teleport(t: Vector2) -> void:
 	world.ensure_now(t, 2)
@@ -172,7 +179,8 @@ func _process_game(dt: float) -> void:
 			aim = at2
 			fire = true
 	player.step(dt, move, aim, aim_active, fire)
-	effects.step(player, player.tile, dt, false)
+	if not player.swimming:
+		effects.step(player, player.tile, dt, false)
 	weapon.update_weapon(dt, player.firing)
 	zombies.update_zombies(dt)
 	world.update_world(player.tile, cam)

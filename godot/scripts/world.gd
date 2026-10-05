@@ -15,6 +15,7 @@ var pending := {}
 var results := {}
 var _mutex := Mutex.new()
 var ground_mat: ShaderMaterial
+var water_mat: ShaderMaterial
 var kinds := {}            # вид -> {"mmis": [MultiMeshInstance3D], "pre", "bs", "top", "cr", "flat", "cat", "yaw"}
 var kinds_meta := {}
 var _scenes := {}
@@ -26,10 +27,13 @@ var center := Vector2i(999999, 999999)
 var player_tile := Vector2.ZERO
 
 func _ready() -> void:
+	WorldGen.init()
 	ground_mat = ShaderMaterial.new()
 	ground_mat.shader = load("res://shaders/ground.gdshader")
 	ground_mat.set_shader_parameter("t_albedo", load("res://assets/ground2/ground_diff_array.jpg"))
 	ground_mat.set_shader_parameter("t_normal", load("res://assets/ground2/ground_nor_array.jpg"))
+	water_mat = ShaderMaterial.new()
+	water_mat.shader = load("res://shaders/water.gdshader")
 	kinds_meta = JSON.parse_string(FileAccess.open("res://assets/models/kinds.json", FileAccess.READ).get_as_text())
 	var lim := 9999
 	for a in OS.get_cmdline_user_args():
@@ -235,6 +239,26 @@ func _build_chunk(k: Vector2i) -> void:
 		for i in GRID:
 			var a := j * n + i
 			idx.append_array([a, a + 1, a + n + 1, a, a + n + 1, a + n])
+	# вода (река, озёра): поверхность на той же сетке, только там, где есть вода
+	var wv := PackedVector3Array(); wv.resize(n * n)
+	var wm := PackedFloat32Array(); wm.resize(n * n)
+	var any_w := false
+	for j in n:
+		for i in n:
+			var x := sx + i * step
+			var y := sy + j * step
+			var W := WorldGen.water_at(x, y)
+			wm[j * n + i] = W.x
+			wv[j * n + i] = Vector3(x * WorldGen.T, W.y * WorldGen.HK, y * WorldGen.T)
+			if W.x > 0.02:
+				any_w = true
+	var widx := PackedInt32Array()
+	if any_w:
+		for j in GRID:
+			for i in GRID:
+				var a := j * n + i
+				if maxf(maxf(wm[a], wm[a + 1]), maxf(wm[a + n], wm[a + n + 1])) > 0.02:
+					widx.append_array([a, a + 1, a + n + 1, a, a + n + 1, a + n])
 	var content := WorldGen.chunk_content(k.x, k.y, density)
 	if gallery:
 		content = _gallery_content(k)
@@ -256,7 +280,7 @@ func _build_chunk(k: Vector2i) -> void:
 		var bs: Basis = tr.basis
 		bufs[o.key].append_array([bs.x.x, bs.y.x, bs.z.x, tr.origin.x, bs.x.y, bs.y.y, bs.z.y, tr.origin.y, bs.x.z, bs.y.z, bs.z.z, tr.origin.z])
 	content["bufs"] = bufs
-	var data := {"v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "i": idx, "content": content}
+	var data := {"wv": wv, "wi": widx, "v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "i": idx, "content": content}
 	_mutex.lock()
 	results[k] = data
 	_mutex.unlock()
@@ -277,6 +301,18 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 	mi.material_override = null if OS.get_cmdline_user_args().has("--noground") else ground_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
+	if data.wi.size() > 0:
+		var wa := []
+		wa.resize(Mesh.ARRAY_MAX)
+		wa[Mesh.ARRAY_VERTEX] = data.wv
+		wa[Mesh.ARRAY_INDEX] = data.wi
+		var wmesh := ArrayMesh.new()
+		wmesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, wa)
+		var wi := MeshInstance3D.new()
+		wi.mesh = wmesh
+		wi.material_override = water_mat
+		wi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.add_child(wi)
 	chunks[k] = {"mesh": mi, "c": data.content}
 	_dirty = true
 
@@ -356,7 +392,7 @@ func occluded(pos: Vector3, h: float, cam: Camera3D) -> bool:
 	return false
 
 func ecosystem_at(tile: Vector2) -> String:
-	return WorldGen.ecosystem(floori(tile.x / WorldGen.CHUNK), floori(tile.y / WorldGen.CHUNK)).name
+	return WorldGen.place_name(tile.x, tile.y)
 
 func count_trees() -> int:
 	var n := 0

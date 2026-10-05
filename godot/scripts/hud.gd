@@ -112,6 +112,8 @@ func _ready() -> void:
 	big_tex.stretch_mode = TextureRect.STRETCH_SCALE
 	big_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	big.add_child(big_tex)
+	dim.show_behind_parent = true       # подписи карты (рисует big) — поверх картинки
+	big_tex.show_behind_parent = true
 	big.draw.connect(_draw_big_marks)
 	add_child(big)
 
@@ -276,11 +278,18 @@ func _draw_big_marks() -> void:
 	var r := big_tex.get_rect()
 	var R := WorldGen.MAP_RADIUS
 	var font := ThemeDB.fallback_font
+	var seen := {}
+	for z in WorldGen.ZONES:          # зоны — серым, мелко
+		if seen.has(z.name):
+			continue
+		seen[z.name] = true
+		var zp := r.position + Vector2((z.x / R + 1.0) / 2.0, (z.y / R + 1.0) / 2.0) * r.size
+		big.draw_string(font, zp + Vector2(-70, 4), z.name, HORIZONTAL_ALIGNMENT_CENTER, 140, 12, Color(1, 1, 1, 0.55))
 	for key in WorldGen.LANDMARKS:
 		var f: Dictionary = WorldGen.FEATURES[key]
 		var p := r.position + Vector2((f.x / R + 1.0) / 2.0, (f.y / R + 1.0) / 2.0) * r.size
 		big.draw_circle(p, 6, Color(0.95, 0.77, 0.06))
-		big.draw_string(font, p + Vector2(-50, -10), f.name, HORIZONTAL_ALIGNMENT_CENTER, 100, 14, Color.WHITE)
+		big.draw_string(font, p + Vector2(-110, -10), f.name, HORIZONTAL_ALIGNMENT_CENTER, 220, 15, Color.WHITE)
 	var pt: Vector2 = main.player.tile
 	var pp := r.position + Vector2((pt.x / R + 1.0) / 2.0, (pt.y / R + 1.0) / 2.0) * r.size
 	big.draw_circle(pp, 7, Color(1, 0.2, 0.2))

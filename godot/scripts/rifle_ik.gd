@@ -22,6 +22,12 @@ func _process_modification() -> void:
 	if spine2 < 0 or r_arm < 0 or l_arm < 0:
 		return
 	var model: Node3D = player.model
+	if player.swimming:
+		# плывёт: автомат на ремне за спиной (наискосок, стволом вверх), руки свободны
+		var tm := model.global_transform.affine_inverse() * skel.global_transform
+		var ch: Vector3 = tm * skel.get_bone_global_pose(spine2).origin
+		player.rifle_rig.transform = Transform3D(Basis(Vector3(0, 0, 1), 0.6) * Basis.from_euler(Vector3(-1.9, 0, 0)), ch + Vector3(0.0, 0.02, -0.17))
+		return
 	# скручивание позвоночника к цели (корпус добирает до TWIST, остальное — руки)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
 	for pair in [["Spine", 0.3], ["Spine1", 0.35], ["Spine2", 0.35]]:

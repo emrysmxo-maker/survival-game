@@ -29,6 +29,9 @@ var world
 var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
+var swimming := false
+const SWIM_CHEST := 1.0            # м: на сколько тело ниже поверхности воды при плавании
+const SWIM_SPEED := 0.45
 var _running := false
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
@@ -202,6 +205,14 @@ func set_tile(p: Vector2) -> void:
 func _place() -> void:
 	var h := WorldGen.height(tile.x, tile.y)
 	global_position = WorldGen.to_world(tile.x, tile.y, h)
+	# вода: глубже ~1 м — плывёт (над водой голова и плечи), автомат за спиной
+	var W := WorldGen.water_at(tile.x, tile.y)
+	var surf: float = W.y * WorldGen.HK
+	var ground: float = h * WorldGen.HK
+	var depth: float = surf - ground
+	swimming = W.x > 0.5 and depth > (0.85 if swimming else 0.95)
+	if swimming:
+		global_position.y = maxf(ground, surf - SWIM_CHEST)
 
 func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_now: bool) -> void:
 	# --- ходьба ---
@@ -229,8 +240,8 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	var real_speed := (tile - prev).length() / maxf(dt, 1e-4)
 
 	# --- прицел ---
-	aiming = aim_active
-	firing = fire_now and aim_active
+	aiming = aim_active and not swimming      # плывёт — не стреляет
+	firing = fire_now and aiming
 	if aim_active and aim_stick.length() > 0.01:
 		aim_yaw = tiles_to_yaw(aim_to_tiles(aim_stick))
 	if aiming:
@@ -278,6 +289,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 
 	# Анимация как в браузерной версии: по скорости — ходьба (Walk) или бег (Run) с гистерезисом;
 	# пятится — всегда шагом, тот же клип назад. Темп шага = скорость по земле / скорость клипа.
+	model.rotation.x = lerpf(model.rotation.x, 0.45 if swimming and moving else 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
+	if swimming:
+		_play("Walk" if moving else "Idle", 0.6 if moving else 0.8)    # гребки руками, ноги под водой
+		return
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
@@ -318,6 +333,8 @@ func _play(n: String, speed: float) -> void:
 
 func _terrain_speed(want: Vector2) -> float:
 	var t := WorldGen.terrain(tile.x, tile.y)
+	if swimming:
+		return SWIM_SPEED
 	var k := 1.0 - (1.0 - SPEED_WATER) * t[1]
 	k *= 1.0 - (1.0 - SPEED_SWAMP) * t[3]
 	var l := want.length()
