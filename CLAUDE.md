@@ -1,0 +1,36 @@
+# Survival game — карта для Claude
+
+Мобильная изометрическая выживалка (как Last Day on Earth). Владелец тестирует на RedMagic 10 Pro, присылает скриншоты/видео. Ответы — коротко, по-русски.
+
+## Правила владельца
+- После каждой правки: коммит в `main` + push + дать ссылку на APK. Обновлять `CHANGES_DRAFT.md`, версию в `godot/scripts/hud.gd` (VERSION).
+- Сначала замерить причину (лог/числа), потом чинить. Не гадать. Одна проблема за раз.
+- «Пока обсуждаем / ничего не делай» — не запускать ничего.
+- Не тратить токены: не читать файлы целиком без нужды, не переделывать решённое.
+
+## Что где
+- Старая браузерная игра (v7.5.1): `index.html`, `src/`, `sw.js` — НЕ трогать.
+- Основная работа — порт на Godot 4.3 в `godot/` (Forward Mobile, ортокамера).
+- `godot/scripts/`: `main.gd` (камера cam_yaw/cam_elev/cam_size, цикл, тест-аргументы), `player.gd` (ходьба, прицел, ноги/торс, анимация), `rifle_ik.gd` (автомат, IK рук), `camctl.gd` (свайп камеры в верхней правой половине, кнопки −/+, кнопка ОГОНЬ), `joystick.gd` (левый стик ходьбы, правый — прицел в нижней половине), `world.gd` (чанки, MultiMesh деревьев, тени-эллипсоиды, x-ray `occluded`), `world_gen.gd` (рельеф, биомы, расстановка, наборы видов), `weapon.gd`, `zombies.gd`, `effects.gd`, `daynight.gd`, `hud.gd`, `settings.gd`.
+- Модели: `godot/assets/models/*.glb` (Poly Haven CC0, 50 файлов) + `kinds.json` (вид → модель/узел/высота). Листва = `<имя>_leaf.glb` (шейдер `shaders/foliage.gdshader`), ствол/камни = `<имя>_wood.glb`.
+- Инструменты: `tools/models/prep_models.py` (оригиналы → игровые glb: gltfpack + сокращение карточек листвы), `make_kinds.py`. Оригиналы моделей лежат вне репозитория (скачивать с Poly Haven).
+
+## Как проверять без телефона
+Godot: `/tmp/claude-0/godot/Godot_v4.3-stable_linux.x86_64` (если нет — скачать 4.3-stable). Видеокарты нет — программный Vulkan:
+`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a godot --path godot --rendering-driver vulkan --rendering-method mobile -- --shot=/tmp/x.png --at=6 --time=12 --nofade`
+Доп. аргументы: `--cam=<размер>`, `--camyaw=`, `--camelev=`, `--test=run|runaim|behind|fireback|zombie`, `--gallery`, `--fixeddt=`. После смены .glb: `godot --headless --import`. Без `--nofade` снимок чёрный.
+
+## Сборка и выдача
+Push в `main` → GitHub Actions собирает APK → Release `godot-latest`: https://github.com/emrysmxo-maker/survival-game/releases/download/godot-latest/survival-godot.apk (APK >100 МБ, в репозиторий не кладётся).
+
+## Уже решено (не повторять)
+- Клипы анимации из .glb не зациклены → `loop_all()` ставит LOOP_LINEAR (иначе «пара шагов и скольжение»).
+- Бег со стрельбой: ноги по направлению движения (+треть угла к цели), торс скручивается ≤90°, дальше 105° — пятится.
+- Деревья — реальные меши (не картинки-импосторы, они удалены). Листва тень не отбрасывает (мерцало) — тень от эллипсоида «proxy».
+- Лёгкий стик: шаг не меньше 55% скорости.
+- Камера: наклон 22°–82°, `player.AIM_ELEV_K = sin(elev)` для поправки прицела.
+
+## Ловушки среды
+- `pkill -f`/`pgrep -f` с шаблоном из своей команды убивает свою оболочку; в Monitor — ждать по файлу-флагу.
+- Длинные команды запускать `nohup … &`; `rm` с относительным glob после `cd` блокируется.
+- Безопасность: `android/android.keystore` и пароль публичны — для магазина заменить секретным ключом.
