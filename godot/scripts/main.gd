@@ -3,6 +3,9 @@ extends Node3D
 
 const CAM_ELEV_DEG := 46.8          # угол камеры над землёй (asin(54/74)), как в браузерной версии
 const CAM_YAW_DEG := 45.0
+const CAM_ELEV_MIN := 22.0          # наклон камеры: почти горизонт ... вид сверху
+const CAM_ELEV_MAX := 82.0
+const CAM_ELEV_SPEED := 60.0
 const CAM_SIZE := 7.6               # метров по вертикали на экране (боец ~1/6 высоты экрана, как раньше)
 const CAM_SIZE_MIN := 3.2           # приближение
 const CAM_SIZE_MAX := 16.0          # отдаление
@@ -22,6 +25,7 @@ var stick_l
 var stick_r
 var cam_h := 0.0
 var cam_yaw := CAM_YAW_DEG
+var cam_elev := CAM_ELEV_DEG
 var cam_size := CAM_SIZE
 var camctl
 var _shot := ""
@@ -84,6 +88,7 @@ func _ready() -> void:
 	camctl = load("res://scripts/camctl.gd").new()
 	camctl.reset_view.connect(func():
 		cam_yaw = CAM_YAW_DEG
+		cam_elev = CAM_ELEV_DEG
 		cam_size = CAM_SIZE)
 	ui.add_child(camctl)
 	var rects: Array = hud.ui_rects()
@@ -103,6 +108,8 @@ func _ready() -> void:
 			_shot_at = float(a.substr(5))
 		if a.begins_with("--cam="):
 			cam_size = float(a.substr(6))
+		if a.begins_with("--camelev="):
+			cam_elev = float(a.substr(10))
 		if a.begins_with("--camyaw="):
 			cam_yaw = float(a.substr(9))
 		if a.begins_with("--time="):
@@ -129,11 +136,14 @@ func _update_camera(dt: float) -> void:
 	var v: Vector2 = camctl.vec
 	if v.length() > 0.12:
 		cam_yaw = fposmod(cam_yaw - v.x * CAM_ROT_SPEED * dt, 360.0)
-		cam_size = clampf(cam_size * exp(v.y * CAM_ZOOM_SPEED * dt), CAM_SIZE_MIN, CAM_SIZE_MAX)
+		cam_elev = clampf(cam_elev - v.y * CAM_ELEV_SPEED * dt, CAM_ELEV_MIN, CAM_ELEV_MAX)
+	if camctl.zoom != 0.0:
+		cam_size = clampf(cam_size * exp(camctl.zoom * CAM_ZOOM_SPEED * dt), CAM_SIZE_MIN, CAM_SIZE_MAX)
 	if Input.is_key_pressed(KEY_Q): cam_yaw = fposmod(cam_yaw + 90.0 * dt, 360.0)
 	if Input.is_key_pressed(KEY_E): cam_yaw = fposmod(cam_yaw - 90.0 * dt, 360.0)
-	cam.rotation_degrees = Vector3(-CAM_ELEV_DEG, cam_yaw, 0)
+	cam.rotation_degrees = Vector3(-cam_elev, cam_yaw, 0)
 	cam.size = cam_size
+	player.AIM_ELEV_K = sin(deg_to_rad(cam_elev))
 	player.cam_yaw = deg_to_rad(cam_yaw)
 	daynight.sun.directional_shadow_max_distance = clampf(cam_size * 3.2, 22.0, 60.0)
 

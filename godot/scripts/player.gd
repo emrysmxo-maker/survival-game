@@ -3,7 +3,7 @@ extends Node3D
 # столкновения с деревьями/камнями, замедление в воде/болоте/в гору.
 # Позиция бойца хранится в тайлах (tile), как в браузерной версии.
 
-const SPEED := 2.0                 # тайлов/с по каждой оси (как в v7: ~2.85 тайла/с по диагонали)
+const SPEED := 2.6                 # тайлов/с по каждой оси (как в v7: ~2.85 тайла/с по диагонали)
 const ACCEL := 14.0
 const BODY_TURN_RATE := 5.5        # рад/с — поворот тела при стрельбе
 # Стрельба на ходу (стиль «Корпус 90° → пятится» из браузерной версии):
@@ -15,7 +15,7 @@ const ARMS := 0.2618               # 15°
 const REACH := TWIST + ARMS
 const FIRE_SPEED := 0.65           # скорость бега при прицеле (×)
 const BACK_SPEED := 0.45           # скорость пятясь (×)
-const AIM_ELEV_K := 0.7297         # sin(46.8°): по вертикали экрана земля сжата — поправка прицела
+var AIM_ELEV_K := 0.7297           # sin(угла камеры): по вертикали экрана земля сжата — поправка прицела (задаёт main.gd)
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
@@ -24,6 +24,7 @@ const RUN_ANIM_MPS := 2.94         # скорость шага в клипе Run
 var world
 var tile := Vector2.ZERO
 var vel := Vector2.ZERO
+var anim_speed := 0.0
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -263,10 +264,12 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 
 	if moving and real_speed > 0.15:
 		# шаг анимации = шагу по земле (без «коньков»); пятясь — тот же клип назад
-		var mps := real_speed * WorldGen.T
-		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.3, 1.6)
+		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)   # сглаженно: без дёрганья темпа шага
+		var mps := anim_speed * WorldGen.T
+		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.5, 1.6)
 		_play("Run", -k if backpedal else k)
 	else:
+		anim_speed = 0.0
 		_play("Idle", 1.0)
 
 func foot_offset() -> float:
