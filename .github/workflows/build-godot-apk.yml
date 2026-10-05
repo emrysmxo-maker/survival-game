@@ -58,16 +58,13 @@ jobs:
           ~/godot/godot --headless --path . --export-release "Android" build/survival-godot.apk
           ls -la build
 
-      - name: Publish APK to repository
+      - name: Publish APK to GitHub Release (godot-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p apk
-          cp godot/build/survival-godot.apk apk/survival-godot.apk
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add apk/survival-godot.apk
-          git commit -m "CI: Godot APK" || exit 0
-          git pull --rebase origin main
-          git push origin HEAD:main
+          # APK больше 100 МБ — в репозиторий не помещается, выкладываем в «Releases»
+          gh release view godot-latest >/dev/null 2>&1 || gh release create godot-latest --title "Survival (Godot) — последняя сборка" --notes "Автосборка из main. Скачать: survival-godot.apk"
+          gh release upload godot-latest godot/build/survival-godot.apk --clobber
 
       - uses: actions/upload-artifact@v4
         with:
