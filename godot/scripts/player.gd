@@ -25,6 +25,7 @@ var world
 var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
+var _pivot := false                # большой разворот при беге: на месте, без «шпагата» ног
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -210,6 +211,8 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.55, 1.0, clampf((stick.length() - 0.1) / 0.7, 0.0, 1.0))
 		want *= _terrain_speed(want)
 		move_dir = want.normalized()
+		if _pivot:
+			want = Vector2.ZERO          # разворот на месте: не бежим, пока ноги не повернулись
 		vel += (want - vel) * minf(1.0, ACCEL * dt)
 	else:
 		vel *= maxf(0.0, 1.0 - 18.0 * dt)
@@ -264,6 +267,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		yaw = wrapf(yaw + clampf(d2, -rate * dt, rate * dt), -PI, PI)
 	elif moving:
 		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
+	# большой разворот ног на бегу (вперёд → огонь назад): боец притормаживает и доворачивается
+	# стоя (клип Idle), а не бежит, пока тело поворачивается — иначе ноги расходятся «шпагатом»
+	var err := absf(wrapf(legs - yaw, -PI, PI)) if aiming and moving else 0.0
+	_pivot = err > (0.35 if _pivot else 0.8)
 	model.rotation.y = yaw
 
 	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
@@ -272,7 +279,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -REACH, REACH)
 	aim_local += (aim_rel - aim_local) * minf(1.0, (12.0 if aiming else 8.0) * dt)
 
-	if moving and real_speed > 0.15:
+	if moving and real_speed > 0.15 and not _pivot:
 		# шаг анимации = шагу по земле (без «коньков»); пятясь — тот же клип назад
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)   # сглаженно: без дёрганья темпа шага
 		var mps := anim_speed * WorldGen.T
