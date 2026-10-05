@@ -19,19 +19,17 @@ var AIM_ELEV_K := 0.7297           # sin(угла камеры): по верти
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
+const WALK_ANIM_MPS := 1.37         # клип Walk (2.94 × 1.32/2.83 — соотношение клипов из браузерной версии)
+const RUN_ENTER_MPS := 2.0          # м/с: быстрее — бег, медленнее RUN_EXIT — шаг (2.4/2.0 браузерной в наших метрах)
+const RUN_EXIT_MPS := 1.66
+const GAIT_TEMPO := 0.85           # шаги чуть спокойнее «физики» (в браузерной 0.7) — естественнее
 const RUN_ANIM_MPS := 2.94         # скорость шага в клипе Run при speed_scale 1 (замер по стопе)
 
 var world
 var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
-var _wp := NAN                     # промежуточный угол ног: разворот на 180° делится на два шага по 90°
-var _pstep := 0.0                  # время короткого шага на месте между двумя половинами разворота
-var face := 0.0                    # куда смотрит корпус при стрельбе (плавно следует за целью)
-var _was_aiming := false
-var leg_twist := 0.0               # поворот таза относительно корпуса (рад), применяется в rifle_ik.gd
-var _was_back := false
-var _pivot := false                # большой разворот при беге: на месте, без «шпагата» ног
+var _running := false
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -246,32 +244,30 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	flash_t = maxf(0.0, flash_t - dt)
 	muzzle_flash.visible = flash_t > 0.0
 
-	# --- тело (стрельба на ходу, как в шутерах от 3-го лица) ---
-	# Корпус смотрит на цель, а не в сторону бега. Ноги идут по направлению движения относительно
-	# корпуса: до ~100° — бег вперёд, дальше — бег спиной вперёд (клип назад). Таз поворачивается
-	# к направлению бега (leg_twist, не больше ~100°), верх тела это компенсирует (rifle_ik.gd) —
-	# вместо разворота всего тела, из-за которого ноги расходились «шпагатом».
+	# --- тело: точный перенос браузерной версии (src/character.js) ---
+	# Ноги — строго по движению; цель дальше REACH — разворот лицом к цели и шаг назад.
+	# Тело поворачивается с ограниченной скоростью (5.5 рад/с), на ~180° — в сторону прицела.
 	var move_yaw := tiles_to_yaw(move_dir) if moving else yaw
-	var twist_goal := 0.0
-	backpedal = false
-	if aiming:
-		if not _was_aiming:
-			face = yaw
-		var d2 := wrapf(aim_world - face, -PI, PI)
-		face = wrapf(face + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
-		if moving:
-			var rel := wrapf(move_yaw - face, -PI, PI)
-			backpedal = absf(rel) > (1.75 if _was_back else 1.95)
-			twist_goal = wrapf(rel + PI, -PI, PI) if backpedal else rel
-		leg_twist = lerp_angle(leg_twist, twist_goal, minf(1.0, 12.0 * dt))
-		yaw = wrapf(face + leg_twist, -PI, PI)     # ноги — по движению, корпус добирает спиной (скручивание)
+	var legs := move_yaw
+	if aiming and moving:
+		var rel := absf(wrapf(aim_world - move_yaw, -PI, PI))
+		backpedal = rel > (REACH - 0.17 if backpedal else REACH)   # гистерезис 10°
+		if backpedal:
+			legs = wrapf(move_yaw + PI, -PI, PI)
+	elif aiming:
+		backpedal = false
+		legs = aim_world
 	else:
-		leg_twist = 0.0
-		if moving:
-			yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
-		face = yaw
-	_was_aiming = aiming
-	_was_back = backpedal
+		backpedal = false
+	if aiming:
+		var d2 := wrapf(legs - yaw, -PI, PI)
+		if absf(d2) > 2.9:
+			var side := signf(wrapf(aim_world - yaw, -PI, PI))
+			if side != 0.0 and signf(d2) != side:
+				d2 += side * TAU
+		yaw = wrapf(yaw + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
+	elif moving:
+		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 24.0 * dt))
 	model.rotation.y = yaw
 
 	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
@@ -280,14 +276,23 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -REACH, REACH)
 	aim_local += (aim_rel - aim_local) * minf(1.0, (12.0 if aiming else 8.0) * dt)
 
+	# Анимация как в браузерной версии: по скорости — ходьба (Walk) или бег (Run) с гистерезисом;
+	# пятится — всегда шагом, тот же клип назад. Темп шага = скорость по земле / скорость клипа.
 	if moving and real_speed > 0.15:
-		# шаг анимации = шагу по земле (без «коньков»); пятясь — тот же клип назад
-		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)   # сглаженно: без дёрганья темпа шага
+		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
-		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.35, 1.6)
-		_play("Run", -k if backpedal else k)
+		if _running:
+			_running = mps > RUN_EXIT_MPS
+		else:
+			_running = mps > RUN_ENTER_MPS
+		if backpedal:
+			_running = false
+		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
+		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.5, 1.3)
+		_play("Run" if _running else "Walk", -k if backpedal else k)
 	else:
 		anim_speed = 0.0
+		_running = false
 		_play("Idle", 1.0)
 
 func foot_offset() -> float:
