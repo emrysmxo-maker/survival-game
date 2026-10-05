@@ -255,7 +255,9 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 			var side := signf(wrapf(aim_yaw - yaw, -PI, PI))
 			if side != 0.0 and signf(d2) != side:
 				d2 += side * TAU
-		yaw = wrapf(yaw + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
+		# на бегу разворот ног быстрый (≈0.2 с на 180°): медленный разворот при беге раздвигал ноги в стороны
+		var rate := BODY_TURN_RATE * (2.6 if moving else 1.0)
+		yaw = wrapf(yaw + clampf(d2, -rate * dt, rate * dt), -PI, PI)
 	elif moving:
 		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
 	model.rotation.y = yaw

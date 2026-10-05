@@ -2,7 +2,7 @@ extends CanvasLayer
 # Интерфейс: экосистема/координаты/деревья, версия и fps, мини-карта (тап — большая
 # карта с 5 локациями), телепорт 📍, «ЗОМБИ +», «АВТО ОГОНЬ», время суток с паузой.
 
-const VERSION := "G0.13"
+const VERSION := "G0.14"
 var main
 var info: Label
 var ver: Label
