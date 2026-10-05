@@ -84,7 +84,6 @@ func _ready() -> void:
 	stick_r = load("res://scripts/joystick.gd").new()
 	stick_r.right_side = true
 	ui.add_child(stick_l)
-	ui.add_child(stick_r)
 	camctl = load("res://scripts/camctl.gd").new()
 	camctl.reset_view.connect(func():
 		cam_yaw = CAM_YAW_DEG
@@ -153,16 +152,24 @@ func _process_game(dt: float) -> void:
 	var kb := Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_up", "ui_down"))
 	if kb != Vector2.ZERO:
 		move = kb.limit_length(1.0)
-	var aim_active: bool = stick_r.active
-	var aim: Vector2 = stick_r.vec
-	var fire: bool = stick_r.active and stick_r.len_px > 18.0
-	if not aim_active:
-		var at = weapon.auto_target(camctl.fire_held)
-		if at == null and camctl.fire_held:
-			at = player.tiles_to_aim(Vector2(sin(player.yaw), cos(player.yaw)))   # кнопка «огонь»: куда смотрит боец
-		if at != null:
+	# правая половина — только камера; целится и стреляет кнопка «ОГОНЬ» (тянуть — целиться в сторону)
+	var aim_active: bool = camctl.fire_held
+	var aim: Vector2 = camctl.fire_vec
+	var fire: bool = camctl.fire_held
+	if _test_script != "" and stick_r.active:      # проверки без экрана
+		aim_active = true
+		aim = stick_r.vec
+		fire = stick_r.len_px > 18.0
+	if camctl.fire_held and aim.length() < 0.3:
+		var at = weapon.auto_target(true)
+		if at == null:
+			at = player.tiles_to_aim(Vector2(sin(player.yaw), cos(player.yaw)))
+		aim = at
+	elif not aim_active:
+		var at2 = weapon.auto_target()
+		if at2 != null:
 			aim_active = true
-			aim = at
+			aim = at2
 			fire = true
 	player.step(dt, move, aim, aim_active, fire)
 	effects.step(player, player.tile, dt, false)

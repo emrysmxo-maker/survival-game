@@ -1,16 +1,19 @@
 extends Control
-# Правая половина экрана разделена (как в PUBG): ВЕРХНЯЯ часть — свайп пальцем вращает камеру
-# (вправо/влево — на 360°, вверх/вниз — наклон), НИЖНЯЯ — стик прицела (joystick.gd).
-# Тут же кнопки «−»/«+» (приближение) и большая кнопка «ОГОНЬ» (держать — стрелять).
+# Вся правая половина экрана — свободный обзор: свайп пальцем вращает камеру (вправо/влево — на 360°,
+# вверх/вниз — наклон), короткий тап — вернуть вид. Кнопки «−»/«+» (приближение) и «ОГОНЬ»:
+# держать — стрелять, тянуть в сторону — целиться в эту сторону (как стик).
 var zoom := 0.0            # -1 приближение / +1 отдаление (кнопки)
 var fire_held := false
+var fire_vec := Vector2.ZERO   # куда оттянута кнопка огня (экранные оси, длина 0..1)
+var _fpos := Vector2.ZERO
+const FIRE_R := 80.0
 var blocked_rects: Array = []
 var _cam_finger := -1
 var _zfinger := -1
 var _ffinger := -1
 var _t0 := 0.0
 var _moved := 0.0
-const SPLIT := 0.5         # доля высоты: выше — камера, ниже — прицел
+const SPLIT := 0.5         # на этой высоте — кнопки приближения
 signal reset_view
 signal swiped(delta: Vector2)
 
@@ -35,7 +38,7 @@ func rect() -> Rect2:
 
 func _cam_zone(p: Vector2) -> bool:
 	var vs := _vs()
-	return p.x >= vs.x * 0.5 and p.y < vs.y * SPLIT
+	return p.x >= vs.x * 0.5
 
 func _input(e: InputEvent) -> void:
 	var vs := _vs()
@@ -52,6 +55,8 @@ func _input(e: InputEvent) -> void:
 			if _ffinger == -1 and fire_rect().grow(8).has_point(e.position):
 				_ffinger = e.index
 				fire_held = true
+				_fpos = e.position
+				fire_vec = Vector2.ZERO
 				queue_redraw()
 				get_viewport().set_input_as_handled()
 				return
@@ -71,19 +76,22 @@ func _input(e: InputEvent) -> void:
 			elif e.index == _ffinger:
 				_ffinger = -1
 				fire_held = false
+				fire_vec = Vector2.ZERO
 				queue_redraw()
 			elif e.index == _cam_finger:
 				if _moved < 12.0 and Time.get_ticks_msec() / 1000.0 - _t0 < 0.25:
 					reset_view.emit()
 				_cam_finger = -1
+	elif e is InputEventScreenDrag and e.index == _ffinger:
+		var d: Vector2 = e.position - fire_rect().get_center()
+		fire_vec = (d / FIRE_R).limit_length(1.0) if d.length() > 14.0 else Vector2.ZERO
+		queue_redraw()
 	elif e is InputEventScreenDrag and e.index == _cam_finger:
 		_moved += e.relative.length()
 		swiped.emit(e.relative)
 
 func _draw() -> void:
 	var vs := _vs()
-	# линия раздела: сверху — камера, снизу — прицел
-	draw_line(Vector2(vs.x * 0.5 + 20.0, vs.y * SPLIT), Vector2(vs.x - 20.0, vs.y * SPLIT), Color(1, 1, 1, 0.07), 1.5)
 	for dir in [-1, 1]:
 		var r := zoom_rect(dir)
 		draw_rect(r, Color(0, 0, 0, 0.4 if zoom != 0.0 and (zoom < 0.0) == (dir > 0) else 0.3), true)
@@ -96,6 +104,9 @@ func _draw() -> void:
 	var c := fr.get_center()
 	draw_circle(c, 58.0, Color(0.75, 0.15, 0.1, 0.6 if fire_held else 0.35))
 	draw_arc(c, 58.0, 0, TAU, 40, Color(1, 1, 1, 0.55), 3.0)
+	if fire_held:
+		draw_arc(c, FIRE_R, 0, TAU, 48, Color(1, 0.55, 0.35, 0.4), 3.0)
+		draw_circle(c + fire_vec * FIRE_R, 26.0, Color(1, 1, 1, 0.5))
 	draw_circle(c, 9.0, Color(1, 1, 1, 0.8))
 	draw_arc(c, 24.0, 0, TAU, 28, Color(1, 1, 1, 0.7), 2.5)
 	for a in 4:
