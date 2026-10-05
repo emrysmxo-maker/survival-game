@@ -2,7 +2,7 @@ extends CanvasLayer
 # Интерфейс: экосистема/координаты/деревья, версия и fps, мини-карта (тап — большая
 # карта с 5 локациями), телепорт 📍, «ЗОМБИ +», «АВТО ОГОНЬ», время суток с паузой.
 
-const VERSION := "G0.11"
+const VERSION := "G0.12"
 var main
 var info: Label
 var ver: Label
@@ -182,6 +182,7 @@ func _layout() -> void:
 	mini.position = Vector2(vs.x - 160, 8)
 	zombie_btn.position = Vector2(12, vs.y - 58)
 	auto_btn.position = Vector2(vs.x - 112, vs.y - 112)
+	auto_btn.size = Vector2(96, 96)
 	var tb: Control = get_node("TimeBox")
 	tb.position = Vector2(vs.x / 2.0 - 170, vs.y - 50)
 	var s := minf(vs.y - 40, vs.x - 40)

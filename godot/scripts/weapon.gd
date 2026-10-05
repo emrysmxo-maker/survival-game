@@ -41,8 +41,8 @@ func _ready() -> void:
 	_puff_mesh.size = Vector2(1, 1)
 
 # Автострельба: ближайший живой зомби в радиусе. Возвращает экранный вектор прицела или null.
-func auto_target():
-	if not auto or zombies == null:
+func auto_target(force := false):
+	if not (auto or force) or zombies == null:
 		return null
 	var best = null
 	var bd := AUTO_FIRE_RANGE

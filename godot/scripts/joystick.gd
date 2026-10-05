@@ -22,7 +22,7 @@ func _mine(x: float) -> bool:
 
 func _input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch:
-		if e.pressed and _finger == -1 and _mine(e.position.x):
+		if e.pressed and _finger == -1 and _mine(e.position.x) and (not right_side or e.position.y >= get_viewport_rect().size.y * 0.5):
 			for r in blocked_rects:
 				if r.call().has_point(e.position):
 					return

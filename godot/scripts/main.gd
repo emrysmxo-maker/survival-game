@@ -90,8 +90,12 @@ func _ready() -> void:
 		cam_yaw = CAM_YAW_DEG
 		cam_elev = CAM_ELEV_DEG
 		cam_size = CAM_SIZE)
+	camctl.swiped.connect(func(d: Vector2):
+		cam_yaw = fposmod(cam_yaw - d.x * 0.28, 360.0)
+		cam_elev = clampf(cam_elev - d.y * 0.22, CAM_ELEV_MIN, CAM_ELEV_MAX))
 	ui.add_child(camctl)
 	var rects: Array = hud.ui_rects()
+	camctl.blocked_rects = rects.duplicate()
 	rects.append(func(): return camctl.rect())
 	stick_l.blocked_rects = rects
 	stick_r.blocked_rects = rects
@@ -133,10 +137,6 @@ func _follow(k: float) -> void:
 	cam.global_position = target + cam.global_transform.basis.z * 60.0
 
 func _update_camera(dt: float) -> void:
-	var v: Vector2 = camctl.vec
-	if v.length() > 0.12:
-		cam_yaw = fposmod(cam_yaw - v.x * CAM_ROT_SPEED * dt, 360.0)
-		cam_elev = clampf(cam_elev - v.y * CAM_ELEV_SPEED * dt, CAM_ELEV_MIN, CAM_ELEV_MAX)
 	if camctl.zoom != 0.0:
 		cam_size = clampf(cam_size * exp(camctl.zoom * CAM_ZOOM_SPEED * dt), CAM_SIZE_MIN, CAM_SIZE_MAX)
 	if Input.is_key_pressed(KEY_Q): cam_yaw = fposmod(cam_yaw + 90.0 * dt, 360.0)
@@ -157,7 +157,9 @@ func _process_game(dt: float) -> void:
 	var aim: Vector2 = stick_r.vec
 	var fire: bool = stick_r.active and stick_r.len_px > 18.0
 	if not aim_active:
-		var at = weapon.auto_target()
+		var at = weapon.auto_target(camctl.fire_held)
+		if at == null and camctl.fire_held:
+			at = player.tiles_to_aim(Vector2(sin(player.yaw), cos(player.yaw)))   # кнопка «огонь»: куда смотрит боец
 		if at != null:
 			aim_active = true
 			aim = at
