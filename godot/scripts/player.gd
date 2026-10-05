@@ -25,6 +25,8 @@ var world
 var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
+var _wp := NAN                     # промежуточный угол ног: разворот на 180° делится на два шага по 90°
+var _pstep := 0.0                  # время короткого шага на месте между двумя половинами разворота
 var _pivot := false                # большой разворот при беге: на месте, без «шпагата» ног
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
@@ -256,6 +258,16 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		legs = aim_world                        # стоит — весь корпус к цели
 	else:
 		backpedal = false
+	var legs_final := legs
+	if aiming and moving and _pivot:
+		if not is_nan(_wp):
+			legs = _wp                          # этап 1: первая половина разворота (90°)
+			if absf(wrapf(_wp - yaw, -PI, PI)) < 0.12:
+				_wp = NAN
+				_pstep = 0.22                   # переступил на месте — и вторая половина
+		elif _pstep > 0.0:
+			legs = yaw
+	_pstep = maxf(0.0, _pstep - dt)
 	if aiming:
 		# поворот ног ограничен по скорости; на ~180° — в сторону прицела, а не как выпадет
 		var d2 := wrapf(legs - yaw, -PI, PI)
@@ -269,8 +281,15 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
 	# большой разворот ног на бегу (вперёд → огонь назад): боец притормаживает и доворачивается
 	# стоя (клип Idle), а не бежит, пока тело поворачивается — иначе ноги расходятся «шпагатом»
-	var err := absf(wrapf(legs - yaw, -PI, PI)) if aiming and moving else 0.0
+	var err := absf(wrapf(legs_final - yaw, -PI, PI)) if aiming and moving else 0.0
+	var was := _pivot
 	_pivot = err > (0.35 if _pivot else 0.8)
+	if _pivot and not was:
+		var dd := wrapf(legs_final - yaw, -PI, PI)
+		_wp = wrapf(yaw + signf(dd) * PI / 2.0, -PI, PI) if absf(dd) > 1.9 else NAN
+	elif not _pivot:
+		_wp = NAN
+		_pstep = 0.0
 	model.rotation.y = yaw
 
 	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
@@ -285,6 +304,8 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		var mps := anim_speed * WorldGen.T
 		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.35, 1.6)
 		_play("Run", -k if backpedal else k)
+	elif _pivot and _pstep > 0.0:
+		_play("Run", 0.5)                       # переступание между двумя этапами разворота
 	else:
 		anim_speed = 0.0
 		_play("Idle", 1.0)
