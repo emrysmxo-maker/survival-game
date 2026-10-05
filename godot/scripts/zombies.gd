@@ -69,6 +69,7 @@ func spawn() -> void:
 	player.add_xray(glb)
 	z.node.add_child(player.make_blob(0.8))
 	z.anim = _find(glb, "AnimationPlayer")
+	player.loop_all(z.anim)
 	z.skel = _find(glb, "Skeleton3D")
 	for p in PARTS:
 		if p[3] > 0.0:

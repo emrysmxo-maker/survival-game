@@ -53,6 +53,7 @@ func _ready() -> void:
 	model.add_child(glb)
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
+	loop_all(anim)
 	_recolor(glb)
 	_make_rifle()
 	add_xray(model)
@@ -223,10 +224,6 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	if moving and aiming:
 		var rel := absf(wrapf(move_yaw - yaw, -PI, PI))
 		backpedal = rel > 1.75
-	# в клипе бега обе стопы до 0.15 м висят в воздухе (фаза полёта) — прижимаем к земле
-	var lo := foot_offset() - model.position.y
-	var want_y := -maxf(0.0, lo - 0.01)
-	model.position.y = lerpf(model.position.y, want_y, minf(1.0, 25.0 * dt))
 	if moving and real_speed > 0.15:
 		# ноги в клипе идут с той же скоростью, что боец по земле — без «коньков»
 		var mps := real_speed * WorldGen.T
@@ -343,3 +340,11 @@ func _xr_set(n: Node, on: bool) -> void:
 		n.set_instance_shader_parameter("xray_on", 1.0 if on else 0.0)
 	for c in n.get_children():
 		_xr_set(c, on)
+
+# Клипы из .glb импортируются без повтора: бег играл один раз (0.7 с — «пара шагов»)
+# и замирал в позе полёта. Включаем зацикливание у всех.
+static func loop_all(ap: AnimationPlayer) -> void:
+	if ap == null:
+		return
+	for n in ap.get_animation_list():
+		ap.get_animation(n).loop_mode = Animation.LOOP_LINEAR

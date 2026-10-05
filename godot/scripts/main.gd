@@ -146,9 +146,10 @@ func _process(dt_raw: float) -> void:
 	if _fixed_dt > 0.0:
 		dt = _fixed_dt
 	_process_game(dt)
-	if _test_script == "run" and Engine.get_process_frames() % 20 == 0 and _fo_n < 12:
+	if _test_script == "run" and Engine.get_process_frames() % 10 == 0 and _fo_n < 40:
 		_fo_n += 1
-		print("FOOT ", player.foot_offset(), " moving=", player.moving, " anim=", player._cur_anim)
+		var an = player.anim
+		print("ANIM t=", snappedf(_clock, 0.1), " name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " loop=", an.get_animation(an.current_animation).loop_mode if an.current_animation != "" else -1, " foot=", snappedf(player.foot_offset(), 0.001))
 	if hud.due(dt):
 		hud.update_hud(0.25, player.tile, world.ecosystem_at(player.tile), world.count_trees())
 	if _test_script != "":
