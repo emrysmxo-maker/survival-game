@@ -30,8 +30,8 @@ var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
 var swimming := false
-const SWIM_CHEST := 1.0            # м: на сколько тело ниже поверхности воды при плавании
-const SWIM_SPEED := 0.45
+var swim_t := 0.0                  # фаза гребков (процедурное плавание, rifle_ik.gd)
+const SWIM_SPEED := 0.5
 var _running := false
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
@@ -212,7 +212,8 @@ func _place() -> void:
 	var depth: float = surf - ground
 	swimming = W.x > 0.5 and depth > (0.85 if swimming else 0.95)
 	if swimming:
-		global_position.y = maxf(ground, surf - SWIM_CHEST)
+		# плечи (~1.2 м от стоп) у поверхности, с учётом наклона тела вперёд
+		global_position.y = maxf(ground, surf + 0.08 - 1.2 * cos(model.rotation.x if model else 0.0))
 
 func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_now: bool) -> void:
 	# --- ходьба ---
@@ -289,9 +290,11 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 
 	# Анимация как в браузерной версии: по скорости — ходьба (Walk) или бег (Run) с гистерезисом;
 	# пятится — всегда шагом, тот же клип назад. Темп шага = скорость по земле / скорость клипа.
-	model.rotation.x = lerpf(model.rotation.x, 0.45 if swimming and moving else 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
+	model.rotation.x = lerpf(model.rotation.x, (0.75 if moving else 0.2) if swimming else 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
 	if swimming:
-		_play("Walk" if moving else "Idle", 0.6 if moving else 0.8)    # гребки руками, ноги под водой
+		# плавание: база — стойка, руки и ноги гребут процедурно (rifle_ik.gd), тело наклонено вперёд
+		swim_t += dt * (4.2 if moving else 2.0)
+		_play("Idle", 1.0)
 		return
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)

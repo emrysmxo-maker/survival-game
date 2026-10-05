@@ -1,25 +1,34 @@
-// Вода (река, озёра): полупрозрачная, с бликами и мелкой рябью; у берега — светлее и прозрачнее.
+// Вода (река, озёра). Цвет от толщины воды (по буферу глубины): у берега прозрачная,
+// видно дно, вглубь — тёмная; у самой кромки — пена; рябь — две бегущие карты нормалей;
+// небо отражается сильнее под косым углом (Френель).
 shader_type spatial;
 render_mode blend_mix, depth_draw_never, cull_back, specular_schlick_ggx;
-uniform vec4 deep : source_color = vec4(0.05, 0.14, 0.15, 0.9);
-uniform vec4 shallow : source_color = vec4(0.18, 0.30, 0.26, 0.55);
-
-float wave(vec2 p, float t) {
-	return sin(p.x * 1.7 + t * 1.3) * 0.5 + sin(p.y * 2.3 - t * 1.1) * 0.35 + sin((p.x + p.y) * 3.1 + t * 2.0) * 0.15;
-}
+uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
+uniform sampler2D n1 : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D n2 : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform vec3 deep_col : source_color = vec3(0.025, 0.075, 0.085);
+uniform vec3 shallow_col : source_color = vec3(0.20, 0.30, 0.24);
+uniform vec3 sky_col : source_color = vec3(0.62, 0.72, 0.78);
 
 void fragment() {
 	vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	vec2 p = wp.xz;
-	float t = TIME;
-	float e = 0.05;
-	float h0 = wave(p, t);
-	vec3 n = normalize(vec3(-(wave(p + vec2(e, 0.0), t) - h0) / e * 0.05, 1.0, -(wave(p + vec2(0.0, e), t) - h0) / e * 0.05));
-	NORMAL = (VIEW_MATRIX * vec4(n, 0.0)).xyz;
-	float f = 0.5 + 0.5 * sin(p.x * 0.11 + p.y * 0.07);
-	vec4 c = mix(shallow, deep, 0.7 + 0.3 * f);
-	ALBEDO = c.rgb;
-	ALPHA = c.a;
-	ROUGHNESS = 0.35;
-	SPECULAR = 0.2;
+	vec2 uv = wp.xz;
+	vec3 a = texture(n1, uv * 0.06 + TIME * vec2(0.010, 0.006)).rgb;
+	vec3 b = texture(n2, uv * 0.15 - TIME * vec2(0.008, 0.013)).rgb;
+	NORMAL_MAP = normalize((a + b) - 1.0) * 0.5 + 0.5;
+	NORMAL_MAP_DEPTH = 0.5;
+	// толщина воды до дна вдоль луча
+	float d = texture(depth_tex, SCREEN_UV).r;
+	vec4 vp = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, d, 1.0);
+	vp.xyz /= vp.w;
+	float thick = max(VERTEX.z - vp.z, 0.0);
+	float k = 1.0 - exp(-thick * 1.4);
+	vec3 col = mix(shallow_col, deep_col, k);
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
+	col = mix(col, sky_col, clamp(fres * 0.6 + 0.08, 0.0, 1.0));
+	float foam = (1.0 - smoothstep(0.0, 0.22, thick)) * (0.55 + 0.45 * sin(TIME * 1.3 + uv.x * 2.7 + uv.y * 1.9));
+	ALBEDO = mix(col, vec3(0.82, 0.86, 0.84), foam * 0.55);
+	ALPHA = clamp(0.25 + k * 0.7 + foam * 0.35, 0.0, 0.94) * smoothstep(0.0, 0.04, thick);
+	ROUGHNESS = 0.1;
+	SPECULAR = 0.5;
 }

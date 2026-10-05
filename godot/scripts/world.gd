@@ -34,6 +34,18 @@ func _ready() -> void:
 	ground_mat.set_shader_parameter("t_normal", load("res://assets/ground2/ground_nor_array.jpg"))
 	water_mat = ShaderMaterial.new()
 	water_mat.shader = load("res://shaders/water.gdshader")
+	for pair in [["n1", 11, 0.012], ["n2", 23, 0.03]]:     # рябь: две карты нормалей из шума (генерирует Godot)
+		var nz := FastNoiseLite.new()
+		nz.seed = pair[1]
+		nz.frequency = pair[2]
+		var nt := NoiseTexture2D.new()
+		nt.width = 256
+		nt.height = 256
+		nt.seamless = true
+		nt.as_normal_map = true
+		nt.bump_strength = 6.0
+		nt.noise = nz
+		water_mat.set_shader_parameter(pair[0], nt)
 	kinds_meta = JSON.parse_string(FileAccess.open("res://assets/models/kinds.json", FileAccess.READ).get_as_text())
 	var lim := 9999
 	for a in OS.get_cmdline_user_args():
@@ -248,16 +260,17 @@ func _build_chunk(k: Vector2i) -> void:
 			var x := sx + i * step
 			var y := sy + j * step
 			var W := WorldGen.water_at(x, y)
-			wm[j * n + i] = W.x
+			var dr := WorldGen.water_draw(x, y)
+			wm[j * n + i] = 1.0 if dr else 0.0
 			wv[j * n + i] = Vector3(x * WorldGen.T, W.y * WorldGen.HK, y * WorldGen.T)
-			if W.x > 0.02:
+			if dr:
 				any_w = true
 	var widx := PackedInt32Array()
 	if any_w:
 		for j in GRID:
 			for i in GRID:
 				var a := j * n + i
-				if maxf(maxf(wm[a], wm[a + 1]), maxf(wm[a + n], wm[a + n + 1])) > 0.02:
+				if minf(minf(wm[a], wm[a + 1]), minf(wm[a + n], wm[a + n + 1])) > 0.5:
 					widx.append_array([a, a + 1, a + n + 1, a, a + n + 1, a + n])
 	var content := WorldGen.chunk_content(k.x, k.y, density)
 	if gallery:
@@ -305,6 +318,13 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 		var wa := []
 		wa.resize(Mesh.ARRAY_MAX)
 		wa[Mesh.ARRAY_VERTEX] = data.wv
+		var nn := PackedVector3Array(); nn.resize(data.wv.size()); nn.fill(Vector3.UP)
+		var tg := PackedFloat32Array(); tg.resize(data.wv.size() * 4)
+		for ti in data.wv.size():
+			tg[ti * 4] = 1.0
+			tg[ti * 4 + 3] = 1.0
+		wa[Mesh.ARRAY_NORMAL] = nn
+		wa[Mesh.ARRAY_TANGENT] = tg
 		wa[Mesh.ARRAY_INDEX] = data.wi
 		var wmesh := ArrayMesh.new()
 		wmesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, wa)

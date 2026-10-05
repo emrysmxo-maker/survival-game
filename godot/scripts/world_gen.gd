@@ -34,16 +34,16 @@ const LAKES := [
 ]
 # зоны растительности: центр (тайлы) и состав; зона — ближайший центр (с «изгибом» границ)
 const ZONES := [
-	{"name": "Северный бор", "x": 40.0, "y": -150.0, "canopy": [["FIR", 5], ["PINE", 4], ["BIRCH", 1]], "dens": 6, "dead": 0.05, "fern": 0.9, "grass": 0.3, "shrub": 0.4},
+	{"name": "Северный бор", "x": 40.0, "y": -150.0, "canopy": [["FIR", 5], ["PINE", 4], ["BIRCH", 1]], "dens": 5, "dead": 0.05, "fern": 0.9, "grass": 0.3, "shrub": 0.4},
 	{"name": "Скалистые холмы", "x": -60.0, "y": -195.0, "canopy": [["PINE", 3], ["FIR", 2]], "dens": 3, "dead": 0.15, "fern": 0.3, "grass": 0.5, "shrub": 0.3},
 	{"name": "Поля у деревни", "x": -135.0, "y": -95.0, "canopy": [["BIRCH", 3], ["BROAD", 1]], "dens": 1, "dead": 0.02, "fern": 0.1, "grass": 1.6, "shrub": 0.5},
-	{"name": "Смешанный лес", "x": -10.0, "y": -30.0, "canopy": [["FIR", 2], ["PINE", 2], ["BIRCH", 3], ["ASPEN", 1], ["OAK", 1], ["BROAD", 1]], "dens": 4, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
-	{"name": "Смешанный лес", "x": 60.0, "y": -40.0, "canopy": [["FIR", 2], ["PINE", 1], ["BIRCH", 3], ["ASPEN", 2], ["BROAD", 1]], "dens": 4, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
+	{"name": "Смешанный лес", "x": -10.0, "y": -30.0, "canopy": [["FIR", 2], ["PINE", 2], ["BIRCH", 3], ["ASPEN", 1], ["OAK", 1], ["BROAD", 1]], "dens": 3, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
+	{"name": "Смешанный лес", "x": 60.0, "y": -40.0, "canopy": [["FIR", 2], ["PINE", 1], ["BIRCH", 3], ["ASPEN", 2], ["BROAD", 1]], "dens": 3, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
 	{"name": "Озёрный край", "x": 150.0, "y": 40.0, "canopy": [["BIRCH", 3], ["ASPEN", 2], ["BROAD", 2]], "dens": 2, "dead": 0.04, "fern": 0.4, "grass": 1.1, "shrub": 0.8},
 	{"name": "Южные поля", "x": 40.0, "y": 165.0, "canopy": [["OAK", 2], ["BROAD", 2], ["BIRCH", 1]], "dens": 1, "dead": 0.03, "fern": 0.1, "grass": 1.6, "shrub": 0.6},
-	{"name": "Дубрава", "x": 120.0, "y": 150.0, "canopy": [["OAK", 4], ["BROAD", 2], ["ASPEN", 1]], "dens": 4, "dead": 0.04, "fern": 0.5, "grass": 0.8, "shrub": 0.8},
+	{"name": "Дубрава", "x": 120.0, "y": 150.0, "canopy": [["OAK", 4], ["BROAD", 2], ["ASPEN", 1]], "dens": 3, "dead": 0.04, "fern": 0.5, "grass": 0.8, "shrub": 0.8},
 	{"name": "Гиблые топи", "x": -150.0, "y": 130.0, "canopy": [["BIRCH", 3], ["PINE", 1], ["DEAD", 3]], "dens": 2, "dead": 0.3, "fern": 0.3, "grass": 0.9, "shrub": 0.4},
-	{"name": "Западный ельник", "x": -160.0, "y": 20.0, "canopy": [["FIR", 4], ["PINE", 2], ["BIRCH", 1]], "dens": 5, "dead": 0.06, "fern": 1.0, "grass": 0.3, "shrub": 0.4},
+	{"name": "Западный ельник", "x": -160.0, "y": 20.0, "canopy": [["FIR", 4], ["PINE", 2], ["BIRCH", 1]], "dens": 4, "dead": 0.06, "fern": 1.0, "grass": 0.3, "shrub": 0.4},
 ]
 
 # ---------- лес: наборы картинок-импосторов (assets/imp, запечены из моделей Poly Haven CC0 и EZ-Tree MIT) ----------
@@ -153,8 +153,9 @@ static func path_dist(wx: float, wy: float) -> float:
 			d = minf(d, p.distance_to(Geometry2D.get_closest_point_to_segment(p, pts[i], pts[i + 1])))
 	return d
 
-# озеро в точке: [доля воды 0..1, глубина 0..1 (к центру), индекс]
-static func lake_at(wx: float, wy: float) -> Vector3:
+# озеро в точке: x — доля воды 0..1, y — глубина 0..1 (к центру), z — индекс (-1 нет),
+# w — «берег» 0..1 (полоса ~6 тайлов вокруг: там земля поднимается над водой)
+static func lake_at(wx: float, wy: float) -> Vector4:
 	for i in _lk.size() / 5:
 		var lx: float = _lk[i * 5]
 		var ly: float = _lk[i * 5 + 1]
@@ -162,14 +163,14 @@ static func lake_at(wx: float, wy: float) -> Vector3:
 		var dx: float = wx - lx
 		var dy: float = wy - ly
 		var d := sqrt(dx * dx + dy * dy)
-		if d > lr * 1.35:
+		if d > lr * 1.3 + 7.0:
 			continue
 		var a := atan2(dy, dx)
 		var re: float = lr * (1.0 + 0.16 * sin(3.0 * a + i) + 0.08 * sin(5.0 * a + 2.0 * i))
-		var w := ss(re, re - 2.5, d)
-		if w > 0.0:
-			return Vector3(w, ss(re, re * 0.35, d), i)
-	return Vector3(0, 0, -1)
+		var ring := ss(re + 6.0, re, d)
+		if ring > 0.0:
+			return Vector4(ss(re, re - 2.5, d), ss(re, re * 0.35, d), i, ring)
+	return Vector4(0, 0, -1, 0)
 
 static func radial(x: float, y: float, f: Dictionary) -> float:
 	var r: float = f.r
@@ -200,8 +201,9 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 	var lk := lake_at(wx, wy)
 	var hb := base_height(wx, wy)
 	var h := hb * (1.0 - ravine * 0.7) - ravine * 2.6 * (1.0 - 0.85 * ford) - swamp * 1.0
-	if lk.x > 0.0:
+	if lk.z >= 0.0:
 		var lvl := lake_level(int(lk.z))
+		h = lerpf(h, maxf(h, lvl + 0.25), lk.w * (1.0 - lk.x))         # берег выше воды — ровная кромка
 		h = lerpf(h, lvl - 0.25 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)
 	var clearing := 0.0
 	for i in _ft.size() / 4:
@@ -223,10 +225,16 @@ static func water_at(wx: float, wy: float) -> Vector2:
 	if lk.z >= 0.0:
 		return Vector2(lk.x, lake_level(int(lk.z)))
 	var rd := river_dist(wx, wy)
-	if rd < 2.6:
+	if rd < 5.0:
 		var hb := base_height(wx, wy)
 		return Vector2(ss(2.6, 1.2, rd) * (1.0 - 0.85 * ford_factor(wx, wy)), hb * 0.3 - 1.3)
 	return Vector2.ZERO
+
+# рисовать ли воду в точке (шире самой воды: кромку обрезает земля, без «зубцов»)
+static func water_draw(wx: float, wy: float) -> bool:
+	if lake_at(wx, wy).w > 0.15:
+		return true
+	return river_dist(wx, wy) < 5.0
 
 static func height(wx: float, wy: float) -> float:
 	return terrain(wx, wy)[0]
@@ -294,6 +302,14 @@ static func _pick_weighted(groups: Array, r: float) -> Array:
 		x -= g[1]
 	return groups[0][0]
 
+# Лесистость (0..1): крупные пятна — густой лес, редколесье, поляны без деревьев.
+# В полях (мало деревьев в зоне) — только редкие рощицы.
+static func forest_patch(wx: float, wy: float, dens: int) -> float:
+	var n := (sin(wx * 0.045 + 0.7) * sin(wy * 0.038 - 1.1) + 0.6 * sin(wx * 0.021 - wy * 0.027 + 2.0) + 0.35 * sin((wx + wy) * 0.09)) / 1.95
+	if dens <= 1:
+		return ss(0.35, 0.6, n)                 # поля: рощи только в «пиках» шума
+	return 0.12 + 0.88 * ss(-0.35, 0.3, n)      # лес: местами густо, местами редко/пусто
+
 static func in_map(x: float, y: float, m: float) -> bool:
 	return absf(x) < MAP_RADIUS - m and absf(y) < MAP_RADIUS - m
 
@@ -322,7 +338,9 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 	var trees: Array = []
 	# 1) деревья: кандидаты с минимальным расстоянием
 	var want: int = eco.dens
-	for i in want * 3:
+	if want <= 1:      # поля: деревья только рощицами
+		want = int(round(5.0 * forest_patch(sx + CHUNK * 0.5, sy + CHUNK * 0.5, 1)))
+	for i in want * 4:
 		if trees.size() >= want:
 			break
 		var x: float = sx + 0.8 + rng.randf() * (CHUNK - 1.6)
@@ -336,6 +354,8 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 				ok = false
 				break
 		if not ok:
+			continue
+		if rng.randf() > forest_patch(x, y, int(eco.dens)):
 			continue
 		var spot := tree_spot(x, y, r0)
 		if spot.is_empty():
