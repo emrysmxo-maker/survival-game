@@ -27,6 +27,10 @@ var vel := Vector2.ZERO
 var anim_speed := 0.0
 var _wp := NAN                     # промежуточный угол ног: разворот на 180° делится на два шага по 90°
 var _pstep := 0.0                  # время короткого шага на месте между двумя половинами разворота
+var face := 0.0                    # куда смотрит корпус при стрельбе (плавно следует за целью)
+var _was_aiming := false
+var leg_twist := 0.0               # поворот таза относительно корпуса (рад), применяется в rifle_ik.gd
+var _was_back := false
 var _pivot := false                # большой разворот при беге: на месте, без «шпагата» ног
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
@@ -213,8 +217,6 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.55, 1.0, clampf((stick.length() - 0.1) / 0.7, 0.0, 1.0))
 		want *= _terrain_speed(want)
 		move_dir = want.normalized()
-		if _pivot:
-			want = Vector2.ZERO          # разворот на месте: не бежим, пока ноги не повернулись
 		vel += (want - vel) * minf(1.0, ACCEL * dt)
 	else:
 		vel *= maxf(0.0, 1.0 - 18.0 * dt)
@@ -244,52 +246,32 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	flash_t = maxf(0.0, flash_t - dt)
 	muzzle_flash.visible = flash_t > 0.0
 
-	# --- тело ---
+	# --- тело (стрельба на ходу, как в шутерах от 3-го лица) ---
+	# Корпус смотрит на цель, а не в сторону бега. Ноги идут по направлению движения относительно
+	# корпуса: до ~100° — бег вперёд, дальше — бег спиной вперёд (клип назад). Таз поворачивается
+	# к направлению бега (leg_twist, не больше ~100°), верх тела это компенсирует (rifle_ik.gd) —
+	# вместо разворота всего тела, из-за которого ноги расходились «шпагатом».
 	var move_yaw := tiles_to_yaw(move_dir) if moving else yaw
-	var legs := move_yaw                      # куда смотрят ноги
-	if aiming and moving:
-		# цель дальше, чем доворачивают корпус и руки — разворот к цели и бег спиной вперёд
-		var rel := absf(wrapf(aim_world - move_yaw, -PI, PI))
-		backpedal = rel > (REACH - 0.17 if backpedal else REACH)
-		if backpedal:
-			legs = wrapf(move_yaw + PI, -PI, PI)
-	elif aiming:
-		backpedal = false
-		legs = aim_world                        # стоит — весь корпус к цели
-	else:
-		backpedal = false
-	var legs_final := legs
-	if aiming and moving and _pivot:
-		if not is_nan(_wp):
-			legs = _wp                          # этап 1: первая половина разворота (90°)
-			if absf(wrapf(_wp - yaw, -PI, PI)) < 0.12:
-				_wp = NAN
-				_pstep = 0.22                   # переступил на месте — и вторая половина
-		elif _pstep > 0.0:
-			legs = yaw
-	_pstep = maxf(0.0, _pstep - dt)
+	var twist_goal := 0.0
+	backpedal = false
 	if aiming:
-		# поворот ног ограничен по скорости; на ~180° — в сторону прицела, а не как выпадет
-		var d2 := wrapf(legs - yaw, -PI, PI)
-		if absf(d2) > 2.9:
-			var side := signf(wrapf(aim_world - yaw, -PI, PI))
-			if side != 0.0 and signf(d2) != side:
-				d2 += side * TAU
-		var rate := BODY_TURN_RATE
-		yaw = wrapf(yaw + clampf(d2, -rate * dt, rate * dt), -PI, PI)
-	elif moving:
-		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
-	# большой разворот ног на бегу (вперёд → огонь назад): боец притормаживает и доворачивается
-	# стоя (клип Idle), а не бежит, пока тело поворачивается — иначе ноги расходятся «шпагатом»
-	var err := absf(wrapf(legs_final - yaw, -PI, PI)) if aiming and moving else 0.0
-	var was := _pivot
-	_pivot = err > (0.35 if _pivot else 0.8)
-	if _pivot and not was:
-		var dd := wrapf(legs_final - yaw, -PI, PI)
-		_wp = wrapf(yaw + signf(dd) * PI / 2.0, -PI, PI) if absf(dd) > 1.9 else NAN
-	elif not _pivot:
-		_wp = NAN
-		_pstep = 0.0
+		if not _was_aiming:
+			face = yaw
+		var d2 := wrapf(aim_world - face, -PI, PI)
+		face = wrapf(face + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
+		if moving:
+			var rel := wrapf(move_yaw - face, -PI, PI)
+			backpedal = absf(rel) > (1.75 if _was_back else 1.95)
+			twist_goal = wrapf(rel + PI, -PI, PI) if backpedal else rel
+		leg_twist = lerp_angle(leg_twist, twist_goal, minf(1.0, 12.0 * dt))
+		yaw = wrapf(face + leg_twist, -PI, PI)     # ноги — по движению, корпус добирает спиной (скручивание)
+	else:
+		leg_twist = 0.0
+		if moving:
+			yaw = lerp_angle(yaw, move_yaw, minf(1.0, 14.0 * dt))
+		face = yaw
+	_was_aiming = aiming
+	_was_back = backpedal
 	model.rotation.y = yaw
 
 	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
@@ -298,14 +280,12 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -REACH, REACH)
 	aim_local += (aim_rel - aim_local) * minf(1.0, (12.0 if aiming else 8.0) * dt)
 
-	if moving and real_speed > 0.15 and not _pivot:
+	if moving and real_speed > 0.15:
 		# шаг анимации = шагу по земле (без «коньков»); пятясь — тот же клип назад
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)   # сглаженно: без дёрганья темпа шага
 		var mps := anim_speed * WorldGen.T
 		var k := clampf(mps / (RUN_ANIM_MPS * CHAR_SCALE), 0.35, 1.6)
 		_play("Run", -k if backpedal else k)
-	elif _pivot and _pstep > 0.0:
-		_play("Run", 0.5)                       # переступание между двумя этапами разворота
 	else:
 		anim_speed = 0.0
 		_play("Idle", 1.0)
