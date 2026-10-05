@@ -2,7 +2,7 @@ extends CanvasLayer
 # Интерфейс: экосистема/координаты/деревья, версия и fps, мини-карта (тап — большая
 # карта с 5 локациями), телепорт 📍, «ЗОМБИ +», «АВТО ОГОНЬ», время суток с паузой.
 
-const VERSION := "G0.4"
+const VERSION := "G0.5"
 var main
 var info: Label
 var ver: Label
@@ -15,6 +15,9 @@ var pause_btn: Button
 var auto_btn: Button
 var zombie_btn: Button
 var tp_btn: Button
+var gear_btn: Button
+var q_panel: VBoxContainer
+var q_btns: Array = []
 var tp_panel: VBoxContainer
 var _mini_img: Image
 var _mini_tex: ImageTexture
@@ -45,6 +48,23 @@ func _ready() -> void:
 	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	add_child(ver)
 
+	gear_btn = _button("⚙", Vector2(10, 168), Vector2(46, 46), Color(0.06, 0.09, 0.06, 0.8))
+	gear_btn.pressed.connect(func(): q_panel.visible = not q_panel.visible)
+	q_panel = VBoxContainer.new()
+	q_panel.position = Vector2(62, 168)
+	q_panel.visible = false
+	add_child(q_panel)
+	var qt := Label.new()
+	qt.text = "Качество графики"
+	qt.add_theme_font_size_override("font_size", 15)
+	q_panel.add_child(qt)
+	for i in 3:
+		var qb := _button("", Vector2.ZERO, Vector2(190, 40), Color(0.06, 0.09, 0.06, 0.9))
+		qb.reparent(q_panel)
+		q_btns.append(qb)
+		qb.pressed.connect(func():
+			main.settings.apply(i)
+			_refresh_q())
 	tp_btn = _button("📍", Vector2(10, 116), Vector2(46, 46), Color(0.06, 0.09, 0.06, 0.8))
 	tp_btn.pressed.connect(func(): tp_panel.visible = not tp_panel.visible)
 	tp_panel = VBoxContainer.new()
@@ -128,6 +148,10 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 
+func _refresh_q() -> void:
+	for i in q_btns.size():
+		q_btns[i].text = ("● " if main.settings.level == i else "   ") + main.settings.NAMES[i]
+
 func _box(c: Color) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = c
@@ -167,9 +191,10 @@ func _layout() -> void:
 # кнопки, на которых стики не начинаются
 func ui_rects() -> Array:
 	var out := []
-	for c in [mini, zombie_btn, auto_btn, tp_btn, get_node("TimeBox")]:
+	for c in [mini, zombie_btn, auto_btn, tp_btn, gear_btn, get_node("TimeBox")]:
 		out.append(func(): return c.get_global_rect() if c.visible else Rect2())
 	out.append(func(): return tp_panel.get_global_rect() if tp_panel.visible else Rect2())
+	out.append(func(): return q_panel.get_global_rect() if q_panel.visible else Rect2())
 	out.append(func(): return get_viewport().get_visible_rect() if big.visible else Rect2())
 	return out
 

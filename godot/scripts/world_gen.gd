@@ -22,27 +22,33 @@ const FEATURES := {
 }
 const LANDMARKS := ["cabin", "post", "ford", "ruins", "bunker", "crater"]
 
-# Породы деревьев (3D-модели assets/trees3d, список — TREE_MODELS в world.gd)
-const TREE_FILES := ["00_pine", "01_oak", "02_birch", "03_maple", "04_deadwood", "05_bluespruce",
-	"06_willow", "07_aspen", "08_rowan", "09_cedar", "10_larch", "11_linden"]
-const TREE_DRAW_W := 214.0
-const TREE_DRAW_H := 428.0
-const TREE_BASE_FRAC := 0.9
-const TREE_TRUNK_W := [0.04, 0.05, 0.092, 0.04, 0.1, 0.04, 0.05, 0.03, 0.03, 0.035, 0.04, 0.06]
-const SWAMP_TREES := [2, 0, 4]
-const ROCK_TYPES := [["boulder_01", 0.49], ["namaqualand_boulder_02", 0.70], ["rock_09", 0.29], ["stone_01", 0.57]]
-const ROCK_DRAW := 119.0
-
-const COVER_KINDS := {
-	"grass": {"keys": ["grass_0", "grass_1", "grass_2", "grass_3"], "flat": false, "sway": 1.0, "push": 1.0},
-	"fern": {"keys": ["fern_0", "fern_1", "fern_2", "fern_3"], "flat": false, "sway": 0.6, "push": 0.9},
-	"nettle": {"keys": ["nettle_0", "nettle_1"], "flat": false, "sway": 0.8, "push": 0.9},
-	"bush": {"keys": ["bush_0", "bush_1", "bush_2"], "flat": false, "sway": 0.7, "push": 0.75},
-	"sapling": {"keys": ["sapling_0", "sapling_1", "sapling_2", "sapling_3", "sapling_4", "sapling_5"], "flat": false, "sway": 0.5, "push": 0.3},
-	"branch": {"keys": ["branch_0", "branch_1", "branch_2"], "flat": true, "sway": 0.0, "push": 0.0},
-	"log": {"keys": ["log_0", "log_1"], "flat": true, "sway": 0.0, "push": 0.0},
-	"roots": {"keys": ["roots_0", "roots_1"], "flat": true, "sway": 0.0, "push": 0.0},
-}
+# ---------- лес: наборы картинок-импосторов (assets/imp, запечены из моделей Poly Haven CC0 и EZ-Tree MIT) ----------
+const FIR := ["fir_a_0", "fir_a_1", "fir_b_0", "fir_b_1", "fir_c_0", "fir_c_1"]
+const PINE := ["pine_a_0", "pine_a_1", "pine_b_0", "pine_b_1", "pine_c_0", "pine_c_1"]
+const BROAD := ["broad1_0", "broad1_1", "broad2_0", "broad2_1", "smalltree_0", "smalltree_1"]
+const BIRCH := ["birch0_0", "birch1_0", "birch2_0"]
+const OAK := ["oak0_0", "oak1_0"]
+const ASPEN := ["aspen0_0", "aspen1_0"]
+const DEAD := ["dead0_0", "dead1_0", "dead2_0"]
+const SAP_SMALL := ["firsap_a", "firsap_b", "firsap_c", "pinesap_a", "pinesap_b", "pinesap_c"]
+const SAP_MED := ["firsapm_a", "firsapm_b", "firsapm_c", "pinesapm_a", "pinesapm_b", "pinesapm_c"]
+const SHRUB := ["shrub1", "shrub2_a", "shrub2_b", "shrub2_c", "shrub2_d", "shrub3_a", "shrub3_b", "shrub3_c", "shrub3_d", "shrub4"]
+const FERN := ["fern_a", "fern_b", "fern_c", "fern_d"]
+const NETTLE := ["nettle_medium_a", "nettle_medium_b", "nettle_small_a", "nettle_small_b", "nettle_tall_a", "nettle_tall_b"]
+const GRASS := ["grass1_small_a", "grass1_mid_b", "grass1_tall_a", "grass1_tall_b", "grass1_large_b", "grass1_small_b", "grass2_a", "grass2_b", "grass2_c", "grass2_d", "grass2_e", "weed_a", "weed_b", "weed_c", "weed_d", "weed_e"]
+const FLOWERS := ["celandine_a", "celandine_b", "celandine_c", "celandine_d", "celandine_e", "dandelion_a", "dandelion_b", "dandelion_c", "dandelion_d", "dandelion_e", "sorrel_a", "sorrel_b", "sorrel_c", "sorrel_d", "sorrel_e", "sorrel_f"]
+const MOSS := ["moss_a", "moss_b", "moss_c", "moss_d", "moss_e", "moss_f", "moss_g", "moss_h"]
+const STUMP := ["stump1", "stump2"]
+const LOG := ["log1", "log1b", "log2", "log2b"]
+const BRANCH := ["branches_a", "branches_b", "branches_c"]
+const ROOTS := ["pineroots_a", "pineroots_b", "rootcl1", "rootcl2_a", "rootcl2_b", "rootcl2_c", "root1"]
+const ROCK := ["boulder1", "mrock1", "mrock2", "mrock3", "mrock4", "mrock5", "mrock6", "mrock7", "mrock8", "mrock9", "mrock10", "mrock11", "mrock12", "mrock13", "rock7", "stone1"]
+# что лежит на земле (рисуется «на земле», без раздвигания) и что твёрдое (столкновения), радиус — тайлы
+const FLAT_CATS := ["moss", "branch", "roots", "log"]
+const SOLID_R := {"tree": 0.55, "dead": 0.5, "stump": 0.45, "log": 0.75, "rock": 0.6, "sapm": 0.3}
+# раздвигание растений бойцом и ветер (как в браузерной версии)
+const PUSH := {"grass": 1.0, "fern": 0.9, "nettle": 0.9, "flower": 0.8, "shrub": 0.7, "sap": 0.35}
+const SWAY := {"tree": 0.45, "dead": 0.15, "sapm": 0.5, "sap": 0.6, "shrub": 0.7, "fern": 0.6, "nettle": 0.8, "grass": 1.0, "flower": 0.9}
 
 static func ss(e0: float, e1: float, x: float) -> float:
 	var t := clampf((x - e0) / (e1 - e0), 0.0, 1.0)
@@ -130,17 +136,29 @@ static func ground_layers(wx: float, wy: float) -> PackedFloat32Array:
 	return PackedFloat32Array([path, swamp, riverbed, t[5] * 0.6, t[1], t[4]])
 
 static func ecosystem(cx: int, cy: int) -> Dictionary:
+	# canopy: [набор, вес]…, dens — деревьев на чанк, dead — доля сухостоя
 	var wx := float(cx * CHUNK)
 	var wy := float(cy * CHUNK)
 	if wy < -70.0:
-		return {"name": "Северный Скалистый Бор", "canopy": [9, 10, 0, 5], "sub": [8, 2, 4, 7]}
+		return {"name": "Северный Скалистый Бор", "canopy": [[PINE, 5], [FIR, 4], [BIRCH, 1]], "dens": 7, "dead": 0.05, "moss": 1.0, "fern": 0.6, "grass": 0.3, "shrub": 0.3}
 	if wy > 110.0 and wx > -70.0:
-		return {"name": "Заброшенный Дубовый Хутор", "canopy": [1, 3, 11, 8], "sub": [8, 2, 6, 7]}
+		return {"name": "Заброшенный Дубовый Хутор", "canopy": [[OAK, 4], [BROAD, 3], [BIRCH, 1], [ASPEN, 1]], "dens": 4, "dead": 0.04, "moss": 0.2, "fern": 0.4, "grass": 1.0, "shrub": 1.0}
 	if absf(wy - river_center_y(wx)) < 26.0:
-		return {"name": "Долина Реки Быстрянки", "canopy": [6, 3, 7, 11], "sub": [6, 2, 11]}
+		return {"name": "Долина Реки Быстрянки", "canopy": [[BROAD, 4], [BIRCH, 2], [ASPEN, 2], [OAK, 1]], "dens": 5, "dead": 0.04, "moss": 0.3, "fern": 0.5, "grass": 1.0, "shrub": 1.0}
 	if wx < -60.0 and wy >= 30.0 and wy <= 220.0:
-		return {"name": "Гиблые Мшистые Топи", "canopy": [2, 0, 4], "sub": [2, 4, 7]}
-	return {"name": "Центральная Лесная Заимка", "canopy": [0, 2, 11, 8], "sub": [2, 7, 3, 8]}
+		return {"name": "Гиблые Мшистые Топи", "canopy": [[BIRCH, 3], [PINE, 2], [DEAD, 2]], "dens": 3, "dead": 0.25, "moss": 1.0, "fern": 0.3, "grass": 0.8, "shrub": 0.4}
+	return {"name": "Центральная Лесная Заимка", "canopy": [[FIR, 3], [PINE, 3], [BIRCH, 3], [ASPEN, 1], [OAK, 1], [BROAD, 1]], "dens": 6, "dead": 0.05, "moss": 0.6, "fern": 1.0, "grass": 0.6, "shrub": 0.6}
+
+static func _pick_weighted(groups: Array, r: float) -> Array:
+	var sum := 0.0
+	for g in groups:
+		sum += g[1]
+	var x := r * sum
+	for g in groups:
+		if x < g[1]:
+			return g[0]
+		x -= g[1]
+	return groups[0][0]
 
 static func in_map(x: float, y: float, m: float) -> bool:
 	return absf(x) < MAP_RADIUS - m and absf(y) < MAP_RADIUS - m
@@ -155,145 +173,132 @@ static func tree_spot(wx: float, wy: float, r: float) -> PackedFloat32Array:
 		return PackedFloat32Array()
 	return t
 
-static func tree_radius(type: int, scale: float) -> float:
-	var half_px: float = TREE_TRUNK_W[type] * TREE_DRAW_W * scale / 2.0
-	return maxf(0.5, half_px * 1.15 / (74.0 * 0.7) + 0.28)
-
-static func rock_radius(type: int, scale: float) -> float:
-	var half_px: float = ROCK_TYPES[type][1] * ROCK_DRAW * scale / 2.0
-	return half_px / (74.0 * 0.7) + 0.22
-
 # ---------- содержимое чанка ----------
-# Деревья: {x, y, type, scale, giant}; камни: {x, y, type, scale, flip};
-# подлесок: {x, y, kind, key, flip, scale}
-static func chunk_content(cx: int, cy: int) -> Dictionary:
-	var trees: Array = []
-	var rocks: Array = []
+static func _obj(rng: RandomNumberGenerator, x: float, y: float, key: String, cat: String, sc: float) -> Dictionary:
+	return {"x": x, "y": y, "key": key, "cat": cat, "scale": sc, "flip": rng.randf() > 0.5}
+
+# Каждый объект: {x, y, key, cat, scale, flip}; solid — те, что не пропускают бойца и пули (+ r)
+static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 	var eco := ecosystem(cx, cy)
 	var sx := float(cx * CHUNK)
 	var sy := float(cy * CHUNK)
-	var hseed := absi(((cx * 73856093) & 0xFFFFFFFF) ^ ((cy * 19349663) & 0xFFFFFFFF))
-	var seed := hseed
-	var giants := 2 + int(prand(seed) * 3.0); seed += 1
-	for g in giants:
-		var gx := sx + 1.5 + prand(seed) * (CHUNK - 3); seed += 1
-		var gy := sy + 1.5 + prand(seed) * (CHUNK - 3); seed += 1
-		if not in_map(gx, gy, 1.0):
+	var rng := RandomNumberGenerator.new()
+	rng.seed = absi(((cx * 73856093) & 0xFFFFFFFF) ^ ((cy * 19349663) & 0xFFFFFFFF)) + 12345
+	var objs: Array = []
+	var trees: Array = []
+	# 1) деревья: кандидаты с минимальным расстоянием
+	var want: int = eco.dens
+	for i in want * 3:
+		if trees.size() >= want:
+			break
+		var x: float = sx + 0.8 + rng.randf() * (CHUNK - 1.6)
+		var y: float = sy + 0.8 + rng.randf() * (CHUNK - 1.6)
+		var r0: float = rng.randf()
+		if not in_map(x, y, 1.0):
 			continue
-		var close := false
+		var ok := true
 		for t in trees:
-			if Vector2(t.x - gx, t.y - gy).length() < 3.2:
-				close = true
+			if Vector2(t.x - x, t.y - y).length() < 3.0:
+				ok = false
 				break
-		var spot := tree_spot(gx, gy, prand(seed)); seed += 1
-		if close or spot.is_empty():
+		if not ok:
 			continue
-		var pool: Array = SWAMP_TREES if spot[3] > 0.5 else eco.canopy
-		var type: int = pool[int(prand(seed) * pool.size())]; seed += 1
-		trees.append({"x": gx, "y": gy, "type": type, "scale": 1.0 + prand(seed) * 0.12, "giant": true}); seed += 1
-		var sats := 1 + int(prand(seed) * 3.0); seed += 1
-		for s in sats:
-			var ang := prand(seed) * TAU; seed += 1
-			var dist := 1.8 + prand(seed) * 1.6; seed += 1
-			var tx := gx + cos(ang) * dist
-			var ty := gy + sin(ang) * dist
-			if not in_map(tx, ty, 1.0):
-				continue
-			var sp := tree_spot(tx, ty, prand(seed)); seed += 1
-			if sp.is_empty():
-				continue
-			var sp_pool: Array = SWAMP_TREES if sp[3] > 0.5 else eco.sub
-			var st: int = sp_pool[int(prand(seed) * sp_pool.size())]; seed += 1
-			trees.append({"x": tx, "y": ty, "type": st, "scale": 0.88 + prand(seed) * 0.1, "giant": false}); seed += 1
-	if prand(seed) < 0.22:
-		seed += 1
-		var dx := sx + 1.5 + prand(seed) * (CHUNK - 3); seed += 1
-		var dy := sy + 1.5 + prand(seed) * (CHUNK - 3); seed += 1
-		if in_map(dx, dy, 1.0) and not tree_spot(dx, dy, prand(seed)).is_empty():
-			var ok := true
-			for t in trees:
-				if Vector2(t.x - dx, t.y - dy).length() < 3.0:
-					ok = false
-			if ok:
-				trees.append({"x": dx, "y": dy, "type": 4, "scale": 0.95 + prand(seed + 1) * 0.1, "giant": true})
-	seed += 2
-	# валуны на каменистых местах
-	if prand(seed) < 0.35:
-		seed += 1
-		var rx := sx + 2.0 + prand(seed) * (CHUNK - 4); seed += 1
-		var ry := sy + 2.0 + prand(seed) * (CHUNK - 4); seed += 1
-		var rt := terrain(rx, ry)
-		if rt[5] > 0.3 and rt[1] < 0.05 and rt[6] < 0.35 and in_map(rx, ry, 1.0):
-			rocks.append({"x": rx, "y": ry, "type": int(prand(seed) * ROCK_TYPES.size()), "scale": 0.85 + prand(seed + 1) * 0.3, "flip": prand(seed + 2) > 0.5})
-	var cover := _cover(trees, sx, sy, hseed + 7777)
-	return {"trees": trees, "rocks": rocks, "cover": cover, "eco": eco.name}
-
-static func _cover(trees: Array, sx: float, sy: float, seed0: int) -> Array:
-	var seed := seed0
-	var cover: Array = []
-	for i in 70:
-		var x := sx + prand(seed) * CHUNK; seed += 1
-		var y := sy + prand(seed) * CHUNK; seed += 1
-		var t := terrain(x, y)
-		if t[1] > 0.02 or path_dist(x, y) < 1.3:
-			seed += 2
+		var spot := tree_spot(x, y, r0)
+		if spot.is_empty():
 			continue
-		var r := prand(seed); seed += 1
-		var clearing := t[4]
+		var dead: bool = rng.randf() < (eco.dead + (0.2 if spot[3] > 0.5 else 0.0))
+		var set: Array = DEAD if dead else _pick_weighted(eco.canopy, rng.randf())
+		var key: String = set[int(rng.randf() * set.size())]
+		var o: Dictionary = _obj(rng, x, y, key, "dead" if dead else "tree", 0.88 + rng.randf() * 0.24)
+		objs.append(o)
+		trees.append(o)
+	# 2) подрост, кусты
+	for i in 3:
+		var x2: float = sx + rng.randf() * CHUNK
+		var y2: float = sy + rng.randf() * CHUNK
+		var t2 := terrain(x2, y2)
+		if t2[1] > 0.02 or t2[6] > 0.3 or t2[4] > 0.5:
+			continue
+		var r2: float = rng.randf()
+		if r2 < 0.45:
+			objs.append(_obj(rng, x2, y2, SAP_SMALL[int(rng.randf() * SAP_SMALL.size())], "sap", 0.8 + rng.randf() * 0.4))
+		elif r2 < 0.7:
+			objs.append(_obj(rng, x2, y2, SAP_MED[int(rng.randf() * SAP_MED.size())], "sapm", 0.8 + rng.randf() * 0.35))
+	var nshrub := int(round(3.0 * eco.shrub * density))
+	for i in nshrub:
+		var x3: float = sx + rng.randf() * CHUNK
+		var y3: float = sy + rng.randf() * CHUNK
+		var t3 := terrain(x3, y3)
+		if t3[1] > 0.02 or path_dist(x3, y3) < 1.5 or t3[3] > 0.6:
+			continue
+		objs.append(_obj(rng, x3, y3, SHRUB[int(rng.randf() * SHRUB.size())], "shrub", 0.8 + rng.randf() * 0.4))
+	# 3) травяной ярус по месту: тень леса — папоротник и мох, поляны — трава и цветы, у воды — крапива
+	var ncover := int(70.0 * density)
+	for i in ncover:
+		var x4: float = sx + rng.randf() * CHUNK
+		var y4: float = sy + rng.randf() * CHUNK
+		var r4: float = rng.randf()
+		var k4: float = rng.randf()
+		var t4 := terrain(x4, y4)
+		if t4[1] > 0.02 or path_dist(x4, y4) < 1.2:
+			continue
+		var clearing := maxf(t4[4], ss(0.18, 0.46, soil_noise(x4, y4)))
 		var w := {
-			"grass": 0.30 + clearing * 1.2 + t[3] * 0.5,
-			"fern": (0.32 + t[2] * 0.5) * (1.0 - clearing) * (1.0 - t[5] * 0.6),
-			"nettle": 0.06 + clearing * 0.25,
-			"bush": 0.10 * (1.0 - t[3]),
-			"sapling": 0.07 * (1.0 - clearing * 0.5),
-			"branch": 0.12 * (1.0 - clearing),
-			"log": 0.018 * (1.0 - t[3]),
+			"fern": (0.35 + t4[2] * 0.5) * (1.0 - clearing) * (1.0 - t4[5] * 0.6) * eco.fern,
+			"grass": (0.25 + clearing * 1.2 + t4[3] * 0.6) * eco.grass,
+			"flower": clearing * 0.45 * eco.grass,
+			"nettle": (0.05 + clearing * 0.15 + t4[2] * 0.3) * (1.0 - t4[3]),
+			"moss": (0.15 + t4[3] * 0.6 + t4[5] * 0.4) * eco.moss,
 		}
 		var sum := 0.0
-		for k in w:
-			sum += w[k]
-		if r > minf(0.9, sum * 0.62):
-			seed += 1
+		for kk in w:
+			sum += w[kk]
+		if r4 > minf(0.92, sum * 0.6):
 			continue
-		var pick := prand(seed) * sum; seed += 1
+		var pick := k4 * sum
 		var kind := "grass"
-		for k in w:
-			if pick < w[k]:
-				kind = k
+		for kk in w:
+			if pick < w[kk]:
+				kind = kk
 				break
-			pick -= w[k]
-		if kind != "grass" and kind != "fern":
-			var near := false
-			for tr in trees:
-				if Vector2(tr.x - x, tr.y - y).length() < 0.9:
-					near = true
-					break
-			if near:
-				continue
-		var keys: Array = COVER_KINDS[kind].keys
-		cover.append({"x": x, "y": y, "kind": kind, "key": keys[int(prand(seed) * keys.size())], "flip": prand(seed + 1) > 0.5, "scale": 0.85 + prand(seed + 2) * 0.3})
-		seed += 3
-	# кромки склонов: гуще трава, папоротник, корни
-	for i in 60:
-		var x := sx + prand(seed) * CHUNK; seed += 1
-		var y := sy + prand(seed) * CHUNK; seed += 1
-		var r1 := prand(seed); var r2 := prand(seed + 1); var r3 := prand(seed + 2); seed += 3
-		var t := terrain(x, y)
-		if t[1] > 0.02 or path_dist(x, y) < 1.3:
-			continue
-		var h := t[0]
-		var slope := Vector2(height(x + 0.5, y) - h, height(x, y + 0.5) - h).length() / 0.5
-		if slope < 0.45 or r1 > minf(0.9, (slope - 0.45) * 1.6):
-			continue
-		var kind := "roots" if r2 < 0.22 else ("grass" if r2 < 0.62 else "fern")
-		var keys: Array = COVER_KINDS[kind].keys
-		cover.append({"x": x, "y": y, "kind": kind, "key": keys[int(r3 * keys.size())], "flip": r3 > 0.5, "scale": (0.7 + r1 * 0.3) if kind == "roots" else (0.8 + r1 * 0.35)})
-	# корни у больших деревьев
-	for tr in trees:
-		if not tr.giant or prand(seed) > 0.5:
-			seed += 1
-			continue
-		var a := prand(seed + 1) * TAU
-		cover.append({"x": tr.x + cos(a) * 0.25, "y": tr.y + sin(a) * 0.25, "kind": "roots", "key": "roots_%d" % int(prand(seed + 2) * 2.0), "flip": prand(seed + 3) > 0.5, "scale": 0.9})
-		seed += 4
-	return cover
+			pick -= w[kk]
+		var lst: Array = {"fern": FERN, "grass": GRASS, "flower": FLOWERS, "nettle": NETTLE, "moss": MOSS}[kind]
+		var sk: float = 0.7 if kind == "fern" else 1.0
+		objs.append(_obj(rng, x4, y4, lst[int(rng.randf() * lst.size())], kind, (0.8 + rng.randf() * 0.4) * sk))
+	# 4) валежник: пни, брёвна, ветки, корни
+	if rng.randf() < 0.45:
+		var x5: float = sx + 1.0 + rng.randf() * (CHUNK - 2)
+		var y5: float = sy + 1.0 + rng.randf() * (CHUNK - 2)
+		if not tree_spot(x5, y5, 0.0).is_empty():
+			objs.append(_obj(rng, x5, y5, STUMP[int(rng.randf() * STUMP.size())], "stump", 0.85 + rng.randf() * 0.3))
+	if rng.randf() < 0.3:
+		var x6: float = sx + 2.0 + rng.randf() * (CHUNK - 4)
+		var y6: float = sy + 2.0 + rng.randf() * (CHUNK - 4)
+		if not tree_spot(x6, y6, 0.0).is_empty():
+			objs.append(_obj(rng, x6, y6, LOG[int(rng.randf() * LOG.size())], "log", 0.85 + rng.randf() * 0.3))
+	for i in 2:
+		var x7: float = sx + rng.randf() * CHUNK
+		var y7: float = sy + rng.randf() * CHUNK
+		if rng.randf() < 0.6 and terrain(x7, y7)[1] < 0.02 and path_dist(x7, y7) > 1.2:
+			objs.append(_obj(rng, x7, y7, BRANCH[int(rng.randf() * BRANCH.size())], "branch", 0.8 + rng.randf() * 0.4))
+	for t in trees:
+		if rng.randf() < 0.35:
+			var a := rng.randf() * TAU
+			objs.append(_obj(rng, t.x + cos(a) * 0.3, t.y + sin(a) * 0.3, ROOTS[int(rng.randf() * ROOTS.size())], "roots", 0.7 + rng.randf() * 0.3))
+	# 5) камни: на каменистых местах — валуны, везде — редкие камешки
+	for i in 3:
+		var x8: float = sx + 1.0 + rng.randf() * (CHUNK - 2)
+		var y8: float = sy + 1.0 + rng.randf() * (CHUNK - 2)
+		var t8 := terrain(x8, y8)
+		var pr: float = 0.08 + t8[5] * 0.8
+		if rng.randf() < pr and t8[1] < 0.05 and t8[6] < 0.35:
+			var big: bool = t8[5] > 0.4 and rng.randf() < 0.4
+			objs.append(_obj(rng, x8, y8, "boulder1" if big else ROCK[1 + int(rng.randf() * (ROCK.size() - 1))], "rock", 0.8 + rng.randf() * 0.5))
+	var solid: Array = []
+	for o in objs:
+		if SOLID_R.has(o.cat):
+			var r: float = SOLID_R[o.cat] * (o.scale if o.cat == "rock" else 1.0)
+			if o.key == "boulder1":
+				r = 1.0 * o.scale
+			solid.append({"x": o.x, "y": o.y, "r": r, "tree": o.cat in ["tree", "dead", "stump", "sapm"]})
+	return {"objs": objs, "trees": trees, "solid": solid, "eco": eco.name}

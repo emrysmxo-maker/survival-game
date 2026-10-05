@@ -219,6 +219,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	if moving and aiming:
 		var rel := absf(wrapf(move_yaw - yaw, -PI, PI))
 		backpedal = rel > 1.75
+	# в клипе бега обе стопы до 0.15 м висят в воздухе (фаза полёта) — прижимаем к земле
+	var lo := foot_offset() - model.position.y
+	var want_y := -maxf(0.0, lo - 0.01)
+	model.position.y = lerpf(model.position.y, want_y, minf(1.0, 25.0 * dt))
 	if moving and real_speed > 0.15:
 		# ноги в клипе идут с той же скоростью, что боец по земле — без «коньков»
 		var mps := real_speed * WorldGen.T

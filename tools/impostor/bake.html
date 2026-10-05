@@ -1,0 +1,168 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#000">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","@dgreenheck/ez-tree":"./node_modules/@dgreenheck/ez-tree/build/ez-tree.es.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+// Запекание «импосторов» для игры (Godot): объект рендерится под углом игровой камеры
+// (ортогональная, 46.8° над землёй) в 2 картинки:
+//   albedo.png — цвет без освещения (RGBA, альфа — вырез листвы);
+//   ndt.png    — R,G: нормаль (вид камеры), B: глубина относительно точки земли, A: затенённость неба (AO).
+// В игре по ним считается настоящее освещение от солнца, тени и пересечение по глубине.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { Tree, TreePreset } from '@dgreenheck/ez-tree';
+const cache = {};
+window.load = (url) => new Promise((res, rej) => { if (cache[url]) return res(true); new GLTFLoader().load(url, g => { cache[url] = g.scene; res(true); }, undefined, e => rej(String(e))); });
+window.ready = true;
+
+const NORMAL_VS = `
+varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position,1.0); vV = mv.xyz; vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }`;
+const NORMAL_FS = `
+uniform sampler2D map; uniform bool hasMap; uniform sampler2D nmap; uniform bool hasN; uniform float z0; uniform float R; uniform float alphaTest;
+varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+vec3 perturb(vec3 surf_pos, vec3 surf_norm, vec3 mapN, float faceDir){
+  vec3 q0 = dFdx(surf_pos); vec3 q1 = dFdy(surf_pos); vec2 st0 = dFdx(vUv); vec2 st1 = dFdy(vUv);
+  vec3 N = surf_norm; vec3 q1perp = cross(q1, N); vec3 q0perp = cross(N, q0);
+  vec3 T = q1perp * st0.x + q0perp * st1.x; vec3 B = q1perp * st0.y + q0perp * st1.y;
+  float det = max(dot(T,T), dot(B,B)); float scale = (det == 0.0) ? 0.0 : faceDir * inversesqrt(det);
+  return normalize(T * (mapN.x * scale) + B * (mapN.y * scale) + N * mapN.z);
+}
+void main(){
+  if (hasMap) { float a = texture2D(map, vUv).a; if (a < alphaTest) discard; }
+  vec3 N = normalize(vN); float fd = gl_FrontFacing ? 1.0 : -1.0; N *= fd;
+  if (hasN) { vec3 m = texture2D(nmap, vUv).xyz * 2.0 - 1.0; N = perturb(vV, N, m, fd); }
+  if (N.z < 0.0) N = -N;   // смотрим всегда «к камере»
+  float d = clamp((vV.z - z0) / (2.0 * R) + 0.5, 0.0, 1.0);
+  gl_FragColor = vec4(N.x * 0.5 + 0.5, N.y * 0.5 + 0.5, d, 1.0);
+}`;
+
+function prep(obj){
+  // все материалы — с вырезом по альфе и двусторонние
+  obj.traverse(n => { if (n.isMesh) { const ms = Array.isArray(n.material) ? n.material : [n.material]; ms.forEach(m => { m.side = THREE.DoubleSide; m.alphaTest = 0.5; m.transparent = false; }); n.castShadow = true; n.receiveShadow = true; } });
+}
+function swapMaterials(obj, mk){
+  const saved = [];
+  obj.traverse(n => { if (n.isMesh) { saved.push([n, n.material]); n.material = Array.isArray(n.material) ? n.material.map(mk) : mk(n.material); } });
+  return () => saved.forEach(([n, m]) => n.material = m);
+}
+const whiteCache = new Map();
+function whiteTex(t){
+  if (!t || !t.image) return null;
+  if (whiteCache.has(t)) return whiteCache.get(t);
+  const img = t.image; const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, cv.width, cv.height);
+  for (let i = 0; i < d.data.length; i += 4) { d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; }
+  g.putImageData(d, 0, 0); const w = new THREE.CanvasTexture(cv); w.flipY = t.flipY; w.wrapS = t.wrapS; w.wrapT = t.wrapT; w.colorSpace = THREE.SRGBColorSpace;
+  whiteCache.set(t, w); return w;
+}
+function readPixels(r, W, H){
+  const gl = r.getContext(); const px = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return px;
+}
+
+// spec: {url, node, yaw, height, ppm, maxW, maxH, R, aoDirs, ez}
+window.bake = async function(spec){
+  let src;
+  if (spec.ez) {
+    const t = new Tree(); t.loadPreset(spec.ez.preset); if (spec.ez.seed !== undefined) t.options.seed = spec.ez.seed;
+    for (const [k, v] of Object.entries(spec.ez.opts || {})) { const p = k.split('.'); let o = t.options; for (let i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p[p.length - 1]] = v; }
+    t.generate(); src = t;
+    await new Promise(r => setTimeout(r, 2500));   // текстуры коры/листвы грузятся асинхронно
+  } else {
+    await window.load(spec.url);
+    src = cache[spec.url];
+    if (spec.node) src = src.getObjectByName(spec.node);
+  }
+  const obj = src.clone(true); obj.position.set(0, 0, 0); obj.rotation.set(0, 0, 0); obj.updateMatrixWorld(true);
+  prep(obj);
+  const holder = new THREE.Group(); holder.add(obj);
+  let bb = new THREE.Box3().setFromObject(obj); const c = bb.getCenter(new THREE.Vector3());
+  obj.position.set(-c.x, -bb.min.y - (spec.sink || 0) / (spec.height ? spec.height / (bb.max.y - bb.min.y) : (spec.scale || 1)), -c.z);
+  const k = spec.height ? spec.height / (bb.max.y - bb.min.y) : (spec.scale || 1);
+  holder.scale.setScalar(k); holder.rotation.y = (spec.yaw || 0) * Math.PI / 180;
+  const scene = new THREE.Scene(); scene.add(holder); holder.updateMatrixWorld(true);
+  bb = new THREE.Box3().setFromObject(holder);
+
+  const E = spec.elev ?? Math.asin(54 / 74);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
+  cam.position.set(0, Math.sin(E) * 200, Math.cos(E) * 200); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
+  const inv = cam.matrixWorldInverse;
+  // границы в осях камеры (по углам коробки — с запасом)
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, zA = 1e9, zB = -1e9;
+  for (let i = 0; i < 8; i++) {
+    const p = new THREE.Vector3(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(inv);
+    x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); zA = Math.min(zA, p.z); zB = Math.max(zB, p.z);
+  }
+  const anchor = new THREE.Vector3(0, 0, 0).applyMatrix4(inv);
+  let ppm = spec.ppm || 140;
+  const pad = 0.02 * Math.max(x1 - x0, y1 - y0);
+  x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
+  ppm = Math.min(ppm, (spec.maxW || 1024) / (x1 - x0), (spec.maxH || 2048) / (y1 - y0));
+  const W = Math.ceil((x1 - x0) * ppm), H = Math.ceil((y1 - y0) * ppm);
+  cam.left = x0; cam.right = x0 + W / ppm; cam.top = y1; cam.bottom = y1 - H / ppm; cam.updateProjectionMatrix();
+  const R = spec.R || Math.max(1, Math.ceil(Math.max(anchor.z - zA, zB - anchor.z)));
+
+  const SS = spec.ss || 2;
+  bb.min.y = Math.max(bb.min.y, 0);
+  const r = new THREE.WebGLRenderer({ antialias: false, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(W * SS, H * SS); r.setClearColor(0x000000, 0);
+  r.localClippingEnabled = true; r.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.0)];
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  const out = {};
+
+  // 1) цвет без света
+  let undo = swapMaterials(holder, m => new THREE.MeshBasicMaterial({ map: m.map || null, color: m.color ? m.color.clone() : 0xffffff, alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: !!m.vertexColors }));
+  r.render(scene, cam); out.albedo = r.domElement.toDataURL('image/png'); undo();
+
+  // 2) нормаль + глубина
+  r.outputColorSpace = THREE.LinearSRGBColorSpace;
+  undo = swapMaterials(holder, m => new THREE.ShaderMaterial({
+    vertexShader: NORMAL_VS, fragmentShader: NORMAL_FS, side: THREE.DoubleSide,
+    uniforms: { map: { value: m.map || null }, hasMap: { value: !!m.map }, nmap: { value: m.normalMap || null }, hasN: { value: !!m.normalMap }, z0: { value: anchor.z }, R: { value: R }, alphaTest: { value: 0.5 } } }));
+  r.setClearColor(0x808080, 0);
+  r.render(scene, cam); out.ndt = r.domElement.toDataURL('image/png'); undo();
+
+  // 3) затенённость неба: свет с N направлений по полусфере, с тенями
+  const dirs = spec.aoDirs || 10;
+  r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+  r.setClearColor(0x000000, 0);
+  undo = swapMaterials(holder, m => {
+    const mm = new THREE.MeshLambertMaterial({ color: 0xffffff, map: null, alphaMap: null, side: THREE.DoubleSide });
+    if (m.map) { mm.alphaTest = 0.5; mm.map = whiteTex(m.map); mm.color.set(0xffffff); }
+    return mm;
+  });
+  // тени с вырезом по альфе
+  holder.traverse(n => { if (n.isMesh) { const mm = Array.isArray(n.material) ? n.material[0] : n.material; n.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: mm.map, alphaTest: 0.5, side: THREE.DoubleSide }); } });
+  const acc = new Float32Array(W * SS * H * SS);
+  const amb = new THREE.AmbientLight(0xffffff, 0.0); scene.add(amb);
+  const lt = new THREE.DirectionalLight(0xffffff, 1.0); lt.castShadow = true; scene.add(lt); scene.add(lt.target);
+  const S = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z);
+  lt.shadow.mapSize.set(2048, 2048); lt.shadow.camera.left = -S; lt.shadow.camera.right = S; lt.shadow.camera.top = S; lt.shadow.camera.bottom = -S; lt.shadow.camera.near = 0.1; lt.shadow.camera.far = 4 * S; lt.shadow.bias = -0.0005; lt.shadow.normalBias = 0.02;
+  const cy = (bb.max.y + bb.min.y) / 2;
+  lt.target.position.set(0, cy, 0);
+  let wsum = 0;
+  for (let i = 0; i < dirs; i++) {
+    // равномерно по полусфере (золотой угол), свет сверху важнее
+    const t = (i + 0.5) / dirs; const el = Math.asin(0.15 + 0.85 * t); const az = i * 2.39996;
+    lt.position.set(Math.cos(el) * Math.cos(az) * 2 * S, cy + Math.sin(el) * 2 * S, Math.cos(el) * Math.sin(az) * 2 * S);
+    lt.shadow.needsUpdate = true;
+    r.render(scene, cam);
+    const px = readPixels(r, W * SS, H * SS);
+    for (let j = 0; j < acc.length; j++) acc[j] += px[j * 4] / 255;
+    wsum += 1;
+  }
+  // нормировка: открытое место ≈ 1
+  const vals = []; for (let j = 0; j < acc.length; j += 7) if (acc[j] > 0) vals.push(acc[j]);
+  vals.sort((a, b) => a - b); const mx = vals.length ? vals[Math.floor(vals.length * 0.97)] : 1;
+  const ao = document.createElement('canvas'); ao.width = W * SS; ao.height = H * SS;
+  const g = ao.getContext('2d'); const im = g.createImageData(W * SS, H * SS);
+  for (let yy = 0; yy < H * SS; yy++) for (let xx = 0; xx < W * SS; xx++) {
+    const j = (H * SS - 1 - yy) * W * SS + xx;     // readPixels — снизу вверх
+    const v = Math.min(1, acc[j] / mx);
+    const o = (yy * W * SS + xx) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = Math.round(v * 255); im.data[o + 3] = 255;
+  }
+  g.putImageData(im, 0, 0); out.ao = ao.toDataURL('image/png'); undo();
+  scene.remove(lt); scene.remove(amb);
+  r.dispose();
+  out.meta = { w: W, h: H, ss: SS, ppm, ax: (anchor.x - x0) * ppm, ay: (y1 - anchor.y) * ppm, R, height: (bb.max.y - bb.min.y), width: Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) };
+  return out;
+};
+</script>

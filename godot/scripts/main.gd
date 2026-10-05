@@ -11,6 +11,7 @@ var weapon
 var zombies
 var effects
 var daynight
+var settings
 var hud
 var cam: Camera3D
 var stick_l
@@ -23,6 +24,7 @@ var _shot_at := 2.0
 var _clock := 0.0
 
 func _ready() -> void:
+	RenderingServer.global_shader_parameter_set("gl_compat", RenderingServer.get_rendering_device() == null)
 	daynight = load("res://scripts/daynight.gd").new()
 	add_child(daynight)
 	daynight.setup(self)
@@ -54,6 +56,9 @@ func _ready() -> void:
 	cam.rotation_degrees = Vector3(-CAM_ELEV_DEG, CAM_YAW_DEG, 0)
 	add_child(cam)
 
+	settings = load("res://scripts/settings.gd").new()
+	settings.main = self
+	add_child(settings)
 	hud = load("res://scripts/hud.gd").new()
 	hud.main = self
 	add_child(hud)
@@ -81,6 +86,8 @@ func _ready() -> void:
 			daynight.t = float(a.substr(7)); daynight.auto = false
 		if a.begins_with("--test="):
 			_test_script = a.substr(7)
+	settings.load_saved()
+	hud._refresh_q()
 	teleport(Vector2(10, 10))
 
 func teleport(t: Vector2) -> void:
@@ -113,7 +120,8 @@ func _process_game(dt: float) -> void:
 	effects.step(player, player.tile, dt, false)
 	weapon.update_weapon(dt, player.firing)
 	zombies.update_zombies(dt)
-	world.update_world(player.tile)
+	world.update_world(player.tile, cam)
+	RenderingServer.global_shader_parameter_set("cam_back", cam.global_transform.basis.z)
 	RenderingServer.global_shader_parameter_set("player_pos", player.global_position)
 	_follow(minf(1.0, 2.6 * dt))
 

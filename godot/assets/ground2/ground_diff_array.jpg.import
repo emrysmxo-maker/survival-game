@@ -1,0 +1,28 @@
+[remap]
+
+importer="2d_array_texture"
+type="CompressedTexture2DArray"
+uid="uid://b1v1b5vjsr4tq"
+path.s3tc="res://.godot/imported/ground_diff_array.jpg-526eaf70d903b54fd4d9241ef0f67548.s3tc.ctexarray"
+path.etc2="res://.godot/imported/ground_diff_array.jpg-526eaf70d903b54fd4d9241ef0f67548.etc2.ctexarray"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+
+[deps]
+
+source_file="res://assets/ground2/ground_diff_array.jpg"
+dest_files=["res://.godot/imported/ground_diff_array.jpg-526eaf70d903b54fd4d9241ef0f67548.s3tc.ctexarray", "res://.godot/imported/ground_diff_array.jpg-526eaf70d903b54fd4d9241ef0f67548.etc2.ctexarray"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+slices/horizontal=1
+slices/vertical=8

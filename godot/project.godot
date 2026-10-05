@@ -40,6 +40,18 @@ player_pos={
 "type": "vec3",
 "value": Vector3(0, 0, 0)
 }
+cam_back={
+"type": "vec3",
+"value": Vector3(0, 0, 1)
+}
+q_ground_normals={
+"type": "bool",
+"value": true
+}
+gl_compat={
+"type": "bool",
+"value": false
+}
 wind_on={
 "type": "float",
 "value": 1.0
