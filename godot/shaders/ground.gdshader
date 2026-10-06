@@ -66,7 +66,8 @@ void fragment() {
 	float ripple = sin(tile.x * 2.1 + TIME * 1.3) * sin(tile.y * 1.7 - TIME * 1.1) * 0.5 + 0.5;
 	vec3 wc = mix(vec3(0.07, 0.12, 0.11), vec3(0.16, 0.22, 0.21), ripple * 0.5);
 	float wet = max(water * 0.88, puddle);
-	c = mix(c, wc, water * 0.88);
+	// под водой и у кромки — мокрый грунт: темнее, с зеленоватым налётом (саму воду рисует water.gdshader)
+	c = mix(c, c * vec3(0.52, 0.58, 0.56) + vec3(0.0, 0.015, 0.012), water * 0.9);
 	ALBEDO = c;
 	if (q_ground_normals) {
 		NORMAL_MAP = mix(nm, vec3(0.5, 0.5, 1.0), wet);

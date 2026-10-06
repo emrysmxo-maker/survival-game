@@ -263,8 +263,7 @@ static func ground_layers(wx: float, wy: float) -> PackedFloat32Array:
 	var path := ss(1.9, 0.7, path_dist(wx, wy)) * (1.0 - swamp * 0.7)
 	var lkb := lake_at(wx, wy)
 	var sand := ss(0.25, 1.0, lkb.w) * (1.0 - lkb.x * 0.0) if lkb.z >= 0.0 else 0.0     # песчаная полоса вокруг озёр
-	var riverbed := maxf(ss(2.3, 1.2, river_dist(wx, wy)), t[1] * 0.8)
-	path = maxf(path, sand * 0.9)          # песок у озёр — светлый грунт (слой дороги), а не мокрая галька
+	var riverbed := maxf(maxf(ss(2.6, 1.2, river_dist(wx, wy)), t[1]), sand)   # песок с галькой (Poly Haven coast_sand_01) — берега и дно
 	return PackedFloat32Array([path, swamp, riverbed, t[5] * 0.6, t[1], t[4]])
 
 # название места: локация (если внутри) или зона
@@ -463,9 +462,26 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if rng.randf() < pr and t8[1] < 0.05 and t8[6] < 0.35:
 			var big: bool = t8[5] > 0.4 and rng.randf() < 0.4
 			objs.append(_obj(rng, x8, y8, "boulder1" if big else ROCK[1 + int(rng.randf() * (ROCK.size() - 1))], "rock", 0.8 + rng.randf() * 0.5))
-	var dry: Array = []        # ничего не растёт и не лежит в воде (река, озёра)
+	# берег: камни разного размера по пляжу и на мелководье, пучки травы на краю пляжа
+	for i in 6:
+		var xs: float = sx + rng.randf() * CHUNK
+		var ys: float = sy + rng.randf() * CHUNK
+		var lb := lake_at(xs, ys)
+		var rbd := river_dist(xs, ys)
+		var shore := 0.0
+		if lb.z >= 0.0:
+			shore = lb.w * (1.0 - lb.y * 3.0)        # пляж и мелководье (не глубина)
+		elif rbd < 6.0:
+			shore = ss(6.0, 2.0, rbd)
+		if shore > 0.2 and rng.randf() < shore:
+			var small := rng.randf() < 0.75
+			var key: String = ["stone1", "rock7", "mrock8", "mrock9", "mrock12"][int(rng.randf() * 5)] if small else ["mrock7", "mrock10", "mrock11", "mrock13"][int(rng.randf() * 4)]
+			objs.append(_obj(rng, xs, ys, key, "rock", (0.35 + rng.randf() * 0.5) if small else (0.6 + rng.randf() * 0.4)))
+		elif lb.z >= 0.0 and lb.w > 0.05 and lb.w < 0.6 and rng.randf() < 0.7:
+			objs.append(_obj(rng, xs, ys, GRASS[int(rng.randf() * GRASS.size())], "grass", 0.9 + rng.randf() * 0.4))
+	var dry: Array = []        # в воде не растёт ничего; камни — можно
 	for o in objs:
-		if not water_draw(o.x, o.y):
+		if o.cat == "rock" or not water_draw(o.x, o.y):
 			dry.append(o)
 	objs = dry
 	var solid: Array = []

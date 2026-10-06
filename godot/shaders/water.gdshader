@@ -6,10 +6,11 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_never, cull_back, specular_schlick_ggx;
 uniform sampler2D n1 : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n2 : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform vec3 shallow_col : source_color = vec3(0.36, 0.44, 0.36);
-uniform vec3 mid_col : source_color = vec3(0.10, 0.27, 0.29);
-uniform vec3 deep_col : source_color = vec3(0.03, 0.09, 0.11);
-uniform vec3 sky_col : source_color = vec3(0.62, 0.72, 0.80);
+uniform vec3 shallow_col : source_color = vec3(0.42, 0.58, 0.50);   // прозрачная бирюза над песком
+uniform vec3 mid_col : source_color = vec3(0.12, 0.38, 0.40);
+uniform vec3 deep_col : source_color = vec3(0.04, 0.16, 0.24);     // глубина — сине-бирюзовая
+uniform vec3 sky_col : source_color = vec3(0.66, 0.78, 0.90);
+uniform vec3 cloud_col : source_color = vec3(0.93, 0.95, 0.97);
 uniform float wave_amp = 0.045;
 
 varying vec2 flow;
@@ -48,7 +49,10 @@ void fragment() {
 	vec3 col = mix(shallow_col, mid_col, smoothstep(0.05, 0.8, d));
 	col = mix(col, deep_col, smoothstep(0.7, 2.2, d));
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
-	col = mix(col, sky_col, clamp(fres * 0.55 + 0.06, 0.0, 1.0));
+	// отражение неба с облаками (как на фото озёр): облака — крупный шум, плывут медленно
+	float cl = smoothstep(0.45, 0.8, texture(n1, uv * 0.012 + TIME * vec2(0.002, 0.001)).b * 0.6 + texture(n2, uv * 0.02 - TIME * 0.0015).g * 0.5);
+	vec3 sky = mix(sky_col, cloud_col, cl);
+	col = mix(col, sky, clamp(fres * 0.6 + 0.1 * smoothstep(0.3, 1.5, d), 0.0, 1.0));
 	// прибой: полоса пены у кромки, набегает и откатывается
 	float lap = 0.05 + 0.035 * sin(TIME * 1.1 + wpos.x * 0.45 + wpos.z * 0.3);   // кромка набегает/откатывается
 	float noise = texture(n2, uv * 0.6 + TIME * 0.03).g;
