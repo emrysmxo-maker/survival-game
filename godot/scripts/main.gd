@@ -42,7 +42,6 @@ var _fixed_dt := 0.0
 
 func _ready() -> void:
 	WorldGen.init()
-	RenderingServer.global_shader_parameter_set("gl_compat", RenderingServer.get_rendering_device() == null)
 	daynight = load("res://scripts/daynight.gd").new()
 	add_child(daynight)
 	daynight.setup(self)
@@ -155,6 +154,10 @@ func _update_camera(dt: float) -> void:
 	cam.rotation_degrees = Vector3(-cam_elev, cam_yaw, 0)
 	cam.size = cam_size
 	player.AIM_ELEV_K = sin(deg_to_rad(cam_elev))
+	var vs := get_viewport().get_visible_rect().size
+	var hw: float = cam_size * vs.x / maxf(vs.y, 1.0) * 0.5
+	var hh: float = cam_size * 0.5 / maxf(sin(deg_to_rad(cam_elev)), 0.25)
+	world.view_r = sqrt(hw * hw + hh * hh) / WorldGen.T + 2.0
 	player.cam_yaw = deg_to_rad(cam_yaw)
 	daynight.sun.directional_shadow_max_distance = clampf(roundf(cam_size * 3.2 / 6.0) * 6.0, 24.0, 60.0)
 
@@ -196,8 +199,10 @@ func _process_game(dt: float) -> void:
 		player.set_xray(world.occluded(player.global_position, 1.5, cam))
 		for z in zombies.list:
 			if not z.dead:
-				_set_xray_node(z.node, world.occluded(z.node.global_position, 1.5, cam))
-	RenderingServer.global_shader_parameter_set("cam_back", cam.global_transform.basis.z)
+				var on: bool = world.occluded(z.node.global_position, 1.5, cam)
+				if on != z.node.get_meta("xr", false):
+					z.node.set_meta("xr", on)
+					_set_xray_node(z.node, on)
 	RenderingServer.global_shader_parameter_set("player_pos", player.global_position)
 	RenderingServer.global_shader_parameter_set("sun_dir", daynight.sun.global_transform.basis.z)
 	_follow(minf(1.0, 2.6 * dt))

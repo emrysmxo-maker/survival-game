@@ -63,7 +63,7 @@ func _ready() -> void:
 	ub.pressed.connect(func():
 		Engine.set_meta("from_game", true)
 		get_tree().change_scene_to_file("res://boot.tscn"))
-	for i in 3:
+	for i in 4:
 		var qb := _button("", Vector2.ZERO, Vector2(190, 40), Color(0.06, 0.09, 0.06, 0.9))
 		qb.reparent(q_panel)
 		q_btns.append(qb)

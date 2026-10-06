@@ -29,7 +29,7 @@
 ## Как проверять без телефона
 Godot: `/tmp/claude-0/godot/Godot_v4.3-stable_linux.x86_64` (если нет — скачать 4.3-stable). Видеокарты нет — программный Vulkan:
 `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a godot --path godot --rendering-driver vulkan --rendering-method mobile -- --shot=/tmp/x.png --at=6 --time=12 --nofade`
-Доп. аргументы: `--cam=<размер>`, `--camyaw=`, `--camelev=`, `--test=run|runaim|behind|fireback|zombie`, `--gallery`, `--fixeddt=`. После смены .glb: `godot --headless --import`. Без `--nofade` снимок чёрный.
+ВАЖНО: локально добавлять `--updurl=http://127.0.0.1:1/` — иначе игра скачает code.pck с GitHub и покажет НЕ локальный код. Доп. аргументы: `--cam=<размер>`, `--camyaw=`, `--camelev=`, `--test=run|runaim|behind|fireback|zombie`, `--gallery`, `--fixeddt=`. После смены .glb: `godot --headless --import`. Без `--nofade` снимок чёрный.
 
 ## Сборка и выдача
 Push в `main` → GitHub Actions собирает APK → Release `godot-latest`: https://github.com/emrysmxo-maker/survival-game/releases/download/godot-latest/survival-godot.apk (APK >100 МБ, в репозиторий не кладётся).

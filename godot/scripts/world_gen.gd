@@ -61,11 +61,9 @@ const FERN := ["fern_a", "fern_b", "fern_c", "fern_d"]
 const NETTLE := ["nettle_medium_a", "nettle_medium_b", "nettle_small_a", "nettle_small_b", "nettle_tall_a", "nettle_tall_b"]
 const GRASS := ["grass1_small_a", "grass1_mid_b", "grass1_tall_a", "grass1_tall_b", "grass1_large_b", "grass1_small_b", "grass2_a", "grass2_b", "grass2_c", "grass2_d", "grass2_e"]
 const FLOWERS := ["celandine_a", "celandine_b", "celandine_c", "celandine_d", "celandine_e", "dandelion_a", "dandelion_b", "dandelion_c", "dandelion_d", "dandelion_e"]
-const MOSS := []   # мох — слой текстуры земли
 const STUMP := ["stump1", "stump2"]
 const LOG := ["log1", "log1b", "log2", "log2b"]
 const BRANCH := ["branches_a", "branches_b", "branches_c"]
-const ROOTS := []  # корни убраны (выглядели как «тарелки» земли)
 const ROCK := ["boulder1", "mrock1", "mrock2", "mrock3", "mrock4", "mrock5", "mrock6", "mrock7", "mrock8", "mrock9", "mrock10", "mrock11", "mrock12", "mrock13", "rock7", "stone1"]
 # что лежит на земле (рисуется «на земле», без раздвигания) и что твёрдое (столкновения), радиус — тайлы
 const FLAT_CATS := ["moss", "branch", "roots", "log"]
@@ -217,9 +215,10 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 			h = maxf(h, lvl + 0.1 - 0.7 * ss(0.15, 0.0, lk.w))
 		h = lerpf(h, lvl - 0.04 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)          # дно: мелко у берега, глубже к центру
 	var rocky := ss(3.2, 5.2, hb) * 0.85
-	var path := ss(2.0, 0.8, path_dist(wx, wy))
+	var pd := path_dist(wx, wy)
+	var path := ss(2.0, 0.8, pd)
 	var lwet := ss(0.8, 1.0, lk.w) if lk.z >= 0.0 else 0.0     # мягкий переход «мокро» у кромки (без ступенек на текстуре)
-	return PackedFloat32Array([h, maxf(rwater, lwet), ravine, swamp, clearing, rocky, path])
+	return PackedFloat32Array([h, maxf(rwater, lwet), ravine, swamp, clearing, rocky, path, pd])
 
 static func lake_level(i: int) -> float:
 	return _lk[i * 5 + 4]
@@ -259,9 +258,12 @@ static func height_m(wx: float, wy: float) -> float:
 
 # Слои земли в точке: path, swamp, riverbed, rocky, water, clearing (0..1)
 static func ground_layers(wx: float, wy: float) -> PackedFloat32Array:
-	var t := terrain(wx, wy)
+	return ground_layers_t(wx, wy, terrain(wx, wy))
+
+# то же по уже посчитанному terrain(): при постройке чанка рельеф считается один раз
+static func ground_layers_t(wx: float, wy: float, t: PackedFloat32Array) -> PackedFloat32Array:
 	var swamp := t[3]
-	var path := ss(1.9, 0.7, path_dist(wx, wy)) * (1.0 - swamp * 0.7)
+	var path := ss(1.9, 0.7, t[7]) * (1.0 - swamp * 0.7)
 	var lkb := lake_at(wx, wy)
 	var sand := ss(0.25, 1.0, lkb.w) * (1.0 - lkb.x * 0.0) if lkb.z >= 0.0 else 0.0     # песчаная полоса вокруг озёр
 	var riverbed := maxf(maxf(ss(2.6, 1.2, river_dist(wx, wy)), t[1]), sand)   # песок с галькой (Poly Haven coast_sand_01) — берега и дно
@@ -450,10 +452,6 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var y7: float = sy + rng.randf() * CHUNK
 		if rng.randf() < 0.6 and terrain(x7, y7)[1] < 0.02 and path_dist(x7, y7) > 1.2:
 			objs.append(_obj(rng, x7, y7, BRANCH[int(rng.randf() * BRANCH.size())], "branch", 0.8 + rng.randf() * 0.4))
-	for t in trees:
-		if not ROOTS.is_empty() and rng.randf() < 0.35:
-			var a := rng.randf() * TAU
-			objs.append(_obj(rng, t.x + cos(a) * 0.3, t.y + sin(a) * 0.3, ROOTS[int(rng.randf() * ROOTS.size())], "roots", 0.7 + rng.randf() * 0.3))
 	# 5) камни: на каменистых местах — валуны, везде — редкие камешки
 	for i in 3:
 		var x8: float = sx + 1.0 + rng.randf() * (CHUNK - 2)

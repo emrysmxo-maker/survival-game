@@ -20,11 +20,16 @@ var kinds := {}            # вид -> {"mmis": [MultiMeshInstance3D], "pre", "b
 var kinds_meta := {}
 var _scenes := {}
 var gallery := OS.get_cmdline_user_args().has("--gallery")
+var crown_shadows := true
 var density := 1.0         # доля травяного яруса (настройка качества)
 var _dirty := false
 var _rebuild_t := 0.0
 var center := Vector2i(999999, 999999)
 var player_tile := Vector2.ZERO
+var view_r := 30.0          # радиус видимой земли, тайлы (задаёт main.gd по камере)
+var _view_c := Vector2(1e9, 1e9)
+var _view_rr := 0.0
+const SMALL_CATS := ["grass", "flower", "fern", "nettle", "branch", "moss"]
 
 func _ready() -> void:
 	WorldGen.init()
@@ -127,7 +132,7 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 		mmi.multimesh = mm
 		# листва-иглы тени не даёт (тонкие карточки мерцают) — тень кроны от простого эллипсоида
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if (shadow and not is_leaf) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.extra_cull_margin = 16384.0
+		mmi.extra_cull_margin = 2.0          # запас на качание ветром; невидимое отсекается целиком
 		add_child(mmi)
 		mmis.append(mmi)
 	var proxy: MultiMeshInstance3D = null
@@ -143,7 +148,7 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 		proxy = MultiMeshInstance3D.new()
 		proxy.multimesh = pm
 		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		proxy.extra_cull_margin = 16384.0
+		proxy.extra_cull_margin = 2.0
 		add_child(proxy)
 	kinds[key] = {"proxy": proxy, "mmis": mmis, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
 
@@ -184,6 +189,9 @@ func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 			if data != null:
 				_finish_chunk(k, data)
 			break
+	# камера ушла или изменился масштаб — пересобрать видимый набор
+	if player_tile.distance_to(_view_c) > 3.0 or absf(view_r - _view_rr) > view_r * 0.12:
+		_dirty = true
 	_rebuild_t -= get_process_delta_time()
 	if _dirty and _rebuild_t <= 0.0:
 		_rebuild_sprites()
@@ -221,9 +229,14 @@ func _build_chunk(k: Vector2i) -> void:
 	var n := GRID + 1
 	var hs := PackedFloat32Array()
 	hs.resize((n + 2) * (n + 2))
+	var ts: Array = []          # terrain() внутренних точек — для слоёв земли (без повторного расчёта)
+	ts.resize(n * n)
 	for j in n + 2:
 		for i in n + 2:
-			hs[j * (n + 2) + i] = WorldGen.height(sx + (i - 1) * step, sy + (j - 1) * step) * WorldGen.HK
+			var tt := WorldGen.terrain(sx + (i - 1) * step, sy + (j - 1) * step)
+			hs[j * (n + 2) + i] = tt[0] * WorldGen.HK
+			if i >= 1 and j >= 1 and i <= n and j <= n:
+				ts[(j - 1) * n + (i - 1)] = tt
 	var verts := PackedVector3Array(); verts.resize(n * n)
 	var norms := PackedVector3Array(); norms.resize(n * n)
 	var cols := PackedColorArray(); cols.resize(n * n)
@@ -242,7 +255,7 @@ func _build_chunk(k: Vector2i) -> void:
 			var hu := hs[j * (n + 2) + i + 1]
 			var hd := hs[(j + 2) * (n + 2) + i + 1]
 			norms[id] = Vector3(hl - hr, 2.0 * st, hu - hd).normalized()
-			var L := WorldGen.ground_layers(x, y)
+			var L := WorldGen.ground_layers_t(x, y, ts[id])
 			cols[id] = Color(L[0], L[1], L[2], L[3])
 			uv[id] = Vector2(x, y)
 			uv2[id] = Vector2(L[4], L[5])
@@ -344,10 +357,22 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 func _rebuild_sprites() -> void:
 	_dirty = false
 	_rebuild_t = 0.25
+	_view_c = player_tile
+	_view_rr = view_r
+	# чанк берём, если он пересекает круг видимости; деревьям/кустам — запас на тени и высоту кроны
 	var all := {}
+	var cs := float(WorldGen.CHUNK)
 	for k in chunks:
+		var rect := Rect2(k.x * cs, k.y * cs, cs, cs)
+		var near := Vector2(clampf(player_tile.x, rect.position.x, rect.end.x), clampf(player_tile.y, rect.position.y, rect.end.y))
+		var dist := near.distance_to(player_tile)
+		if dist > view_r + 12.0:
+			continue
+		var small_ok := dist <= view_r + 1.5
 		var bufs: Dictionary = chunks[k].c.bufs
 		for key in bufs:
+			if not small_ok and kinds.has(key) and kinds[key].cat in SMALL_CATS:
+				continue
 			if not all.has(key):
 				all[key] = PackedFloat32Array()
 			all[key].append_array(bufs[key])
@@ -362,6 +387,7 @@ func _rebuild_sprites() -> void:
 				mm.buffer = buf
 		var px: MultiMeshInstance3D = kinds[key].proxy
 		if px:
+			px.visible = crown_shadows
 			var pb := PackedFloat32Array()
 			pb.resize(n * 12)
 			var kd: Dictionary = kinds[key]
