@@ -171,7 +171,7 @@ static func lake_at(wx: float, wy: float) -> Vector4:
 		if ring > 0.0:
 			# x — вода (резкая кромка по ватерлинии), y — глубина: от 0 у берега плавно вниз на 60% радиуса
 			var tdeep := clampf((re - d) / (re * 0.6), 0.0, 1.0)
-			return Vector4(ss(re + 0.4, re - 0.4, d), tdeep * tdeep * (3.0 - 2.0 * tdeep), i, ring)
+			return Vector4(ss(re + 1.6, re - 1.6, d), tdeep * tdeep * (3.0 - 2.0 * tdeep), i, ring)   # пологий переход берег→дно (иначе кромка «ступеньками» по сетке)
 	return Vector4(0, 0, -1, 0)
 
 static func radial(x: float, y: float, f: Dictionary) -> float:
@@ -203,20 +203,22 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 	var lk := lake_at(wx, wy)
 	var hb := base_height(wx, wy)
 	var h := hb * (1.0 - ravine * 0.7) - ravine * 2.6 * (1.0 - 0.85 * ford) - swamp * 1.0
-	if lk.z >= 0.0:
-		var lvl := lake_level(int(lk.z))
-		h = lerpf(h, maxf(h, lvl + 0.1 + 0.25 * (1.0 - lk.w)), lk.w * (1.0 - lk.x))   # берег чуть выше воды
-		h = lerpf(h, lvl - 0.04 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)          # дно: мелко у берега, глубже к центру
 	var clearing := 0.0
 	for i in _ft.size() / 4:
 		var fr: float = _ft[i * 4 + 2]
 		var c := ss(fr, fr * 0.25, Vector2(wx - _ft[i * 4], wy - _ft[i * 4 + 1]).length())
 		if c > 0.0:
 			clearing = maxf(clearing, c)
-			h = lerpf(h, _ft[i * 4 + 3], c * 0.85)       # поляна под локацию — ровная
+			h = lerpf(h, _ft[i * 4 + 3], c * 0.85)       # поляна под локацию — ровная (до озёр: вода её не заливает и не поднимает дно)
+	if lk.z >= 0.0:
+		var lvl := lake_level(int(lk.z))
+		if lk.x < 1.0:   # берег у кромки не ниже воды (без «канавы» с водой); дальше 6 тайлов — как было
+			h = maxf(h, lvl + 0.1 - 0.7 * ss(0.15, 0.0, lk.w))
+		h = lerpf(h, lvl - 0.04 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)          # дно: мелко у берега, глубже к центру
 	var rocky := ss(3.2, 5.2, hb) * 0.85
 	var path := ss(2.0, 0.8, path_dist(wx, wy))
-	return PackedFloat32Array([h, maxf(rwater, lk.x), ravine, swamp, clearing, rocky, path])
+	var lwet := ss(0.8, 1.0, lk.w) if lk.z >= 0.0 else 0.0     # мягкий переход «мокро» у кромки (без ступенек на текстуре)
+	return PackedFloat32Array([h, maxf(rwater, lwet), ravine, swamp, clearing, rocky, path])
 
 static func lake_level(i: int) -> float:
 	return _lk[i * 5 + 4]
@@ -261,7 +263,8 @@ static func ground_layers(wx: float, wy: float) -> PackedFloat32Array:
 	var path := ss(1.9, 0.7, path_dist(wx, wy)) * (1.0 - swamp * 0.7)
 	var lkb := lake_at(wx, wy)
 	var sand := ss(0.25, 1.0, lkb.w) * (1.0 - lkb.x * 0.0) if lkb.z >= 0.0 else 0.0     # песчаная полоса вокруг озёр
-	var riverbed := maxf(maxf(ss(2.3, 1.2, river_dist(wx, wy)), t[1] * 0.8), sand)
+	var riverbed := maxf(ss(2.3, 1.2, river_dist(wx, wy)), t[1] * 0.8)
+	path = maxf(path, sand * 0.9)          # песок у озёр — светлый грунт (слой дороги), а не мокрая галька
 	return PackedFloat32Array([path, swamp, riverbed, t[5] * 0.6, t[1], t[4]])
 
 # название места: локация (если внутри) или зона

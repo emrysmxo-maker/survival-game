@@ -43,7 +43,7 @@ func _ready() -> void:
 		nt.height = 256
 		nt.seamless = true
 		nt.as_normal_map = true
-		nt.bump_strength = 6.0
+		nt.bump_strength = 3.0
 		nt.noise = nz
 		water_mat.set_shader_parameter(pair[0], nt)
 	kinds_meta = JSON.parse_string(FileAccess.open("res://assets/models/kinds.json", FileAccess.READ).get_as_text())
@@ -264,7 +264,8 @@ func _build_chunk(k: Vector2i) -> void:
 			var dr := WorldGen.water_draw(x, y)
 			wm[j * n + i] = 1.0 if dr else 0.0
 			var fl := WorldGen.flow_at(x, y)
-			wc[j * n + i] = Color(fl.x * 0.5 + 0.5, fl.y * 0.5 + 0.5, 0.0, 1.0)
+			var gd := (W.y - hs[(j + 1) * (n + 2) + i + 1] / WorldGen.HK) * WorldGen.HK   # глубина воды в вершине, м
+			wc[j * n + i] = Color(fl.x * 0.5 + 0.5, fl.y * 0.5 + 0.5, clampf(gd / 3.0, 0.0, 1.0), 1.0)
 			wv[j * n + i] = Vector3(x * WorldGen.T, W.y * WorldGen.HK, y * WorldGen.T)
 			if dr:
 				any_w = true
@@ -317,7 +318,7 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 	mi.material_override = null if OS.get_cmdline_user_args().has("--noground") else ground_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-	if data.wi.size() > 0:
+	if data.wi.size() > 0 and not OS.get_cmdline_user_args().has("--nowater"):
 		var wa := []
 		wa.resize(Mesh.ARRAY_MAX)
 		wa[Mesh.ARRAY_VERTEX] = data.wv

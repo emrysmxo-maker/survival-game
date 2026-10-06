@@ -5,6 +5,7 @@ var player
 var splash: GPUParticles3D
 var wake: GPUParticles3D
 var rings: Array = []
+var collar: MeshInstance3D     # пенный «воротник» вокруг тела в воде (вода обтекает бойца)
 var _ring_t := 0.0
 var _step_t := 0.0
 var _was_in := false
@@ -88,6 +89,31 @@ void fragment() {
 	mat.shader = sh
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(1, 1)
+	var csh := Shader.new()
+	csh.code = """shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+uniform float strength = 1.0;
+void fragment() {
+	vec2 q = UV - 0.5;
+	float d = length(q) * 2.0;
+	float ang = atan(q.y, q.x);
+	float wob = 0.06 * sin(ang * 7.0 + TIME * 3.0) + 0.04 * sin(ang * 13.0 - TIME * 4.3);
+	float band = smoothstep(0.36 + wob, 0.55 + wob, d) * (1.0 - smoothstep(0.62 + wob, 0.98, d));
+	float bits = 0.7 + 0.3 * sin(ang * 9.0 + TIME * 2.5 + d * 6.0);
+	ALBEDO = vec3(0.9, 0.95, 0.97);
+	ALPHA = band * bits * 0.45 * strength;
+}"""
+	var cmat := ShaderMaterial.new()
+	cmat.shader = csh
+	var cpm := PlaneMesh.new()
+	cpm.size = Vector2(1.3, 1.3)
+	collar = MeshInstance3D.new()
+	collar.mesh = cpm
+	collar.material_override = cmat
+	collar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	collar.top_level = true
+	collar.visible = false
+	add_child(collar)
 	for i in RING_N:
 		var mi := MeshInstance3D.new()
 		mi.mesh = pm
@@ -130,6 +156,12 @@ func update_fx(dt: float) -> void:
 	if in_water and not _was_in:
 		wake.restart()                      # вошёл в воду — всплеск
 	_was_in = in_water
+	collar.visible = in_water and depth > 0.2
+	if collar.visible:
+		collar.global_position = pos + Vector3(0, 0.01, 0)
+		var sc: float = 1.6 if player.swimming else 1.0
+		collar.scale = Vector3(sc, 1, sc)
+		collar.rotation.y = player.yaw
 	_ring_t -= dt
 	if in_water and _ring_t <= 0.0 and (moving or player.swimming) and not OS.get_cmdline_user_args().has("--noring"):
 		_ring_t = 0.2 if player.swimming else 0.4
