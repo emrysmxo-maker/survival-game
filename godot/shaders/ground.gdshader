@@ -70,9 +70,9 @@ void fragment() {
 	c = mix(c, c * vec3(0.52, 0.58, 0.56) + vec3(0.0, 0.015, 0.012), water * 0.9);
 	ALBEDO = c;
 	if (q_ground_normals) {
-		NORMAL_MAP = mix(nm, vec3(0.5, 0.5, 1.0), wet);
+		NORMAL_MAP = mix(nm, vec3(0.5, 0.5, 1.0), puddle);
 		NORMAL_MAP_DEPTH = 1.2;
 	}
-	ROUGHNESS = mix(0.95, 0.12, wet);
+	ROUGHNESS = mix(mix(0.95, 0.78, water * 0.9), 0.12, puddle);     // мокрый песок матовый, глянец только в лужах
 	SPECULAR = mix(0.2, 0.6, wet);
 }

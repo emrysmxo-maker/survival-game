@@ -15,6 +15,7 @@ uniform float wave_amp = 0.045;
 
 varying vec2 flow;
 varying float depth;
+varying float dteff;
 varying vec3 wpos;
 
 float swell(vec2 p, float t) {
@@ -31,7 +32,10 @@ void vertex() {
 	float a = wave_amp * smoothstep(0.0, 0.5, depth);   // у самой кромки волна гаснет
 	float e = 0.15;
 	float h = swell(p, TIME);
-	VERTEX.y += h * a;
+	// прилив-отлив: уровень воды «дышит», прибой набегает на пологий берег и откатывается неровно
+	float tide = 0.07 * sin(TIME * 0.55 + dot(wp.xz, vec2(0.21, 0.14))) + 0.04 * sin(TIME * 0.9 - dot(wp.xz, vec2(0.37, -0.22)));
+	VERTEX.y += h * a + tide;
+	dteff = depth + tide;
 	float hx = swell(p + vec2(e, 0.0), TIME);
 	float hz = swell(p + vec2(0.0, e), TIME);
 	NORMAL = normalize(vec3(-(hx - h) / e * a, 1.0, -(hz - h) / e * a));
@@ -45,7 +49,7 @@ void fragment() {
 	vec3 b = texture(n2, uv * 0.23 - fl * 0.22 - TIME * vec2(0.009, 0.014)).rgb;
 	NORMAL_MAP = normalize((a + b) - 1.0) * 0.5 + 0.5;
 	NORMAL_MAP_DEPTH = 0.22;
-	float d = depth;
+	float d = dteff;
 	vec3 col = mix(shallow_col, mid_col, smoothstep(0.05, 0.8, d));
 	col = mix(col, deep_col, smoothstep(0.7, 2.2, d));
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);

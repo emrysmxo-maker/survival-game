@@ -166,7 +166,8 @@ static func lake_at(wx: float, wy: float) -> Vector4:
 		if d > lr * 1.3 + 7.0:
 			continue
 		var a := atan2(dy, dx)
-		var re: float = lr * (1.0 + 0.16 * sin(3.0 * a + i) + 0.08 * sin(5.0 * a + 2.0 * i))
+		var re: float = lr * (1.0 + 0.16 * sin(3.0 * a + i) + 0.08 * sin(5.0 * a + 2.0 * i) + 0.05 * sin(9.0 * a + 3.0 * i) + 0.03 * sin(17.0 * a + i))
+		re += 2.3 * sin(wx * 0.19 + wy * 0.13 + i) + 1.5 * sin(wx * 0.37 - wy * 0.29 + 2.0 * i) + 0.8 * sin(wx * 0.71 + wy * 0.83)   # заливчики и мысы (неровная кромка)
 		var ring := ss(re + 6.0, re, d)
 		if ring > 0.0:
 			# x — вода (резкая кромка по ватерлинии), y — глубина: от 0 у берега плавно вниз на 60% радиуса
@@ -477,6 +478,11 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 			var small := rng.randf() < 0.75
 			var key: String = ["stone1", "rock7", "mrock8", "mrock9", "mrock12"][int(rng.randf() * 5)] if small else ["mrock7", "mrock10", "mrock11", "mrock13"][int(rng.randf() * 4)]
 			objs.append(_obj(rng, xs, ys, key, "rock", (0.35 + rng.randf() * 0.5) if small else (0.6 + rng.randf() * 0.4)))
+		elif lb.z >= 0.0 and lb.x < 0.5 and lb.w > 0.45 and rng.randf() < 0.22:      # у самой воды: плавник, ветки
+			if rng.randf() < 0.3:
+				objs.append(_obj(rng, xs, ys, LOG[int(rng.randf() * LOG.size())], "log", 0.45 + rng.randf() * 0.3))
+			else:
+				objs.append(_obj(rng, xs, ys, BRANCH[int(rng.randf() * BRANCH.size())], "branch", 0.7 + rng.randf() * 0.5))
 		elif lb.z >= 0.0 and lb.w > 0.05 and lb.w < 0.6 and rng.randf() < 0.7:
 			objs.append(_obj(rng, xs, ys, GRASS[int(rng.randf() * GRASS.size())], "grass", 0.9 + rng.randf() * 0.4))
 	var dry: Array = []        # в воде не растёт ничего; камни — можно
