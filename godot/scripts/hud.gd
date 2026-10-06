@@ -58,6 +58,11 @@ func _ready() -> void:
 	qt.text = "Качество графики"
 	qt.add_theme_font_size_override("font_size", 15)
 	q_panel.add_child(qt)
+	var ub := _button("⟳ Обновления", Vector2.ZERO, Vector2(190, 40), Color(0.18, 0.3, 0.2, 0.95))
+	ub.reparent(q_panel)
+	ub.pressed.connect(func():
+		Engine.set_meta("from_game", true)
+		get_tree().change_scene_to_file("res://boot.tscn"))
 	for i in 3:
 		var qb := _button("", Vector2.ZERO, Vector2(190, 40), Color(0.06, 0.09, 0.06, 0.9))
 		qb.reparent(q_panel)

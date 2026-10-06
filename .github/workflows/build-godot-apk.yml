@@ -55,9 +55,18 @@ jobs:
           cd godot
           # версия в углу экрана = номер сборки + коммит (вручную менять не нужно)
           sed -i "s/^const VERSION := .*/const VERSION := \"сборка ${{ github.run_number }} · ${GITHUB_SHA::7}\"/" scripts/hud.gd
+          # номер сборки для обновления «по воздуху»: build.txt — в APK и в code.pck; apk_build.txt — только в APK
+          echo "${{ github.run_number }}" > build.txt
+          echo "${{ github.run_number }}" > apk_build.txt
           mkdir -p build
           ~/godot/godot --headless --path . --import || true
           ~/godot/godot --headless --path . --export-release "Android" build/survival-godot.apk
+          # маленький пакет с кодом (скрипты, шейдеры, сцены): игра на телефоне докачивает его сама
+          ~/godot/godot --headless --path . --export-pack "Code" build/code.pck
+          SIZE=$(stat -c%s build/code.pck)
+          APKMIN=$(cat apk_min.txt | tr -d '[:space:]')
+          echo "{\"build\":${{ github.run_number }},\"sha\":\"${GITHUB_SHA::7}\",\"size\":$SIZE,\"apk_min\":${APKMIN:-0}}" > build/update.json
+          cat build/update.json
           ls -la build
 
       - name: Publish APK to GitHub Release (godot-latest)
@@ -67,6 +76,9 @@ jobs:
           # APK больше 100 МБ — в репозиторий не помещается, выкладываем в «Releases»
           gh release view godot-latest >/dev/null 2>&1 || gh release create godot-latest --title "Survival (Godot) — последняя сборка" --notes "Автосборка из main. Скачать: survival-godot.apk"
           gh release upload godot-latest godot/build/survival-godot.apk --clobber
+          # сначала пакет, потом update.json: игра не увидит новую версию, пока пакет не загружен
+          gh release upload godot-latest godot/build/code.pck --clobber
+          gh release upload godot-latest godot/build/update.json --clobber
           gh release edit godot-latest --notes "Последняя сборка: №${{ github.run_number }}, коммит ${GITHUB_SHA::7}, $(date -u '+%d.%m %H:%M') UTC. Скачать: survival-godot.apk. Эта же надпись («сборка № · коммит») в углу экрана игры."
 
       - uses: actions/upload-artifact@v4
