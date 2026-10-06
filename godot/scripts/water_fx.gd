@@ -97,7 +97,8 @@ void fragment() {
 	float d = length(UV - 0.5) * 2.0;
 	float disc = (1.0 - smoothstep(0.35, 1.0, d));
 	float rg = smoothstep(0.62, 0.84, d) * (1.0 - smoothstep(0.84, 1.0, d));
-	float a = mix(disc * 0.5, rg * 0.7, ring);
+	float bub = 0.55 + 0.45 * sin(UV.x * 31.0 + UV.y * 23.0);      // рваная пена, а не сплошное пятно
+	float a = mix(disc * 0.26 * bub, rg * 0.6, ring);
 	ALBEDO = vec3(0.93, 0.97, 1.0);
 	ALPHA = a * (1.0 - age);
 }"""
@@ -171,9 +172,10 @@ func update_fx(dt: float) -> void:
 		if moving:
 			_wake_t -= dt
 			if _wake_t <= 0.0:
-				_wake_t = 0.1
+				_wake_t = 0.17
 				for sgn in [-1.0, 1.0]:
-					_spawn(pos - fwd * 0.45 + side * 0.22 * sgn, side * sgn * 0.38 - fwd * 0.12, 2.2, 0.22, 0.75, 0.0)
+					if randf() < 0.65:     # пена идёт клочками, не сплошной лентой (как дым катера)
+						_spawn(pos - fwd * 0.4 + side * 0.2 * sgn + fwd * randf_range(-0.1, 0.1), side * sgn * 0.22 - fwd * 0.05, 1.1, 0.12, 0.42, 0.0)
 		else:
 			_idle_t -= dt
 			if _idle_t <= 0.0:       # на месте — редкие слабые круги
