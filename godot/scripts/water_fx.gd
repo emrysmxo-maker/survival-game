@@ -6,6 +6,8 @@ var splash: GPUParticles3D
 var wake: GPUParticles3D
 var rings: Array = []
 var _ring_t := 0.0
+var _step_t := 0.0
+var _was_in := false
 var _tex: Texture2D
 const RING_N := 8
 
@@ -66,8 +68,11 @@ func _make_particles(amount: int, life: float, size: float, speed: float, spread
 	return p
 
 func _ready() -> void:
-	splash = _make_particles(34, 0.55, 0.05, 2.6, 30.0, 11.0)
-	wake = _make_particles(40, 0.6, 0.055, 2.2, 55.0, 11.0)
+	splash = _make_particles(10, 0.45, 0.04, 1.7, 55.0, 9.8)
+	wake = _make_particles(26, 0.6, 0.05, 2.8, 40.0, 9.8)
+	for p in [splash, wake]:
+		p.one_shot = true
+		p.explosiveness = 1.0
 	# круги на воде: плоский диск с шейдером-кольцом
 	var sh := Shader.new()
 	sh.code = """shader_type spatial;
@@ -117,12 +122,17 @@ func update_fx(dt: float) -> void:
 	var pos := Vector3(player.global_position.x, surf + 0.03, player.global_position.z)
 	splash.global_position = pos
 	wake.global_position = pos + Vector3(0, 0.05, 0)
-	splash.emitting = in_water and moving and not player.swimming and not OS.get_cmdline_user_args().has("--nosplash")
-	wake.emitting = in_water and player.swimming
-	(wake.process_material as ParticleProcessMaterial).initial_velocity_max = 2.4 if moving else 0.9
+	# капли — только событиями: шаг по мелководью и вход в воду; на плаву только круги/пена
+	_step_t -= dt
+	if in_water and not player.swimming and moving and depth < 0.9 and _step_t <= 0.0:
+		_step_t = 0.34
+		splash.restart()
+	if in_water and not _was_in:
+		wake.restart()                      # вошёл в воду — всплеск
+	_was_in = in_water
 	_ring_t -= dt
 	if in_water and _ring_t <= 0.0 and (moving or player.swimming) and not OS.get_cmdline_user_args().has("--noring"):
-		_ring_t = 0.28 if player.swimming else 0.4
+		_ring_t = 0.2 if player.swimming else 0.4
 		_spawn_ring(pos)
 	for r in rings:
 		if r.age < 1.0:

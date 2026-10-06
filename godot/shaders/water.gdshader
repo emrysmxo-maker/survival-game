@@ -7,7 +7,8 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform sampler2D n1 : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D n2 : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform vec3 deep_col : source_color = vec3(0.025, 0.075, 0.085);
-uniform vec3 shallow_col : source_color = vec3(0.20, 0.30, 0.24);
+uniform vec3 shallow_col : source_color = vec3(0.30, 0.42, 0.36);
+uniform vec3 mid_col : source_color = vec3(0.07, 0.24, 0.27);
 uniform vec3 sky_col : source_color = vec3(0.62, 0.72, 0.78);
 
 varying vec2 flow;
@@ -28,14 +29,15 @@ void fragment() {
 	vec4 vp = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, d, 1.0);
 	vp.xyz /= vp.w;
 	float thick = max(VERTEX.z - vp.z, 0.0);
-	float k = 1.0 - exp(-thick * 1.4);
-	vec3 col = mix(shallow_col, deep_col, k);
+	float k = 1.0 - exp(-thick * 0.75);          // 0 у берега … 1 на глубине
+	vec3 col = mix(shallow_col, mid_col, smoothstep(0.0, 0.45, k));
+	col = mix(col, deep_col, smoothstep(0.4, 1.0, k));
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
 	col = mix(col, sky_col, clamp(fres * 0.6 + 0.08, 0.0, 1.0));
 	float foam = (1.0 - smoothstep(0.0, 0.22, thick)) * (0.55 + 0.45 * sin(TIME * 1.3 + uv.x * 2.7 + uv.y * 1.9));
 	float streak = length(flow) > 0.3 ? smoothstep(0.62, 0.9, texture(n2, uv * vec2(0.05, 0.22) - fl * 0.2).g) * 0.35 : 0.0;   // пенные полосы по течению
 	ALBEDO = mix(col, vec3(0.82, 0.86, 0.84), clamp(foam * 0.55 + streak, 0.0, 1.0));
-	ALPHA = clamp(0.25 + k * 0.7 + foam * 0.35, 0.0, 0.94) * smoothstep(0.0, 0.04, thick);
+	ALPHA = clamp(0.12 + k * 0.82 + foam * 0.35, 0.0, 0.95) * smoothstep(0.0, 0.04, thick);
 	ROUGHNESS = 0.1;
 	SPECULAR = 0.5;
 }

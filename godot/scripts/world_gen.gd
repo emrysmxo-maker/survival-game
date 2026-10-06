@@ -169,7 +169,9 @@ static func lake_at(wx: float, wy: float) -> Vector4:
 		var re: float = lr * (1.0 + 0.16 * sin(3.0 * a + i) + 0.08 * sin(5.0 * a + 2.0 * i))
 		var ring := ss(re + 6.0, re, d)
 		if ring > 0.0:
-			return Vector4(ss(re, re - 2.5, d), ss(re, re * 0.35, d), i, ring)
+			# x — вода (резкая кромка по ватерлинии), y — глубина: от 0 у берега плавно вниз на 60% радиуса
+			var tdeep := clampf((re - d) / (re * 0.6), 0.0, 1.0)
+			return Vector4(ss(re + 0.4, re - 0.4, d), tdeep * tdeep * (3.0 - 2.0 * tdeep), i, ring)
 	return Vector4(0, 0, -1, 0)
 
 static func radial(x: float, y: float, f: Dictionary) -> float:
@@ -203,8 +205,8 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 	var h := hb * (1.0 - ravine * 0.7) - ravine * 2.6 * (1.0 - 0.85 * ford) - swamp * 1.0
 	if lk.z >= 0.0:
 		var lvl := lake_level(int(lk.z))
-		h = lerpf(h, maxf(h, lvl + 0.25), lk.w * (1.0 - lk.x))         # берег выше воды — ровная кромка
-		h = lerpf(h, lvl - 0.25 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)
+		h = lerpf(h, maxf(h, lvl + 0.1 + 0.25 * (1.0 - lk.w)), lk.w * (1.0 - lk.x))   # берег чуть выше воды
+		h = lerpf(h, lvl - 0.04 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)          # дно: мелко у берега, глубже к центру
 	var clearing := 0.0
 	for i in _ft.size() / 4:
 		var fr: float = _ft[i * 4 + 2]
@@ -257,7 +259,9 @@ static func ground_layers(wx: float, wy: float) -> PackedFloat32Array:
 	var t := terrain(wx, wy)
 	var swamp := t[3]
 	var path := ss(1.9, 0.7, path_dist(wx, wy)) * (1.0 - swamp * 0.7)
-	var riverbed := maxf(ss(1.7, 0.95, river_dist(wx, wy)), t[1] * 0.8)
+	var lkb := lake_at(wx, wy)
+	var sand := ss(0.25, 1.0, lkb.w) * (1.0 - lkb.x * 0.0) if lkb.z >= 0.0 else 0.0     # песчаная полоса вокруг озёр
+	var riverbed := maxf(maxf(ss(2.3, 1.2, river_dist(wx, wy)), t[1] * 0.8), sand)
 	return PackedFloat32Array([path, swamp, riverbed, t[5] * 0.6, t[1], t[4]])
 
 # название места: локация (если внутри) или зона
