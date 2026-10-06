@@ -199,6 +199,7 @@ func _process_game(dt: float) -> void:
 				_set_xray_node(z.node, world.occluded(z.node.global_position, 1.5, cam))
 	RenderingServer.global_shader_parameter_set("cam_back", cam.global_transform.basis.z)
 	RenderingServer.global_shader_parameter_set("player_pos", player.global_position)
+	RenderingServer.global_shader_parameter_set("sun_dir", daynight.sun.global_transform.basis.z)
 	_follow(minf(1.0, 2.6 * dt))
 
 var _fo_n := 0

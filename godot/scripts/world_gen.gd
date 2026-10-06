@@ -111,7 +111,7 @@ static func init() -> void:
 		return
 	var lk := PackedFloat32Array()
 	for L in LAKES:
-		lk.append_array([L.x, L.y, L.r, L.d, base_height(L.x, L.y) - 0.35])
+		lk.append_array([L.x, L.y, L.r, L.d * 2.0, base_height(L.x, L.y) - 0.35])   # дно вдвое глубже: видна толща воды, вода темнеет с глубиной
 	var ft := PackedFloat32Array()
 	for key in LANDMARKS:
 		var f: Dictionary = FEATURES[key]

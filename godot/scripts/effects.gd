@@ -77,7 +77,12 @@ func step(ent, tile: Vector2, dt: float, heavy: bool) -> void:
 	var a := lerpf(0.28, 0.6, soft) * (1.2 if heavy else 1.0)
 	if not heavy:
 		_step_sound(soft)
-	_prints.append({"pos": pos, "yaw": atan2(n.x, n.y), "a": a, "age": 0.0})
+	var wet: float = 0.0
+	if ent is Object and ent.get("wet") != null:
+		wet = float(ent.get("wet"))        # вышел из воды: следы тёмные, мокрые, держатся недолго (песок сохнет)
+	if wet > 0.15:
+		a = clampf(a + 0.35 * wet, 0.0, 0.9)
+	_prints.append({"pos": pos, "yaw": atan2(n.x, n.y), "a": a, "age": 0.0, "w": wet})
 	if _prints.size() > PRINT_MAX:
 		_prints.remove_at(0)
 	_dirty = true
@@ -88,7 +93,7 @@ func _process(dt: float) -> void:
 	var changed := _dirty
 	for i in range(_prints.size() - 1, -1, -1):
 		_prints[i].age += dt
-		if _prints[i].age > PRINT_LIFE:
+		if _prints[i].age > PRINT_LIFE * (0.35 if _prints[i].w > 0.15 else 1.0):
 			_prints.remove_at(i)
 			changed = true
 	if not changed and Engine.get_process_frames() % 30 != 0:
@@ -99,8 +104,10 @@ func _process(dt: float) -> void:
 	for i in _prints.size():
 		var p: Dictionary = _prints[i]
 		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, p.yaw), p.pos))
-		var fade := 1.0 - clampf((p.age - PRINT_LIFE * 0.6) / (PRINT_LIFE * 0.4), 0.0, 1.0)
-		mm.set_instance_color(i, Color(0.10, 0.07, 0.04, p.a * fade))
+		var life: float = PRINT_LIFE * (0.35 if p.w > 0.15 else 1.0)
+		var fade := 1.0 - clampf((p.age - life * 0.6) / (life * 0.4), 0.0, 1.0)
+		var col := Color(0.10, 0.07, 0.04, p.a * fade) if p.w <= 0.15 else Color(0.03, 0.045, 0.055, p.a * fade)
+		mm.set_instance_color(i, col)
 
 # --- звук шагов: короткий шорох (шум с затуханием), синтезируется при запуске ---
 var _steps: Array = []

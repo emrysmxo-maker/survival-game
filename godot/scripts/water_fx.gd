@@ -5,7 +5,12 @@ var player
 var splash: GPUParticles3D
 var wake: GPUParticles3D
 var rings: Array = []
-var collar: MeshInstance3D     # пенный «воротник» вокруг тела в воде (вода обтекает бойца)
+var drip: GPUParticles3D
+var puffs: Array = []          # пенный след за плывущим (V-образный) и круги от шагов
+var _wake_t := 0.0
+var _idle_t := 0.0
+var _foot := 1.0
+const PUFF_N := 44
 var _ring_t := 0.0
 var _step_t := 0.0
 var _was_in := false
@@ -74,47 +79,33 @@ func _ready() -> void:
 	for p in [splash, wake]:
 		p.one_shot = true
 		p.explosiveness = 1.0
-	# круги на воде: плоский диск с шейдером-кольцом
+	# капли с мокрого бойца после выхода из воды: падают отвесно, ~3 секунды
+	drip = _make_particles(16, 0.55, 0.03, 0.15, 180.0, 9.8)
+	drip.explosiveness = 0.0
+	drip.one_shot = false
+	var dm := drip.process_material as ParticleProcessMaterial
+	dm.direction = Vector3(0, -1, 0)
+	dm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	dm.emission_box_extents = Vector3(0.28, 0.5, 0.18)
+	# пенные пятна: мягкие диски на воде (след, круги шагов) — одна общая картинка
 	var sh := Shader.new()
 	sh.code = """shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 instance uniform float age = 0.0;
+instance uniform float ring = 0.0;
 void fragment() {
 	float d = length(UV - 0.5) * 2.0;
-	float ring = smoothstep(0.78, 0.9, d) * (1.0 - smoothstep(0.9, 1.0, d));
-	ALBEDO = vec3(0.92, 0.97, 1.0);
-	ALPHA = ring * (1.0 - age) * 0.55;
+	float disc = (1.0 - smoothstep(0.35, 1.0, d));
+	float rg = smoothstep(0.62, 0.84, d) * (1.0 - smoothstep(0.84, 1.0, d));
+	float a = mix(disc * 0.5, rg * 0.7, ring);
+	ALBEDO = vec3(0.93, 0.97, 1.0);
+	ALPHA = a * (1.0 - age);
 }"""
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(1, 1)
-	var csh := Shader.new()
-	csh.code = """shader_type spatial;
-render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
-uniform float strength = 1.0;
-void fragment() {
-	vec2 q = UV - 0.5;
-	float d = length(q) * 2.0;
-	float ang = atan(q.y, q.x);
-	float wob = 0.06 * sin(ang * 7.0 + TIME * 3.0) + 0.04 * sin(ang * 13.0 - TIME * 4.3);
-	float band = smoothstep(0.36 + wob, 0.55 + wob, d) * (1.0 - smoothstep(0.62 + wob, 0.98, d));
-	float bits = 0.7 + 0.3 * sin(ang * 9.0 + TIME * 2.5 + d * 6.0);
-	ALBEDO = vec3(0.9, 0.95, 0.97);
-	ALPHA = band * bits * 0.45 * strength;
-}"""
-	var cmat := ShaderMaterial.new()
-	cmat.shader = csh
-	var cpm := PlaneMesh.new()
-	cpm.size = Vector2(1.3, 1.3)
-	collar = MeshInstance3D.new()
-	collar.mesh = cpm
-	collar.material_override = cmat
-	collar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	collar.top_level = true
-	collar.visible = false
-	add_child(collar)
-	for i in RING_N:
+	for i in PUFF_N:
 		var mi := MeshInstance3D.new()
 		mi.mesh = pm
 		mi.material_override = mat
@@ -122,18 +113,24 @@ void fragment() {
 		mi.visible = false
 		mi.top_level = true
 		add_child(mi)
-		rings.append({"n": mi, "age": 1.0})
+		puffs.append({"n": mi, "age": 1.0, "life": 1.0, "s0": 0.2, "s1": 0.8, "v": Vector3.ZERO, "ring": 0.0})
 
-func _spawn_ring(p: Vector3) -> void:
-	var best: Dictionary = rings[0]
-	for r in rings:
+func _spawn(p: Vector3, v: Vector3, life: float, s0: float, s1: float, ring: float) -> void:
+	var best: Dictionary = puffs[0]
+	for r in puffs:
 		if r.age >= 1.0:
 			best = r
 			break
 		if r.age > best.age:
 			best = r
 	best.age = 0.0
+	best.life = life
+	best.s0 = s0
+	best.s1 = s1
+	best.v = v
+	best.ring = ring
 	best.n.global_position = p
+	best.n.set_instance_shader_parameter("ring", ring)
 	best.n.visible = true
 
 func update_fx(dt: float) -> void:
@@ -146,30 +143,47 @@ func update_fx(dt: float) -> void:
 	var spd: float = player.vel.length()
 	var moving: bool = spd > 0.25
 	var pos := Vector3(player.global_position.x, surf + 0.03, player.global_position.z)
+	var fwd := Vector3(sin(player.yaw), 0.0, cos(player.yaw))
+	var side := Vector3(fwd.z, 0.0, -fwd.x)
 	splash.global_position = pos
 	wake.global_position = pos + Vector3(0, 0.05, 0)
-	# капли — только событиями: шаг по мелководью и вход в воду; на плаву только круги/пена
+	# мокрый: в воде глубже колена — 1, мелководье — 0.5, после выхода сохнет ~5 с
+	if in_water:
+		player.wet = maxf(player.wet, 1.0 if depth > 0.35 else 0.5)
+	else:
+		player.wet = maxf(0.0, player.wet - dt / 5.0)
+	player.apply_wet()
+	drip.global_position = player.global_position + Vector3(0, 1.0, 0)
+	drip.emitting = player.wet > 0.35 and not in_water
+	# шаги по мелководью: всплеск капель и маленький круг у ноги
 	_step_t -= dt
 	if in_water and not player.swimming and moving and depth < 0.9 and _step_t <= 0.0:
 		_step_t = 0.34
 		splash.restart()
+		_foot = -_foot
+		_spawn(pos + side * 0.12 * _foot + fwd * 0.05, Vector3.ZERO, 1.0, 0.12, 0.8, 1.0)
 	if in_water and not _was_in:
-		wake.restart()                      # вошёл в воду — всплеск
+		wake.restart()                      # вошёл в воду — всплеск и большой круг
+		_spawn(pos, Vector3.ZERO, 1.6, 0.3, 2.4, 1.0)
 	_was_in = in_water
-	collar.visible = in_water and depth > 0.2
-	if collar.visible:
-		collar.global_position = pos + Vector3(0, 0.01, 0)
-		var sc: float = 1.6 if player.swimming else 1.0
-		collar.scale = Vector3(sc, 1, sc)
-		collar.rotation.y = player.yaw
-	_ring_t -= dt
-	if in_water and _ring_t <= 0.0 and (moving or player.swimming) and not OS.get_cmdline_user_args().has("--noring"):
-		_ring_t = 0.2 if player.swimming else 0.4
-		_spawn_ring(pos)
-	for r in rings:
+	# плывёт: V-образный пенный след позади (два ряда пятен расходятся в стороны)
+	if player.swimming:
+		if moving:
+			_wake_t -= dt
+			if _wake_t <= 0.0:
+				_wake_t = 0.1
+				for sgn in [-1.0, 1.0]:
+					_spawn(pos - fwd * 0.45 + side * 0.22 * sgn, side * sgn * 0.38 - fwd * 0.12, 2.2, 0.22, 0.75, 0.0)
+		else:
+			_idle_t -= dt
+			if _idle_t <= 0.0:       # на месте — редкие слабые круги
+				_idle_t = 1.4
+				_spawn(pos + side * randf_range(-0.2, 0.2), Vector3.ZERO, 1.8, 0.3, 1.6, 1.0)
+	for r in puffs:
 		if r.age < 1.0:
-			r.age += dt / 1.3
-			var s: float = 0.4 + r.age * (3.2 if player.swimming else 2.2)
+			r.age += dt / r.life
+			r.n.global_position += r.v * dt
+			var s: float = lerpf(r.s0, r.s1, minf(r.age, 1.0))
 			r.n.scale = Vector3(s, 1, s)
 			r.n.set_instance_shader_parameter("age", minf(r.age, 1.0))
 			if r.age >= 1.0:

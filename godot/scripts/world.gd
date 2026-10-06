@@ -265,7 +265,7 @@ func _build_chunk(k: Vector2i) -> void:
 			wm[j * n + i] = 1.0 if dr else 0.0
 			var fl := WorldGen.flow_at(x, y)
 			var gd := (W.y - hs[(j + 1) * (n + 2) + i + 1] / WorldGen.HK) * WorldGen.HK   # глубина воды в вершине, м
-			wc[j * n + i] = Color(fl.x * 0.5 + 0.5, fl.y * 0.5 + 0.5, clampf(gd / 3.0, 0.0, 1.0), 1.0)
+			wc[j * n + i] = Color(fl.x * 0.5 + 0.5, fl.y * 0.5 + 0.5, clampf(gd / 6.0, 0.0, 1.0), 1.0)
 			wv[j * n + i] = Vector3(x * WorldGen.T, W.y * WorldGen.HK, y * WorldGen.T)
 			if dr:
 				any_w = true

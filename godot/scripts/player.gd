@@ -30,6 +30,8 @@ var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
 var swimming := false
+var wet := 0.0                     # 0..1: мокрый (в воде 1, потом сохнет ~5 с)
+var _wet_set := -1.0
 var swim_t := 0.0                  # фаза гребков (процедурное плавание, rifle_ik.gd)
 const SWIM_SPEED := 0.5
 const SWIM_DEPTH := 1.0             # м: насколько ноги-точка модели ниже поверхности воды при плавании (подбирается по виду)
@@ -81,7 +83,7 @@ func _ready() -> void:
 	_add_swim_clips()
 	_recolor(glb)
 	_make_rifle()
-	add_xray(model)
+	add_xray(model, true)
 	blob = make_blob(0.75)
 	add_child(blob)
 	if skel:
@@ -313,6 +315,17 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		_running = false
 		_play("Idle", 1.0)
 
+func apply_wet() -> void:
+	if absf(wet - _wet_set) < 0.01:
+		return
+	_wet_set = wet
+	var st: Array = [model]
+	while st.size():
+		var n: Node = st.pop_back()
+		if n is GeometryInstance3D:
+			(n as GeometryInstance3D).set_instance_shader_parameter("wet", wet)
+		st.append_array(n.get_children())
+
 func foot_offset() -> float:
 	# высота самой низкой точки стоп над точкой земли (м, мир)
 	var lo := 1e9
@@ -393,13 +406,19 @@ static func make_blob(size: float) -> MeshInstance3D:
 	m.position.y = 0.07
 	return m
 
-static func add_xray(n: Node) -> void:
+static func add_xray(n: Node, with_wet := false) -> void:
 	var xr := ShaderMaterial.new()
 	xr.shader = load("res://shaders/xray.gdshader")
 	xr.render_priority = 10
-	_xray_walk(n, xr)
+	var first: Material = xr
+	if with_wet:
+		var wm := ShaderMaterial.new()
+		wm.shader = load("res://shaders/wet.gdshader")
+		wm.next_pass = xr
+		first = wm
+	_xray_walk(n, first)
 
-static func _xray_walk(n: Node, xr: ShaderMaterial) -> void:
+static func _xray_walk(n: Node, xr: Material) -> void:
 	if n is MeshInstance3D and n.mesh:
 		for i in n.mesh.get_surface_count():
 			var m: Material = n.get_active_material(i)

@@ -40,6 +40,10 @@ player_pos={
 "type": "vec3",
 "value": Vector3(0, 0, 0)
 }
+sun_dir={
+"type": "vec3",
+"value": Vector3(0.3, 0.8, 0.5)
+}
 cam_back={
 "type": "vec3",
 "value": Vector3(0, 0, 1)
