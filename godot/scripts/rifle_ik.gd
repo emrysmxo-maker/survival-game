@@ -23,11 +23,17 @@ func _process_modification() -> void:
 		return
 	var model: Node3D = player.model
 	if player.swimming:
-		# плывёт: автомат на ремне за спиной (наискосок, стволом вверх), руки свободны
+		# плывёт: автомат на ремне за спиной (наискосок вдоль позвоночника), положение — по костям
 		var tm := model.global_transform.affine_inverse() * skel.global_transform
 		var ch: Vector3 = tm * skel.get_bone_global_pose(spine2).origin
-		player.rifle_rig.transform = Transform3D(Basis(Vector3(0, 0, 1), 0.6) * Basis.from_euler(Vector3(-1.9, 0, 0)), ch + Vector3(0.0, 0.02, -0.17))
-		_swim(skel, model)
+		var head := _bone("Head")
+		var up: Vector3 = ((tm * skel.get_bone_global_pose(head).origin) - ch).normalized() if head >= 0 else Vector3.UP
+		var right: Vector3 = ((tm * skel.get_bone_global_pose(r_arm).origin) - (tm * skel.get_bone_global_pose(l_arm).origin)).normalized()
+		var fwd := up.cross(right).normalized()
+		var z := (up * 0.92 + right * 0.3).normalized()
+		var y := (-fwd - z * (-fwd).dot(z)).normalized()
+		var x := y.cross(z).normalized()
+		player.rifle_rig.transform = Transform3D(Basis(x, y, z), ch - fwd * 0.17 - up * 0.1)
 		return
 	# скручивание позвоночника к цели (корпус добирает до TWIST, остальное — руки)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
@@ -98,35 +104,3 @@ func _ik(skel: Skeleton3D, up: int, lo: int, hand: int, target_w: Vector3, pole_
 	gl.basis = Basis(q2) * gl.basis
 	skel.set_bone_global_pose(lo, gl)
 
-# Плавание (клипа нет — процедурно): руки по очереди тянутся вперёд и гребут вниз-назад
-# (кроль/«по-собачьи»), ноги часто и мелко бьют. Направления — в осях модели: +Z вперёд, +Y вверх.
-func _swim(skel: Skeleton3D, model: Node3D) -> void:
-	var t: float = player.swim_t
-	var to_s := skel.global_transform.basis.inverse() * model.global_transform.basis
-	var side := signf((model.global_transform.affine_inverse() * skel.global_transform * skel.get_bone_global_pose(_bone("RightArm")).origin).x)
-	if side == 0.0:
-		side = 1.0
-	for arm in [["Right", 0.0, side], ["Left", PI, -side]]:
-		var ph: float = t + arm[1]
-		var sx: float = arm[2]
-		var reach := Vector3(sx * (0.3 + 0.15 * cos(ph)), -0.25 + 0.55 * sin(ph), 0.75 + 0.35 * cos(ph))
-		var fore := reach + Vector3(sx * 0.1, -0.35 - 0.2 * sin(ph), 0.1)
-		_point(skel, _bone(arm[0] + "Arm"), _bone(arm[0] + "ForeArm"), to_s * reach)
-		_point(skel, _bone(arm[0] + "ForeArm"), _bone(arm[0] + "Hand"), to_s * fore)
-	for leg in [["Right", 0.0, side], ["Left", PI, -side]]:
-		var k: float = sin(t * 2.2 + leg[1])
-		var thigh := Vector3(leg[2] * 0.12, -1.0, -0.25 + 0.3 * k)
-		var shin := Vector3(leg[2] * 0.08, -1.0, -0.45 + 0.2 * k)
-		_point(skel, _bone(leg[0] + "UpLeg"), _bone(leg[0] + "Leg"), to_s * thigh)
-		_point(skel, _bone(leg[0] + "Leg"), _bone(leg[0] + "Foot"), to_s * shin)
-
-# повернуть кость b так, чтобы её дочерняя c оказалась в направлении dir (оси скелета)
-func _point(skel: Skeleton3D, b: int, c: int, dir: Vector3) -> void:
-	if b < 0 or c < 0:
-		return
-	var gb := skel.get_bone_global_pose(b)
-	var cur := skel.get_bone_global_pose(c).origin - gb.origin
-	if cur.length() < 1e-5 or dir.length() < 1e-5:
-		return
-	gb.basis = Basis(Quaternion(cur.normalized(), dir.normalized())) * gb.basis
-	skel.set_bone_global_pose(b, gb)

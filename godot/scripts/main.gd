@@ -28,6 +28,7 @@ var cam_yaw := CAM_YAW_DEG
 var cam_elev := CAM_ELEV_DEG
 var cam_size := CAM_SIZE
 var camctl
+var water_fx
 var _shot := ""
 var _shot_frames := 0
 var _test_script := ""
@@ -57,6 +58,10 @@ func _ready() -> void:
 	weapon.world = world
 	add_child(weapon)
 	effects.weapon = weapon
+	var wfx = load("res://scripts/water_fx.gd").new()
+	wfx.player = player
+	add_child(wfx)
+	water_fx = wfx
 	zombies = load("res://scripts/zombies.gd").new()
 	zombies.player = player
 	zombies.world = world
@@ -182,6 +187,7 @@ func _process_game(dt: float) -> void:
 	if not player.swimming:
 		effects.step(player, player.tile, dt, false)
 	weapon.update_weapon(dt, player.firing)
+	water_fx.update_fx(dt)
 	zombies.update_zombies(dt)
 	world.update_world(player.tile, cam)
 	_xray_t -= dt

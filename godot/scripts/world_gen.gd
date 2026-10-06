@@ -230,6 +230,15 @@ static func water_at(wx: float, wy: float) -> Vector2:
 		return Vector2(ss(2.6, 1.2, rd) * (1.0 - 0.85 * ford_factor(wx, wy)), hb * 0.3 - 1.3)
 	return Vector2.ZERO
 
+# течение в точке (тайлы/с, условно): река течёт на восток вдоль русла, в озёрах — лёгкий дрейф
+static func flow_at(wx: float, wy: float) -> Vector2:
+	if lake_at(wx, wy).z >= 0.0:
+		return Vector2(0.06, 0.04)
+	if river_dist(wx, wy) < 6.0:
+		var k := 16.0 * 0.018 * cos(wx * 0.018 + 0.4) + 6.0 * 0.045 * cos(wx * 0.045)
+		return Vector2(1.0, k).normalized() * 0.9
+	return Vector2.ZERO
+
 # рисовать ли воду в точке (шире самой воды: кромку обрезает земля, без «зубцов»)
 static func water_draw(wx: float, wy: float) -> bool:
 	if lake_at(wx, wy).w > 0.15:
@@ -447,6 +456,11 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if rng.randf() < pr and t8[1] < 0.05 and t8[6] < 0.35:
 			var big: bool = t8[5] > 0.4 and rng.randf() < 0.4
 			objs.append(_obj(rng, x8, y8, "boulder1" if big else ROCK[1 + int(rng.randf() * (ROCK.size() - 1))], "rock", 0.8 + rng.randf() * 0.5))
+	var dry: Array = []        # ничего не растёт и не лежит в воде (река, озёра)
+	for o in objs:
+		if not water_draw(o.x, o.y):
+			dry.append(o)
+	objs = dry
 	var solid: Array = []
 	for o in objs:
 		if SOLID_R.has(o.cat):

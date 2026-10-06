@@ -32,6 +32,7 @@ var anim_speed := 0.0
 var swimming := false
 var swim_t := 0.0                  # фаза гребков (процедурное плавание, rifle_ik.gd)
 const SWIM_SPEED := 0.5
+const SWIM_DEPTH := 1.0             # м: насколько ноги-точка модели ниже поверхности воды при плавании (подбирается по виду)
 var _running := false
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
@@ -77,6 +78,7 @@ func _ready() -> void:
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
 	loop_all(anim)
+	_add_swim_clips()
 	_recolor(glb)
 	_make_rifle()
 	add_xray(model)
@@ -212,8 +214,7 @@ func _place() -> void:
 	var depth: float = surf - ground
 	swimming = W.x > 0.5 and depth > (0.85 if swimming else 0.95)
 	if swimming:
-		# плечи (~1.2 м от стоп) у поверхности, с учётом наклона тела вперёд
-		global_position.y = maxf(ground, surf + 0.08 - 1.2 * cos(model.rotation.x if model else 0.0))
+		global_position.y = maxf(ground, surf - SWIM_DEPTH)   # тело лежит на воде: клип плавания горизонтальный
 
 func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_now: bool) -> void:
 	# --- ходьба ---
@@ -290,11 +291,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 
 	# Анимация как в браузерной версии: по скорости — ходьба (Walk) или бег (Run) с гистерезисом;
 	# пятится — всегда шагом, тот же клип назад. Темп шага = скорость по земле / скорость клипа.
-	model.rotation.x = lerpf(model.rotation.x, (0.75 if moving else 0.2) if swimming else 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
+	model.rotation.x = lerpf(model.rotation.x, 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
 	if swimming:
 		# плавание: база — стойка, руки и ноги гребут процедурно (rifle_ik.gd), тело наклонено вперёд
-		swim_t += dt * (4.2 if moving else 2.0)
-		_play("Idle", 1.0)
+		_play("Swim_Fwd" if moving else "Swim_Idle", 1.0)
 		return
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
@@ -427,6 +427,38 @@ func _xr_set(n: Node, on: bool) -> void:
 
 # Клипы из .glb импортируются без повтора: бег играл один раз (0.7 с — «пара шагов»)
 # и замирал в позе полёта. Включаем зацикливание у всех.
+# Клипы плавания Swim_Fwd / Swim_Idle — из Universal Animation Library (Quaternius, CC0),
+# перенесены на скелет Mixamo заранее (tools/models/retarget.py → assets/character/swim.json)
+func _add_swim_clips() -> void:
+	if anim == null or skel == null:
+		return
+	var f := FileAccess.open("res://assets/character/swim.json", FileAccess.READ)
+	if f == null:
+		return
+	var data: Dictionary = JSON.parse_string(f.get_as_text())
+	var base: String = str(anim.get_node(anim.root_node).get_path_to(skel))
+	var lib := anim.get_animation_library("")
+	for cname in data.clips:
+		var c: Dictionary = data.clips[cname]
+		var a := Animation.new()
+		a.length = c.len
+		a.loop_mode = Animation.LOOP_LINEAR
+		var n: int = int(c.n)
+		for bone in c.tracks:
+			if bone.ends_with("_pos"):
+				continue
+			var ti := a.add_track(Animation.TYPE_ROTATION_3D)
+			a.track_set_path(ti, NodePath(base + ":" + bone))
+			var q: Array = c.tracks[bone]
+			for i in n:
+				a.rotation_track_insert_key(ti, float(i) / 30.0, Quaternion(q[i][0], q[i][1], q[i][2], q[i][3]))
+		var hp := a.add_track(Animation.TYPE_POSITION_3D)
+		a.track_set_path(hp, NodePath(base + ":mixamorig_Hips"))
+		var pos: Array = c.tracks["mixamorig_Hips_pos"]
+		for i in n:
+			a.position_track_insert_key(hp, float(i) / 30.0, Vector3(pos[i][0], pos[i][1], pos[i][2]))
+		lib.add_animation(cname, a)
+
 static func loop_all(ap: AnimationPlayer) -> void:
 	if ap == null:
 		return

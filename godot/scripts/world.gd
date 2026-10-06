@@ -254,6 +254,7 @@ func _build_chunk(k: Vector2i) -> void:
 	# вода (река, озёра): поверхность на той же сетке, только там, где есть вода
 	var wv := PackedVector3Array(); wv.resize(n * n)
 	var wm := PackedFloat32Array(); wm.resize(n * n)
+	var wc := PackedColorArray(); wc.resize(n * n)
 	var any_w := false
 	for j in n:
 		for i in n:
@@ -262,6 +263,8 @@ func _build_chunk(k: Vector2i) -> void:
 			var W := WorldGen.water_at(x, y)
 			var dr := WorldGen.water_draw(x, y)
 			wm[j * n + i] = 1.0 if dr else 0.0
+			var fl := WorldGen.flow_at(x, y)
+			wc[j * n + i] = Color(fl.x * 0.5 + 0.5, fl.y * 0.5 + 0.5, 0.0, 1.0)
 			wv[j * n + i] = Vector3(x * WorldGen.T, W.y * WorldGen.HK, y * WorldGen.T)
 			if dr:
 				any_w = true
@@ -293,7 +296,7 @@ func _build_chunk(k: Vector2i) -> void:
 		var bs: Basis = tr.basis
 		bufs[o.key].append_array([bs.x.x, bs.y.x, bs.z.x, tr.origin.x, bs.x.y, bs.y.y, bs.z.y, tr.origin.y, bs.x.z, bs.y.z, bs.z.z, tr.origin.z])
 	content["bufs"] = bufs
-	var data := {"wv": wv, "wi": widx, "v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "i": idx, "content": content}
+	var data := {"wv": wv, "wc": wc, "wi": widx, "v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "i": idx, "content": content}
 	_mutex.lock()
 	results[k] = data
 	_mutex.unlock()
@@ -324,6 +327,7 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 			tg[ti * 4] = 1.0
 			tg[ti * 4 + 3] = 1.0
 		wa[Mesh.ARRAY_NORMAL] = nn
+		wa[Mesh.ARRAY_COLOR] = data.wc
 		wa[Mesh.ARRAY_TANGENT] = tg
 		wa[Mesh.ARRAY_INDEX] = data.wi
 		var wmesh := ArrayMesh.new()

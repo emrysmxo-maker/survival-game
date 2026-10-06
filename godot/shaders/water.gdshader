@@ -10,11 +10,17 @@ uniform vec3 deep_col : source_color = vec3(0.025, 0.075, 0.085);
 uniform vec3 shallow_col : source_color = vec3(0.20, 0.30, 0.24);
 uniform vec3 sky_col : source_color = vec3(0.62, 0.72, 0.78);
 
+varying vec2 flow;
+void vertex() {
+	flow = COLOR.rg * 2.0 - 1.0;
+}
+
 void fragment() {
 	vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 uv = wp.xz;
-	vec3 a = texture(n1, uv * 0.06 + TIME * vec2(0.010, 0.006)).rgb;
-	vec3 b = texture(n2, uv * 0.15 - TIME * vec2(0.008, 0.013)).rgb;
+	vec2 fl = flow * TIME;                       // течение: рябь едет вдоль русла
+	vec3 a = texture(n1, uv * 0.06 - fl * 0.07 + TIME * vec2(0.010, 0.006)).rgb;
+	vec3 b = texture(n2, uv * 0.15 - fl * 0.16 - TIME * vec2(0.008, 0.013)).rgb;
 	NORMAL_MAP = normalize((a + b) - 1.0) * 0.5 + 0.5;
 	NORMAL_MAP_DEPTH = 0.5;
 	// толщина воды до дна вдоль луча
@@ -27,7 +33,8 @@ void fragment() {
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
 	col = mix(col, sky_col, clamp(fres * 0.6 + 0.08, 0.0, 1.0));
 	float foam = (1.0 - smoothstep(0.0, 0.22, thick)) * (0.55 + 0.45 * sin(TIME * 1.3 + uv.x * 2.7 + uv.y * 1.9));
-	ALBEDO = mix(col, vec3(0.82, 0.86, 0.84), foam * 0.55);
+	float streak = length(flow) > 0.3 ? smoothstep(0.62, 0.9, texture(n2, uv * vec2(0.05, 0.22) - fl * 0.2).g) * 0.35 : 0.0;   // пенные полосы по течению
+	ALBEDO = mix(col, vec3(0.82, 0.86, 0.84), clamp(foam * 0.55 + streak, 0.0, 1.0));
 	ALPHA = clamp(0.25 + k * 0.7 + foam * 0.35, 0.0, 0.94) * smoothstep(0.0, 0.04, thick);
 	ROUGHNESS = 0.1;
 	SPECULAR = 0.5;
