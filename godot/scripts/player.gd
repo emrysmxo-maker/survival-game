@@ -30,6 +30,8 @@ var tile := Vector2.ZERO
 var vel := Vector2.ZERO
 var anim_speed := 0.0
 var swimming := false
+var water_depth := 0.0             # м воды над землёй под бойцом (0 — суша)
+var wet_mat: ShaderMaterial        # «мокрый» слой тела (общий для всех частей модели)
 var wet := 0.0                     # 0..1: мокрый (в воде 1, потом сохнет ~5 с)
 var _wet_set := -1.0
 var swim_t := 0.0                  # фаза гребков (процедурное плавание, rifle_ik.gd)
@@ -214,6 +216,7 @@ func _place() -> void:
 	var surf: float = W.y * WorldGen.HK
 	var ground: float = h * WorldGen.HK
 	var depth: float = surf - ground
+	water_depth = depth if W.x > 0.3 else 0.0
 	swimming = W.x > 0.5 and depth > (0.85 if swimming else 0.95)
 	if swimming:
 		global_position.y = maxf(ground, surf - SWIM_DEPTH)   # тело лежит на воде: клип плавания горизонтальный
@@ -305,10 +308,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 			_running = mps > RUN_EXIT_MPS
 		else:
 			_running = mps > RUN_ENTER_MPS
-		if backpedal:
-			_running = false
+		if backpedal or water_depth > 0.15:
+			_running = false          # по воде — шагом
 		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
-		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.5, 1.3)
+		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.5, 1.3) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
 		_play("Run" if _running else "Walk", -k if backpedal else k)
 	else:
 		anim_speed = 0.0
@@ -316,15 +319,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		_play("Idle", 1.0)
 
 func apply_wet() -> void:
-	if absf(wet - _wet_set) < 0.01:
+	if wet_mat == null or absf(wet - _wet_set) < 0.01:
 		return
 	_wet_set = wet
-	var st: Array = [model]
-	while st.size():
-		var n: Node = st.pop_back()
-		if n is GeometryInstance3D:
-			(n as GeometryInstance3D).set_instance_shader_parameter("wet", wet)
-		st.append_array(n.get_children())
+	wet_mat.set_shader_parameter("wet", wet)
 
 func foot_offset() -> float:
 	# высота самой низкой точки стоп над точкой земли (м, мир)
@@ -351,7 +349,8 @@ func _terrain_speed(want: Vector2) -> float:
 	var t := WorldGen.terrain(tile.x, tile.y)
 	if swimming:
 		return SWIM_SPEED
-	var k := 1.0 - (1.0 - SPEED_WATER) * t[1]
+	# брод: до колена почти без потерь, глубже — тяжелее (до 0.55 на пороге плавания); влажный песок не тормозит
+	var k := 1.0 - 0.45 * smoothstep(0.12, 0.95, water_depth)
 	k *= 1.0 - (1.0 - SPEED_SWAMP) * t[3]
 	var l := want.length()
 	if l > 1e-6:
@@ -406,16 +405,16 @@ static func make_blob(size: float) -> MeshInstance3D:
 	m.position.y = 0.07
 	return m
 
-static func add_xray(n: Node, with_wet := false) -> void:
+func add_xray(n: Node, with_wet := false) -> void:
 	var xr := ShaderMaterial.new()
 	xr.shader = load("res://shaders/xray.gdshader")
 	xr.render_priority = 10
 	var first: Material = xr
 	if with_wet:
-		var wm := ShaderMaterial.new()
-		wm.shader = load("res://shaders/wet.gdshader")
-		wm.next_pass = xr
-		first = wm
+		wet_mat = ShaderMaterial.new()
+		wet_mat.shader = load("res://shaders/wet.gdshader")
+		wet_mat.next_pass = xr
+		first = wet_mat
 	_xray_walk(n, first)
 
 static func _xray_walk(n: Node, xr: Material) -> void:

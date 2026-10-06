@@ -413,6 +413,8 @@ func occluded(pos: Vector3, h: float, cam: Camera3D) -> bool:
 					if (dxs * dxs) / (cr * cr) + (dys * dys) / (ry * ry) < 1.0:
 						hits += 1
 						if hits >= 2:
+							if OS.get_cmdline_user_args().has("--xdbg"):
+								print("XRAY by ", o.key, " cat=", o.cat, " at tile ", o.x, ",", o.y, " top=", top, " cr=", cr, " d=", d)
 							return true
 	return false
 
