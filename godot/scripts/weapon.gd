@@ -309,7 +309,10 @@ func _make_gun_sound() -> void:
 		add_child(p)
 		_gun_players.append(p)
 
+const SOUND_ON := false          # звук пока выключен (владелец: добавим позже)
 func _gun_sound() -> void:
+	if not SOUND_ON:
+		return
 	var p: AudioStreamPlayer = _gun_players[_gun_i % _gun_players.size()]
 	_gun_i += 1
 	p.stream = _gun_snd[randi() % _gun_snd.size()]

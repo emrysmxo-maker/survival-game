@@ -126,7 +126,10 @@ func _make_steps() -> void:
 		add_child(p)
 		_players.append(p)
 
+const SOUND_ON := false          # звук пока выключен (владелец: добавим позже)
 func _step_sound(soft: float) -> void:
+	if not SOUND_ON:
+		return
 	if _steps.is_empty():
 		_make_steps()
 	if _steps.is_empty():

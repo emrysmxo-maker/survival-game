@@ -37,7 +37,7 @@ func _process_modification() -> void:
 		return
 	# скручивание позвоночника к цели (корпус добирает до TWIST, остальное — руки)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
-	for pair in [["Spine", 0.3, "Spine1"], ["Spine1", 0.35, "Spine2"], ["Spine2", 0.35, "Neck"]]:
+	for pair in [["Hips", 0.22, "Spine"], ["Spine", 0.26, "Spine1"], ["Spine1", 0.26, "Spine2"], ["Spine2", 0.26, "Neck"]]:   # часть поворота — тазом, как у живого человека
 		var bi := _bone(pair[0])
 		if bi >= 0:
 			# ось скрутки — вдоль позвоночника (к следующей кости): у Mixamo это локальная Y, у Rocketbox (Biped) — X;
