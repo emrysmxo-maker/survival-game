@@ -72,7 +72,7 @@ func _ready() -> void:
 	var scn: PackedScene = load("res://assets/character/Soldier.glb")
 	# модель смотрит в +Z (лицо бойца); на «опору» опираются автомат и прицел
 	model = Node3D.new()
-	model.scale = Vector3.ONE * CHAR_SCALE
+	model.scale = Vector3(0.84, 1.0, 0.9) * CHAR_SCALE        # у модели Quaternius плечи «качка» — сужаем в обычные пропорции
 	add_child(model)
 	var glb: Node3D = scn.instantiate()
 	model.add_child(glb)
@@ -486,7 +486,35 @@ func _add_gait_clips() -> void:
 					var pw: Vector3 = w0.position_track_interpolate(ti, tw)
 					var pr: Vector3 = r0.position_track_interpolate(tj, tr)
 					a.position_track_insert_key(no, ph * a.length, pw.lerp(pr, w))
+		_flatten_bob(a, lerpf(0.7, 0.25, w))
 		lib.add_animation("Gait%d" % (gi + 1), a)
+	_flatten_bob(r0, 0.25)
+	_flatten_bob(lib.get_animation("Sprint"), 0.35)
+
+# У клипа Jog таз «пружинит» на 24 см (тело подпрыгивает при беге) — гасим вертикальное колебание таза.
+# Позиция таза хранится в осях родительской кости, поэтому «вверх» переводим в её локальные оси.
+func _flatten_bob(a: Animation, k: float) -> void:
+	if a == null or skel == null:
+		return
+	var hips := skel.find_bone("mixamorig_Hips")
+	if hips < 0:
+		return
+	var par := skel.get_bone_parent(hips)
+	var up_local := Vector3.UP
+	if par >= 0:
+		up_local = skel.get_bone_global_rest(par).basis.inverse() * Vector3.UP
+	up_local = up_local.normalized()
+	for ti in a.get_track_count():
+		if a.track_get_type(ti) == Animation.TYPE_POSITION_3D and str(a.track_get_path(ti)).ends_with(":mixamorig_Hips"):
+			var n := a.track_get_key_count(ti)
+			var low := 1e9
+			for i in n:
+				low = minf(low, (a.track_get_key_value(ti, i) as Vector3).dot(up_local))
+			for i in n:
+				var v: Vector3 = a.track_get_key_value(ti, i)
+				var s := v.dot(up_local)
+				v += up_local * ((low + (s - low) * k) - s)     # от самой низкой точки: опорная нога не уходит в землю
+				a.track_set_key_value(ti, i, v)
 
 func _add_swim_clips() -> void:
 	if anim == null or skel == null or anim.has_animation("Swim_Fwd"):

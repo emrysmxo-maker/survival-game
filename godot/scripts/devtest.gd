@@ -22,7 +22,8 @@ static func run(m, dt: float) -> void:
 		var sk: Skeleton3D = pl.skel
 		var lf: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_LeftFoot")).origin
 		var rf: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_RightFoot")).origin
-		print("F ", snappedf(m._tt, 0.001), " ", pl.anim.current_animation, " ", snappedf(pl.anim.speed_scale, 0.001), " ", pl.global_position.x, " ", pl.global_position.z, " ", lf.x, " ", lf.y, " ", lf.z, " ", rf.x, " ", rf.y, " ", rf.z)
+		var hp: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Hips")).origin
+		print("F ", snappedf(m._tt, 0.001), " ", pl.anim.current_animation, " ", snappedf(pl.anim.speed_scale, 0.001), " ", pl.global_position.x, " ", pl.global_position.z, " ", lf.x, " ", lf.y, " ", lf.z, " ", rf.x, " ", rf.y, " ", rf.z, " ", hp.y - pl.global_position.y)
 	match m._test_script:
 		"run":
 			m.stick_l.active = true
