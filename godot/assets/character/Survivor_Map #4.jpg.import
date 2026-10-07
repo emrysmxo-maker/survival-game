@@ -2,18 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://clb0ckx4csfkw"
-path.s3tc="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.s3tc.ctex"
-path.etc2="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.etc2.ctex"
+uid="uid://cj478trri13bo"
+path.s3tc="res://.godot/imported/Survivor_Map #4.jpg-91c312673e8eb6289148c40afc24d831.s3tc.ctex"
+path.etc2="res://.godot/imported/Survivor_Map #4.jpg-91c312673e8eb6289148c40afc24d831.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
+generator_parameters={
+"md5": "e862a13d26497b84f205f941aac2925d"
+}
 
 [deps]
 
-source_file="res://assets/character/Soldier_vanguard_vanguard_diffuse_tga.jpg"
-dest_files=["res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.s3tc.ctex", "res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.etc2.ctex"]
+source_file="res://assets/character/Survivor_Map #4.jpg"
+dest_files=["res://.godot/imported/Survivor_Map #4.jpg-91c312673e8eb6289148c40afc24d831.s3tc.ctex", "res://.godot/imported/Survivor_Map #4.jpg-91c312673e8eb6289148c40afc24d831.etc2.ctex"]
 
 [params]
 

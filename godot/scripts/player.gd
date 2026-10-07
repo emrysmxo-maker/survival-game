@@ -70,8 +70,8 @@ const RIFLE_MUZZLE := Vector3(0, 0.02, 0.37)
 const RIFLE_PORT := Vector3(0.03, 0.03, -0.02)
 
 func _ready() -> void:
-	var scn: PackedScene = load("res://assets/character/Soldier.glb")
-	# модель в файле смотрит в -Z: кладём её в «опору», развёрнутую на 180°,
+	var scn: PackedScene = load("res://assets/character/Survivor.glb")
+	# модель (Rocketbox Male_Adult_07, MIT) в файле смотрит в -Z: кладём её в «опору», развёрнутую на 180°,
 	# у опоры +Z — лицо бойца (на опору опираются автомат и прицел)
 	model = Node3D.new()
 	model.scale = Vector3.ONE * CHAR_SCALE
@@ -81,9 +81,13 @@ func _ready() -> void:
 	model.add_child(glb)
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
+	if anim == null:
+		# в модели Rocketbox нет клипов — плеер создаём сами, клипы из survivor_clips.json
+		anim = AnimationPlayer.new()
+		glb.add_child(anim)
+		anim.add_animation_library("", AnimationLibrary.new())
+	_add_json_clips("res://assets/character/survivor_clips.json")
 	loop_all(anim)
-	_add_swim_clips()
-	_recolor(glb)
 	_make_rifle()
 	add_xray(model, true)
 	blob = make_blob(0.75)
@@ -446,11 +450,11 @@ func _xr_set(n: Node, on: bool) -> void:
 # Клипы из .glb импортируются без повтора: бег играл один раз (0.7 с — «пара шагов»)
 # и замирал в позе полёта. Включаем зацикливание у всех.
 # Клипы плавания Swim_Fwd / Swim_Idle — из Universal Animation Library (Quaternius, CC0),
-# перенесены на скелет Mixamo заранее (tools/models/retarget.py → assets/character/swim.json)
-func _add_swim_clips() -> void:
+# Клипы бойца (Idle/Walk/Run/Swim_*) перенесены со скелета Mixamo на Rocketbox (tools/character/retarget_mixamo.py → survivor_clips.json)
+func _add_json_clips(path: String) -> void:
 	if anim == null or skel == null:
 		return
-	var f := FileAccess.open("res://assets/character/swim.json", FileAccess.READ)
+	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return
 	var data: Dictionary = JSON.parse_string(f.get_as_text())

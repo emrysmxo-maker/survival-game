@@ -123,7 +123,7 @@ func _start_preload() -> void:
 			var p := "res://assets/models/%s_%s.glb" % [kinds[k].m, part]
 			if not seen.has(p) and ResourceLoader.exists(p):
 				seen[p] = true
-	for p in ["res://assets/character/Soldier.glb", "res://assets/character/Zombie.glb", "res://assets/character/Rifle_Assault.glb"]:
+	for p in ["res://assets/character/Survivor.glb", "res://assets/character/Zombie.glb", "res://assets/character/Rifle_Assault.glb"]:
 		if ResourceLoader.exists(p):
 			seen[p] = true
 	for p in seen:
