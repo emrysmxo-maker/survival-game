@@ -19,6 +19,8 @@ var cur_build := 0
 var _phase := ""          # "json" | "pck" | ""
 var _remote: Dictionary = {}
 var _apk_url := ""
+var _preload: Array = []      # модели грузятся в фоне, пока на экране проверка обновления
+var _want_play := false
 
 func _read_int(path: String) -> int:
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -46,6 +48,7 @@ func _ready() -> void:
 	_mount_saved()
 	cur_build = _read_int("res://build.txt")
 	_build_ui()
+	_start_preload()
 	http = HTTPRequest.new()
 	http.max_redirects = 8
 	http.timeout = 30.0
@@ -108,6 +111,31 @@ func _btn(t: String, c: Color) -> Button:
 	b.add_theme_stylebox_override("hover", s)
 	b.add_theme_stylebox_override("pressed", s)
 	return b
+
+func _start_preload() -> void:
+	var f := FileAccess.open("res://assets/models/kinds.json", FileAccess.READ)
+	if f == null:
+		return
+	var kinds = JSON.parse_string(f.get_as_text())
+	var seen := {}
+	for k in kinds:
+		for part in ["wood", "leaf"]:
+			var p := "res://assets/models/%s_%s.glb" % [kinds[k].m, part]
+			if not seen.has(p) and ResourceLoader.exists(p):
+				seen[p] = true
+	for p in ["res://assets/character/Soldier.glb", "res://assets/character/Zombie.glb", "res://assets/character/Rifle_Assault.glb"]:
+		if ResourceLoader.exists(p):
+			seen[p] = true
+	for p in seen:
+		if ResourceLoader.load_threaded_request(p, "", true) == OK:
+			_preload.append(p)
+
+func _preload_left() -> int:
+	var n := 0
+	for p in _preload:
+		if ResourceLoader.load_threaded_get_status(p) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			n += 1
+	return n
 
 func _stamp() -> String:
 	return str(int(Time.get_unix_time_from_system()))
@@ -194,6 +222,13 @@ func _on_done(result: int, code: int, _h: PackedStringArray, body: PackedByteArr
 			get_tree().create_timer(0.8).timeout.connect(play)
 
 func _process(_dt: float) -> void:
+	if _want_play:
+		var left := _preload_left()
+		status.text = "Загрузка мира… %d%%" % int(100.0 * (1.0 - float(left) / maxf(_preload.size(), 1.0)))
+		if left == 0:
+			_want_play = false
+			play()
+		return
 	if _phase == "pck" and http:
 		var total := http.get_body_size()
 		bar.max_value = maxf(total, 1.0) if total > 0 else maxf(float(_remote.get("size", 1)), 1.0)
@@ -203,5 +238,11 @@ func _process(_dt: float) -> void:
 func play() -> void:
 	if _phase == "pck":
 		return
+	if _preload_left() > 0:
+		_want_play = true      # дождаться фоновой загрузки моделей
+		return
+	for p in _preload:
+		ResourceLoader.load_threaded_get(p)     # забрать готовое (дальше load() берёт из памяти)
+	_preload.clear()
 	Engine.remove_meta("from_game") if Engine.has_meta("from_game") else null
 	get_tree().change_scene_to_file("res://main.tscn")

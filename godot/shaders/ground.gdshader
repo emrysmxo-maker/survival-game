@@ -7,6 +7,7 @@ render_mode diffuse_lambert, specular_schlick_ggx;
 uniform sampler2DArray t_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray t_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float meters_per_texture = 2.6;
+uniform bool detail = true;          // false (Низкое/Среднее): одна выборка на слой, слабые слои пропускаются
 global uniform bool q_ground_normals;
 
 float ssf(float e0, float e1, float x) { float t = clamp((x - e0) / (e1 - e0), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
@@ -26,6 +27,7 @@ void vertex() {
 
 // анти-повтор: каждый слой берётся в двух масштабах со сдвигом и смешивается по шуму
 vec4 lay(sampler2DArray s, vec2 uv, float i, float mixk) {
+	if (!detail) { return texture(s, vec3(uv, i)); }
 	vec4 a = texture(s, vec3(uv, i));
 	vec4 b = texture(s, vec3(uv * 0.43 + vec2(0.37, 0.71), i));
 	return mix(a, b, mixk);
@@ -51,7 +53,7 @@ void fragment() {
 	vec3 nm = vec3(0.5, 0.5, 1.0);
 	// послойное наложение снизу вверх
 	for (int i = 0; i < 8; i++) {
-		if (w[i] < 0.004) { continue; }
+		if (w[i] < (detail ? 0.004 : 0.06)) { continue; }
 		vec3 ci = lay(t_albedo, uv, float(i), mk).rgb;
 		c = i == 0 ? ci : mix(c, ci, w[i]);
 		if (q_ground_normals) {

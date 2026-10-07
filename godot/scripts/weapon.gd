@@ -23,6 +23,12 @@ var _tracer_mesh: BoxMesh
 var _tracer_mat: StandardMaterial3D
 var _casing_mat: StandardMaterial3D
 var _puff_mesh: QuadMesh
+var _puff_mat: ShaderMaterial
+var _casing_mesh: QuadMesh
+# пулы: объекты создаются один раз и переиспользуются (раньше — новые на каждый выстрел)
+var _tracer_pool: Array = []
+var _casing_pool: Array = []
+var _puff_pool: Array = []
 
 func _ready() -> void:
 	_tracer_mesh = BoxMesh.new()
@@ -39,6 +45,11 @@ func _ready() -> void:
 	_casing_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_puff_mesh = QuadMesh.new()
 	_puff_mesh.size = Vector2(1, 1)
+	_puff_mat = ShaderMaterial.new()
+	_puff_mat.shader = load("res://shaders/puff.gdshader")
+	_puff_mat.set_shader_parameter("tex", _soft_tex())
+	_casing_mesh = QuadMesh.new()
+	_casing_mesh.size = Vector2(0.07, 0.07)
 
 # Автострельба: ближайший живой зомби в радиусе. Возвращает экранный вектор прицела или null.
 func auto_target(force := false):
@@ -73,11 +84,14 @@ func _shoot() -> void:
 	var mz: Vector3 = player.muzzle_world()
 	var dir3: Vector3 = player.barrel_dir()
 	var d := Vector2(dir3.x, dir3.z).normalized().rotated(randf_range(-BULLET_SPREAD, BULLET_SPREAD))
-	var tr := MeshInstance3D.new()
-	tr.mesh = _tracer_mesh
-	tr.material_override = _tracer_mat
-	tr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(tr)
+	var tr: MeshInstance3D = _tracer_pool.pop_back() if not _tracer_pool.is_empty() else null
+	if tr == null:
+		tr = MeshInstance3D.new()
+		tr.mesh = _tracer_mesh
+		tr.material_override = _tracer_mat
+		tr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(tr)
+	tr.visible = true
 	var b := {"x": mz.x / WorldGen.T, "y": mz.z / WorldGen.T, "z": mz.y, "dx": d.x, "dy": d.y, "vz": clampf(dir3.y, -0.3, 0.3), "age": 0.0, "node": tr}
 	bullets.append(b)
 	_place_bullet(b)
@@ -87,17 +101,18 @@ func _shoot() -> void:
 	# гильза: вправо-вверх от окна выброса
 	var port: Vector3 = player.port_world()
 	var right := Vector3(d.y, 0, -d.x)
-	var c := MeshInstance3D.new()
-	var qm := QuadMesh.new()
-	qm.size = Vector2(0.07, 0.07)
-	c.mesh = qm
-	c.material_override = _casing_mat
-	c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(c)
+	var c: MeshInstance3D = _casing_pool.pop_back() if not _casing_pool.is_empty() else null
+	if c == null:
+		c = MeshInstance3D.new()
+		c.mesh = _casing_mesh
+		c.material_override = _casing_mat
+		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(c)
+	c.visible = true
 	c.global_position = port
 	casings.append({"node": c, "v": right * randf_range(1.6, 2.4) + Vector3(0, randf_range(1.8, 2.6), 0) - Vector3(d.x, 0, d.y) * 0.3, "rest": false, "age": 0.0, "b": 0})
 	if casings.size() > 80:
-		casings[0].node.queue_free()
+		_free_casing(casings[0].node)
 		casings.remove_at(0)
 
 func _place_bullet(b: Dictionary) -> void:
@@ -129,7 +144,8 @@ func _update_bullets(dt: float) -> void:
 			_impact(Vector2(b.x, b.y), gz, false)
 			hit = true
 		if hit:
-			b.node.queue_free()
+			b.node.visible = false
+			_tracer_pool.append(b.node)
 			bullets.remove_at(i)
 		else:
 			_place_bullet(b)
@@ -149,24 +165,29 @@ func _impact(t: Vector2, z: float, wood: bool) -> void:
 		_puff(p, Vector3(randf_range(-0.6, 0.6), randf_range(0.4, 1.2), randf_range(-0.6, 0.6)), col, 0.12, 0.6)
 
 func _puff(p: Vector3, v: Vector3, col: Color, size: float, life: float) -> void:
-	var m := MeshInstance3D.new()
-	m.mesh = _puff_mesh
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.billboard_keep_scale = true
-	mat.albedo_texture = _soft_tex()
-	mat.albedo_color = col
-	m.material_override = mat
-	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(m)
+	var m: MeshInstance3D = _puff_pool.pop_back() if not _puff_pool.is_empty() else null
+	if m == null:
+		m = MeshInstance3D.new()
+		m.mesh = _puff_mesh
+		m.material_override = _puff_mat
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(m)
+	m.visible = true
 	m.global_position = p
 	m.scale = Vector3.ONE * size
+	m.set_instance_shader_parameter("col", col)
 	puffs.append({"node": m, "v": v, "age": 0.0, "life": life, "size": size, "col": col})
 	if puffs.size() > 120:
-		puffs[0].node.queue_free()
+		_free_puff(puffs[0].node)
 		puffs.remove_at(0)
+
+func _free_puff(m: MeshInstance3D) -> void:
+	m.visible = false
+	_puff_pool.append(m)
+
+func _free_casing(c: MeshInstance3D) -> void:
+	c.visible = false
+	_casing_pool.append(c)
 
 var _soft: Texture2D
 func _soft_tex() -> Texture2D:
@@ -187,7 +208,7 @@ func _update_puffs(dt: float) -> void:
 		p.age += dt
 		var k: float = p.age / p.life
 		if k >= 1.0:
-			p.node.queue_free()
+			_free_puff(p.node)
 			puffs.remove_at(i)
 			continue
 		p.node.global_position += p.v * dt
@@ -195,7 +216,7 @@ func _update_puffs(dt: float) -> void:
 		p.node.scale = Vector3.ONE * p.size * (1.0 + k * 2.0)
 		var c: Color = p.col
 		c.a = p.col.a * (1.0 - k)
-		p.node.material_override.albedo_color = c
+		p.node.set_instance_shader_parameter("col", c)
 
 func _update_casings(dt: float) -> void:
 	for i in range(casings.size() - 1, -1, -1):
@@ -204,7 +225,7 @@ func _update_casings(dt: float) -> void:
 		if c.rest:
 			c.age += dt
 			if c.age > CASING_LIE:
-				n.queue_free()
+				_free_casing(n)
 				casings.remove_at(i)
 			continue
 		c.v.y -= 9.8 * dt

@@ -21,6 +21,11 @@ var kinds_meta := {}
 var _scenes := {}
 var gallery := OS.get_cmdline_user_args().has("--gallery")
 var crown_shadows := true
+var ground_detail := true:
+	set(v):
+		ground_detail = v
+		if ground_mat:
+			ground_mat.set_shader_parameter("detail", v)
 var density := 1.0         # доля травяного яруса (настройка качества)
 var _dirty := false
 var _rebuild_t := 0.0
@@ -162,6 +167,7 @@ func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 			if absi(k.x - c.x) > DROP_R or absi(k.y - c.y) > DROP_R:
 				chunks[k].mesh.queue_free()
 				chunks.erase(k)
+				_obs_cache.clear()
 				_dirty = true
 	if pending.size() < 4:
 		var best := Vector2i.ZERO
@@ -219,6 +225,7 @@ func set_density(d: float) -> void:
 	for k in chunks.keys():
 		chunks[k].mesh.queue_free()
 	chunks.clear()
+	_obs_cache.clear()
 	center = Vector2i(999999, 999999)
 	ensure_now(player_tile, 2)
 
@@ -352,6 +359,7 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 		wi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.add_child(wi)
 	chunks[k] = {"mesh": mi, "c": data.content}
+	_obs_cache.clear()
 	_dirty = true
 
 func _rebuild_sprites() -> void:
@@ -454,15 +462,21 @@ func count_trees() -> int:
 			n += chunks[k].c.trees.size()
 	return n
 
-# препятствия рядом: [{x, y, r, tree}] в тайлах
+# препятствия рядом: [{x, y, r, tree}] в тайлах. Список на каждый кусок мира собирается один раз
+# и переиспользуется (раньше — новый массив для бойца, каждого зомби и каждой пули каждый кадр).
+var _obs_cache := {}
 func obstacles_near(tile: Vector2) -> Array:
-	var out := []
 	var c := Vector2i(floori(tile.x / WorldGen.CHUNK), floori(tile.y / WorldGen.CHUNK))
+	var hit = _obs_cache.get(c)
+	if hit != null:
+		return hit
+	var out := []
 	for dx in range(-1, 2):
 		for dy in range(-1, 2):
 			var k := Vector2i(c.x + dx, c.y + dy)
 			if chunks.has(k):
 				out.append_array(chunks[k].c.solid)
+	_obs_cache[c] = out
 	return out
 
 # --- проверка: все объекты рядами у старта (запуск с --gallery) ---

@@ -207,20 +207,16 @@ func _process_game(dt: float) -> void:
 	RenderingServer.global_shader_parameter_set("sun_dir", daynight.sun.global_transform.basis.z)
 	_follow(minf(1.0, 2.6 * dt))
 
-var _fo_n := 0
 func _process(dt_raw: float) -> void:
 	var dt := minf(dt_raw, 0.05)      # всё считаем каждый кадр (145 fps), без шагов физики 60 Гц — иначе рывки
 	if _fixed_dt > 0.0:
 		dt = _fixed_dt
 	_process_game(dt)
-	if _test_script == "run" and Engine.get_process_frames() % 10 == 0 and _fo_n < 40:
-		_fo_n += 1
-		var an = player.anim
-		print("ANIM t=", snappedf(_clock, 0.1), " name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " loop=", an.get_animation(an.current_animation).loop_mode if an.current_animation != "" else -1, " foot=", snappedf(player.foot_offset(), 0.001))
 	if hud.due(dt):
 		hud.update_hud(0.25, player.tile, world.ecosystem_at(player.tile), world.count_trees())
 	if _test_script != "":
-		_run_test(dt)
+		_tt += dt
+		load("res://scripts/devtest.gd").run(self, dt)
 	_clock = Time.get_ticks_msec() / 1000.0
 	if _shot != "" and _clock > _shot_at and _shot_frames > 0:
 		var path := _shot if _shots <= 1 else _shot.replace(".png", "_%02d.png" % _shot_i)
@@ -230,63 +226,10 @@ func _process(dt_raw: float) -> void:
 			_shot_frames = 0
 			get_tree().quit()
 
-# --- проверки без экрана (запуск с --test=...) ---
 var _tt := 0.0
-func _run_test(dt: float) -> void:
-	_tt += dt
-	match _test_script:
-		"run":
-			stick_l.active = true
-			stick_l.vec = Vector2(0, -1)
-		"fireback":
-			stick_l.vec = Vector2(0, -1)
-			if _tt > 0.5:
-				stick_r.active = true
-				stick_r.vec = Vector2(0.6, 0.8)
-				stick_r.len_px = 60.0
-			if _tt > 0.3 and zombies.list.is_empty():
-				zombies.spawn()
-		"zombie":
-			if zombies.list.is_empty():
-				zombies.spawn(); zombies.spawn()
-				zombies.list[0].tile = player.tile + Vector2(3, 1)
-				zombies.list[1].tile = player.tile + Vector2(-1, 3)
-			weapon.auto = _tt > 1.0
-		"behind":
-			if not has_meta("done"):
-				set_meta("done", true)
-				# встать за ближайшее дерево (дальше от камеры)
-				var best = null
-				var bd := 1e9
-				for o in world.obstacles_near(player.tile):
-					if o.tree:
-						var d: float = Vector2(o.x, o.y).distance_to(player.tile)
-						if d < bd:
-							bd = d
-							best = o
-				if best != null:
-					var back: Vector3 = cam.global_transform.basis.z
-					var bt := Vector2(back.x, back.z).normalized()
-					player.set_tile(Vector2(best.x, best.y) - bt * 1.6)
-		"runaim", "runback":
-			stick_l.active = true
-			stick_l.vec = Vector2(0, -1)
-			stick_r.active = true
-			stick_r.vec = Vector2(1, 0) if _test_script == "runaim" else Vector2(0.2, 1)
-			stick_r.len_px = 60.0
-			if Engine.get_process_frames() % 20 == 0 and _tt > 1.0:
-				var bd: Vector3 = player.barrel_dir()
-				print("RUNAIM t=", snappedf(_tt, 0.1), " legs=", snappedf(rad_to_deg(player.yaw), 1), " move=", snappedf(rad_to_deg(WorldGen_yaw(player.move_dir)), 1), " aim=", snappedf(rad_to_deg(player.aim_yaw), 1), " twist=", snappedf(rad_to_deg(player.aim_local), 1), " barrel=", snappedf(rad_to_deg(atan2(bd.x, bd.z)), 1), " back=", player.backpedal, " anim=", player.anim.current_animation, " spd=", snappedf(player.anim.speed_scale, 0.01), " bullets=", weapon.bullets.size())
-		"aim":
-			stick_r.active = true
-			stick_r.vec = Vector2(1, 0.3)
-			stick_r.len_px = 10.0
 
 func _set_xray_node(n: Node, on: bool) -> void:
 	if n is GeometryInstance3D:
 		n.set_instance_shader_parameter("xray_on", 1.0 if on else 0.0)
 	for c in n.get_children():
 		_set_xray_node(c, on)
-
-func WorldGen_yaw(d: Vector2) -> float:
-	return atan2(d.x, d.y)

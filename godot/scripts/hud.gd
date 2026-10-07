@@ -227,8 +227,9 @@ func update_hud(dt: float, tile: Vector2, eco: String, trees: int) -> void:
 		WorkerThreadPool.wait_for_task_completion(_mini_task)
 		_mini_task = -1
 		_mini_tex.update(_mini_img)
-	if _mini_t <= 0.0 and _mini_task < 0:
-		_mini_t = 1.0
+	# пересчёт миникарты — только когда боец ушёл на 3+ тайла (или раз в 5 с), а не каждую секунду
+	if _mini_t <= 0.0 and _mini_task < 0 and (tile.distance_to(_mini_at) > 3.0 or _mini_t < -4.0 or _mini_tex == null):
+		_mini_t = 0.5
 		_mini_at = tile
 		_mini_task = WorkerThreadPool.add_task(_build_mini.bind(tile))
 	if _big_task >= 0 and WorkerThreadPool.is_task_completed(_big_task):
@@ -243,7 +244,7 @@ static func terrain_color(x: float, y: float) -> Color:
 	var t := WorldGen.terrain(x, y)
 	if t[1] > 0.3:
 		return Color(0.25, 0.42, 0.55)
-	var L := WorldGen.ground_layers(x, y)
+	var L := WorldGen.ground_layers_t(x, y, t)     # рельеф уже посчитан — не считать второй раз
 	var c := Color(0.29, 0.40, 0.22)
 	c = c.lerp(Color(0.40, 0.47, 0.27), L[5] * 0.8)
 	c = c.lerp(Color(0.22, 0.28, 0.20), L[1])

@@ -1,0 +1,59 @@
+extends RefCounted
+# Проверки без экрана (запуск с --test=run|runaim|runback|fireback|zombie|behind|aim): сценарии
+# управления и вывод замеров в лог. В обычной игре не используется.
+
+static func _yaw(d: Vector2) -> float:
+	return atan2(d.x, d.y)
+
+static func run(m, dt: float) -> void:
+	if m._test_script == "run" and Engine.get_process_frames() % 10 == 0:
+		var an = m.player.anim
+		print("ANIM name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " foot=", snappedf(m.player.foot_offset(), 0.001))
+	match m._test_script:
+		"run":
+			m.stick_l.active = true
+			m.stick_l.vec = Vector2(0, -1)
+		"fireback":
+			m.stick_l.vec = Vector2(0, -1)
+			if m._tt > 0.5:
+				m.stick_r.active = true
+				m.stick_r.vec = Vector2(0.6, 0.8)
+				m.stick_r.len_px = 60.0
+			if m._tt > 0.3 and m.zombies.list.is_empty():
+				m.zombies.spawn()
+		"zombie":
+			if m.zombies.list.is_empty():
+				m.zombies.spawn(); m.zombies.spawn()
+				m.zombies.list[0].tile = m.player.tile + Vector2(3, 1)
+				m.zombies.list[1].tile = m.player.tile + Vector2(-1, 3)
+			m.weapon.auto = m._tt > 1.0
+		"behind":
+			if not m.has_meta("done"):
+				m.set_meta("done", true)
+				# встать за ближайшее дерево (дальше от камеры)
+				var best = null
+				var bd := 1e9
+				for o in m.world.obstacles_near(m.player.tile):
+					if o.tree:
+						var d: float = Vector2(o.x, o.y).distance_to(m.player.tile)
+						if d < bd:
+							bd = d
+							best = o
+				if best != null:
+					var back: Vector3 = m.cam.global_transform.basis.z
+					var bt := Vector2(back.x, back.z).normalized()
+					m.player.set_tile(Vector2(best.x, best.y) - bt * 1.6)
+		"runaim", "runback":
+			m.stick_l.active = true
+			m.stick_l.vec = Vector2(0, -1)
+			m.stick_r.active = true
+			m.stick_r.vec = Vector2(1, 0) if m._test_script == "runaim" else Vector2(0.2, 1)
+			m.stick_r.len_px = 60.0
+			if Engine.get_process_frames() % 20 == 0 and m._tt > 1.0:
+				var bd: Vector3 = m.player.barrel_dir()
+				print("RUNAIM t=", snappedf(m._tt, 0.1), " legs=", snappedf(rad_to_deg(m.player.yaw), 1), " move=", snappedf(rad_to_deg(_yaw(m.player.move_dir)), 1), " aim=", snappedf(rad_to_deg(m.player.aim_yaw), 1), " twist=", snappedf(rad_to_deg(m.player.aim_local), 1), " barrel=", snappedf(rad_to_deg(atan2(bd.x, bd.z)), 1), " back=", m.player.backpedal, " anim=", m.player.anim.current_animation, " spd=", snappedf(m.player.anim.speed_scale, 0.01), " bullets=", m.weapon.bullets.size())
+		"aim":
+			m.stick_r.active = true
+			m.stick_r.vec = Vector2(1, 0.3)
+			m.stick_r.len_px = 10.0
+
