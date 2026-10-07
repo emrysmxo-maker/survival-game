@@ -1,10 +1,11 @@
 # Перенос клипов бойца Mixamo (Soldier.glb + swim.json) на скелет Rocketbox (Biped).
 # Совпадение по глобальным поворотам костей; A-поза Rocketbox выравнивается к T-позе Mixamo по направлениям костей.
-# python3 -I retarget_mixamo.py Soldier.glb swim.json target.glb out.json
+# python3 -I retarget_mixamo.py Soldier.glb swim.json target.glb out.json [jog.glb]
 import sys, json, numpy as np
 sys.path.insert(0, __file__.rsplit('/', 2)[0] + '/models')
 from glbutil import load, acc, qmul, qinv, qrot
 SOL, SWIM, TGT, OUT = sys.argv[1:5]
+JOG = sys.argv[5] if len(sys.argv) > 5 else None     # бег из присланного Mixamo «Jogging» (экспорт в glb, клип 'Run')
 MAP = {'Pelvis': 'Hips', 'Spine': 'Spine', 'Spine1': 'Spine1', 'Spine2': 'Spine2', 'Neck': 'Neck', 'Head': 'Head'}
 for s, m in (('L', 'Left'), ('R', 'Right')):
     MAP.update({f'{s} Clavicle': f'{m}Shoulder', f'{s} UpperArm': f'{m}Arm', f'{s} Forearm': f'{m}ForeArm', f'{s} Hand': f'{m}Hand',
@@ -55,31 +56,32 @@ def slerp(a, b, t):
     if d > 0.9995: r = a + t * (b - a); return r / np.linalg.norm(r)
     th = np.arccos(d); return (np.sin((1 - t) * th) * a + np.sin(t * th) * b) / np.sin(th)
 
-sj, sb = load(SOL); sn = sj['nodes']; sp = parents(sn); so = order(sn, sp)
 tj, tb = load(TGT); tn = tj['nodes']; tp = parents(tn); to = order(tn, tp)
-sname = {n.get('name'): i for i, n in enumerate(sn)}
 tname = {n.get('name'): i for i, n in enumerate(tn)}
-SR0 = {i: lrot(sn[i]) for i in range(len(sn))}; ST0 = {i: ltr(sn[i]) for i in range(len(sn))}
 TR0 = {i: lrot(tn[i]) for i in range(len(tn))}; TT0 = {i: ltr(tn[i]) for i in range(len(tn))}
-SG0 = glob(sn, sp, so, SR0, ST0); TG0 = glob(tn, tp, to, TR0, TT0)
-mx = {}   # имя Mixamo -> (индекс источника, индекс цели)
-for b, m in MAP.items():
-    mx[m] = (sname['mixamorig:' + m], tname['Bip01 ' + b])
-# выравнивание A-позы к T-позе: поворот направления кости цели к направлению кости источника
-ALIGN = {}
-for m, (si, ti) in mx.items():
-    if m in CHILD:
-        cs, ct = mx[CHILD[m]]
-        ds = SG0[cs][1] - SG0[si][1]; dt = TG0[ct][1] - TG0[ti][1]
-        ALIGN[m] = qbetween(dt, ds)
-    else:
-        ALIGN[m] = np.array([0, 0, 0, 1.0])
-# масштаб смещения таза: по высоте таза
-k = TG0[mx['Hips'][1]][1][1] / SG0[mx['Hips'][0]][1][1]
-print('height k', k)
-# выравнивание идёт от родителя к ребёнку: глобальный поворот ребёнка в T-позе = ALIGN родителей уже учтён,
-# поэтому для каждой кости берём целевую глобальную ориентацию «T-позы» = ALIGN[m] * TG0
-TPOSE = {m: qmul(ALIGN[m], TG0[ti][0]) for m, (si, ti) in mx.items()}
+TG0 = glob(tn, tp, to, TR0, TT0)
+
+def set_source(path):
+    """Подготовка источника анимации (скелет Mixamo из файла): родители, T-поза, выравнивание к A-позе Rocketbox."""
+    global sj, sb, sn, sp, so, sname, SR0, ST0, SG0, mx, ALIGN, k, TPOSE
+    sj, sb = load(path); sn = sj['nodes']; sp = parents(sn); so = order(sn, sp)
+    sname = {n.get('name'): i for i, n in enumerate(sn)}
+    SR0 = {i: lrot(sn[i]) for i in range(len(sn))}; ST0 = {i: ltr(sn[i]) for i in range(len(sn))}
+    SG0 = glob(sn, sp, so, SR0, ST0)
+    mx = {}   # имя Mixamo -> (индекс источника, индекс цели)
+    for b_, m in MAP.items():
+        mx[m] = (sname['mixamorig:' + m], tname['Bip01 ' + b_])
+    ALIGN = {}
+    for m, (si, ti) in mx.items():
+        if m in CHILD:
+            cs, ct = mx[CHILD[m]]
+            ds = SG0[cs][1] - SG0[si][1]; dt = TG0[ct][1] - TG0[ti][1]
+            ALIGN[m] = qbetween(dt, ds)
+        else:
+            ALIGN[m] = np.array([0, 0, 0, 1.0])
+    k = TG0[mx['Hips'][1]][1][1] / SG0[mx['Hips'][0]][1][1]
+    TPOSE = {m: qmul(ALIGN[m], TG0[ti][0]) for m, (si, ti) in mx.items()}
+    print('source', path.split('/')[-1], 'height k', round(k, 3))
 
 def clip_frames_glb(A):
     ch = {}; tmax = 0
@@ -96,14 +98,22 @@ def clip_frames_glb(A):
         if key[1] == 'rotation': return slerp(np.array(vals[i], float), np.array(vals[i + 1], float), f)
         return vals[i] * (1 - f) + vals[i + 1] * f
     n = int(round(tmax * 30)) + 1
+    hk = (sname['mixamorig:Hips'], 'translation')
+    drift = None
+    if INPLACE and hk in ch:
+        vals_h = ch[hk][1]; drift = np.array(vals_h[-1], float) - np.array(vals_h[0], float)
+        n -= 1                      # последний кадр петли = первый + путь: выбрасываем, иначе кадр задвоится
     for fi in range(n):
         t = fi / 30.0
         R = {i: np.array(sample((i, 'rotation'), t, SR0[i]), float) for i in range(len(sn))}
         T = {i: np.array(sample((i, 'translation'), t, ST0[i]), float) for i in range(len(sn))}
+        if drift is not None:
+            T[sname['mixamorig:Hips']] = T[sname['mixamorig:Hips']] - drift * (t / (n / 30.0))   # бег на месте: убираем путь вперёд
         yield R, T
     return
 def clip_len_glb(A):
-    return max(float(acc(sj, sb, A['samplers'][c['sampler']]['input'])[-1, 0]) for c in A['channels'])
+    L = max(float(acc(sj, sb, A['samplers'][c['sampler']]['input'])[-1, 0]) for c in A['channels'])
+    return L - 1 / 30.0 if INPLACE else L
 
 def retarget(frames):
     tracks = {}
@@ -138,13 +148,23 @@ def retarget(frames):
     return tracks
 
 out = {'fps': 30, 'clips': {}}
+INPLACE = False
+set_source(SOL)
 for A in sj['animations']:
-    if A['name'] not in ('Idle', 'Walk', 'Run'):
+    if A['name'] not in ('Idle', 'Walk') and not (A['name'] == 'Run' and not JOG):
         continue
     L = clip_len_glb(A)
     tr = retarget(clip_frames_glb(A))
     out['clips'][A['name']] = {'len': L, 'n': len(tr['mixamorig_Hips_pos']), 'tracks': tr}
     print(A['name'], L, len(tr['mixamorig_Hips_pos']))
+if JOG:
+    set_source(JOG); INPLACE = True
+    A = [x for x in sj['animations'] if x['name'] == 'Run'][0]
+    L = clip_len_glb(A); tr = retarget(clip_frames_glb(A))
+    out['clips']['Run'] = {'len': L, 'n': len(tr['mixamorig_Hips_pos']), 'tracks': tr}
+    print('Run (jog, на месте)', L, len(tr['mixamorig_Hips_pos']))
+    INPLACE = False
+    set_source(SOL)
 # плавание: swim.json — локальные повороты костей Mixamo бойца
 sw = json.load(open(SWIM))
 for cname, c in sw['clips'].items():

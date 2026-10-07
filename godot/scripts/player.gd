@@ -23,7 +23,7 @@ const WALK_ANIM_MPS := 1.37         # клип Walk (2.94 × 1.32/2.83 — со�
 const RUN_ENTER_MPS := 2.0          # м/с: быстрее — бег, медленнее RUN_EXIT — шаг (2.4/2.0 браузерной в наших метрах)
 const RUN_EXIT_MPS := 1.66
 const GAIT_TEMPO := 0.85           # шаги чуть спокойнее «физики» (в браузерной 0.7) — естественнее
-const RUN_ANIM_MPS := 2.94         # скорость шага в клипе Run при speed_scale 1 (замер по стопе)
+const RUN_ANIM_MPS := 2.0           # клип Run (Mixamo Jogging от владельца, на месте): путь таза 1.98 м/с в единицах модели
 
 var world
 var tile := Vector2.ZERO
@@ -341,9 +341,13 @@ func barrel_on_target() -> bool:
 	# ствол реально смотрит туда, куда прицел (с допуском ~11°)
 	return absf(wrapf(aim_yaw - (yaw + aim_local), -PI, PI)) < 0.2
 
+var forced_clip := ""          # отладка (devtest --gait=): принудительный клип, темп 1
 func _play(n: String, speed: float) -> void:
 	if anim == null:
 		return
+	if forced_clip != "" and n in ["Walk", "Run"]:
+		n = forced_clip
+		speed = signf(speed)
 	if n != _cur_anim:
 		anim.play(n, 0.15)
 		_cur_anim = n
