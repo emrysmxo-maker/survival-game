@@ -74,30 +74,32 @@ func _process_modification() -> void:
 			var ci := _bone(pair[2])
 			var ax := skel.get_bone_rest(ci).origin.normalized() if ci >= 0 else Vector3.UP
 			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(ax, tw * pair[1]))
-	# 3) автомат относительно груди и руки к точкам хвата
+	# 3) автомат: приклад в плече (прицел) или у рёбер (наготове), ствол по линии прицела; руки тянутся к рукояти и цевью.
+	#    Приклад привязан к правому плечу — рука согнута в локте, а не вытянута (как у живого стрелка).
 	var to_model := model.global_transform.affine_inverse() * skel.global_transform
-	var chest: Vector3 = to_model * skel.get_bone_global_pose(spine2).origin
-	var side := signf((to_model * skel.get_bone_global_pose(r_arm).origin).x)
+	var rs: Vector3 = to_model * skel.get_bone_global_pose(r_arm).origin        # правое плечо (модельные координаты)
+	var side := signf(rs.x)
 	if side == 0.0:
 		side = 1.0
 	var k: float = player.aim_blend
 	var rc: float = player.recoil
 	var ay: float = player.aim_local
-	var cx := side * (0.05 + 0.04 * k)
-	var cy := -0.21 + 0.31 * k
-	var cz := 0.26 + 0.07 * k - 0.035 * rc
-	var px := cx * cos(ay) + cz * sin(ay)
-	var pz := -cx * sin(ay) + cz * cos(ay)
-	var pitch := 0.42 * (1.0 - k) - 0.03 * rc
 	var yaw := -side * 0.22 * (1.0 - k) + ay
+	var pitch := 0.50 * (1.0 - k) - 0.03 * rc            # наготове ствол вниз ~28°, при прицеле — по горизонту
+	var fwd := Vector3(sin(yaw), 0.0, cos(yaw))
+	var lat := Vector3(cos(yaw), 0.0, -sin(yaw)) * side    # вправо от бойца
+	var butt_ready := rs + fwd * 0.10 - lat * 0.09 + Vector3(0, -0.20, 0)
+	var butt_aim := rs + fwd * 0.01 - lat * 0.05 + Vector3(0, -0.04, 0)
+	var butt := butt_ready.lerp(butt_aim, k) - fwd * (0.03 * rc)
 	var rig: Node3D = player.rifle_rig
-	rig.transform = Transform3D(Basis.from_euler(Vector3(pitch, yaw, 0.0), EULER_ORDER_YXZ), chest + Vector3(px, cy, pz))
+	var bas := Basis.from_euler(Vector3(pitch, yaw, 0.0), EULER_ORDER_YXZ)
+	rig.transform = Transform3D(bas, butt - bas * player.RIFLE_BUTT)
 	var rig_w := model.global_transform * rig.transform
 	var grip: Vector3 = rig_w * player.RIFLE_GRIP
 	var guard: Vector3 = rig_w * player.RIFLE_HANDGUARD
 	var mb := model.global_transform.basis
-	var pole_r: Vector3 = (skel.global_transform * skel.get_bone_global_pose(r_arm).origin) + mb * Vector3(side * 0.5, -1.0, -0.5)
-	var pole_l: Vector3 = (skel.global_transform * skel.get_bone_global_pose(l_arm).origin) + mb * Vector3(-side * 0.5, -1.0, -0.3)
+	var pole_r: Vector3 = (skel.global_transform * skel.get_bone_global_pose(r_arm).origin) + mb * Vector3(side * 0.6, -0.8, -0.5)   # локоть вниз и чуть наружу
+	var pole_l: Vector3 = (skel.global_transform * skel.get_bone_global_pose(l_arm).origin) + mb * Vector3(-side * 0.6, -0.8, -0.2)
 	_ik(skel, r_arm, _bone("RightForeArm"), _bone("RightHand"), grip, pole_r)
 	_ik(skel, l_arm, _bone("LeftForeArm"), _bone("LeftHand"), guard, pole_l)
 

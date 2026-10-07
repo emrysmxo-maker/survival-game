@@ -9,6 +9,12 @@ static func run(m, dt: float) -> void:
 	if m._test_script == "run" and Engine.get_process_frames() % 10 == 0:
 		var an = m.player.anim
 		print("ANIM name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " foot=", snappedf(m.player.foot_offset(), 0.001))
+	if m._test_script == "idle" or m._test_script == "idleaim":
+		# стоит на месте (без стика); idleaim — прицел зажат вправо
+		if m._test_script == "idleaim":
+			m.stick_r.active = true
+			m.stick_r.vec = Vector2(1, 0)
+			m.stick_r.len_px = 60.0
 	if m._test_script == "start":
 		# с места: стик отпущен до 1.5 с, потом полный вперёд; замер расстановки ног (не путаются ли)
 		var pl2 = m.player

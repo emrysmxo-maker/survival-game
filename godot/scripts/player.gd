@@ -62,6 +62,7 @@ var _cur_anim := ""
 var blob: MeshInstance3D
 var _anim_speed := 1.0
 
+const RIFLE_BUTT := Vector3(0, -0.04, -0.33)        # торец приклада (в плечо)
 const RIFLE_GRIP := Vector3(0, -0.10, -0.125)
 const RIFLE_HANDGUARD := Vector3(0, -0.035, 0.15)
 const RIFLE_MUZZLE := Vector3(0, 0.02, 0.37)
