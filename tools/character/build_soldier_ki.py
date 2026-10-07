@@ -118,6 +118,15 @@ for me_ in meshes:
     md = me_.modifiers.new('Armature', 'ARMATURE'); md.object = tgt
     me_.parent = tgt
 bpy.context.view_layer.update()
+# Бёдра у Biped прикреплены к кости Spine (а не к тазу): скрутка позвоночника сдвигала тазобедренные суставы и «вела» ноги.
+# Переподвешиваем бёдра на таз (положение костей не меняется).
+bpy.context.view_layer.objects.active = tgt
+bpy.ops.object.mode_set(mode='EDIT')
+eb = tgt.data.edit_bones
+for S_ in 'LR':
+    eb[f'{PFX}{S_} Thigh'].parent = eb[PFX + 'Pelvis']
+bpy.ops.object.mode_set(mode='OBJECT')
+bpy.context.view_layer.update()
 # проверка: разница направлений
 bad = 0
 for b_, c_, frm, to in DIRS:

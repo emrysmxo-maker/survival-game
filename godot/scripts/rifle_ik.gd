@@ -66,9 +66,9 @@ func _process_modification() -> void:
 		var ta := fposmod(_t, _aim_anim.length)
 		for e in _hand_tracks:
 			skel.set_bone_pose_rotation(e[0], _aim_anim.rotation_track_interpolate(e[1], ta))
-	# 2) скрутка корпуса к цели (часть поворота — тазом, остальное — по позвоночнику)
+	# 2) скрутка корпуса к цели по позвоночнику (бёдра подвешены на таз — не едут)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
-	for pair in [["Hips", 0.22, "Spine"], ["Spine", 0.26, "Spine1"], ["Spine1", 0.26, "Spine2"], ["Spine2", 0.26, "Neck"]]:
+	for pair in [["Spine", 0.3, "Spine1"], ["Spine1", 0.35, "Spine2"], ["Spine2", 0.35, "Neck"]]:   # таз и бёдра не скручиваются — ноги стоят ровно
 		var bi := _bone(pair[0])
 		if bi >= 0:
 			var ci := _bone(pair[2])
