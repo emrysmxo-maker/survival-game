@@ -7,12 +7,14 @@ import bpy, sys, os, math
 from mathutils import Matrix, Quaternion, Vector
 SRC, ANIMS, OUT = sys.argv[-3:]
 MODEL = ANIMS.replace('Animations/Male', 'Models/HumanM_Model.fbx')
-CLIPS = {   # имя клипа -> файл
-    'Idle': 'Idles/HumanM@Idle01', 'MilIdle': 'Idles/HumanM@MilitaryIdle01',
-    'WalkF': 'Movement/Walk/HumanM@Walk01_Forward', 'WalkB': 'Movement/Walk/HumanM@Walk01_Backward',
-    'WalkL': 'Movement/Walk/HumanM@Walk01_Left', 'WalkR': 'Movement/Walk/HumanM@Walk01_Right',
-    'RunF': 'Movement/Run/HumanM@Run01_Forward', 'RunB': 'Movement/Run/HumanM@Run01_Backward',
-    'RunL': 'Movement/Run/HumanM@Run01_Left', 'RunR': 'Movement/Run/HumanM@Run01_Right',
+# Ноги и корпус — живой мокап Rocketbox (тот же скелет: копируется мировой поворот каждой кости);
+# у бега Iglesias таз стоит на одной высоте, ноги «пружинят» — для ходьбы/бега он не годится.
+RB_ANIMS = os.environ.get('RB_ANIMS', '')
+RB_CLIPS = {'Idle': 'm_idle_neutral_01', 'WalkSlow': 'm_walk_slow_01', 'Walk': 'm_walk_neutral_01', 'WalkFast': 'm_walk_fast_01',
+            'RunSlow': 'm_run_slow_01', 'Run': 'm_run_neutral_01', 'RunFast': 'm_run_fast_01'}
+SPEEDS = {}
+CLIPS = {   # Iglesias: поза с автоматом (верх тела), выстрел, перезарядка, военная стойка
+    'MilIdle': 'Idles/HumanM@MilitaryIdle01',
     'AimAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Aim01', 'ShootAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Aim01_Shoot01',
     'ReloadAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Reload01',
 }
@@ -205,8 +207,55 @@ def bake(clip, fn):
     nact.name = clip
     t = tgt.animation_data.nla_tracks.new(); t.name = clip; t.strips.new(clip, f0, nact)
     for o in new: bpy.data.objects.remove(o)
+def bake_rb(clip, fn):
+    before_o = set(bpy.data.objects)
+    bpy.ops.import_scene.fbx(filepath=f'{RB_ANIMS}/{fn}.fbx')
+    new = set(bpy.data.objects) - before_o
+    src = [o for o in new if o.type == 'ARMATURE'][0]
+    act = src.animation_data.action
+    f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+    sc = bpy.context.scene
+    fps = sc.render.fps
+    names = [b.name[len(PFX):] for b in bones_t if b.name in src.pose.bones]
+    order = [b.name[len(PFX):] for b in bones_t if b.name in src.pose.bones]   # data.bones уже от родителя к детям
+    pos = []
+    frames = list(range(f0, f1 + 1))
+    tgt.animation_data_create()
+    nact = bpy.data.actions.new(clip); tgt.animation_data.action = nact
+    for f in frames:
+        sc.frame_set(f)
+        W = {n: RZ @ qof(src.matrix_world @ src.pose.bones[PFX + n].matrix) for n in names}
+        for rb in order:
+            pn = full_parent(rb)
+            Wp = W.get(pn, WR.get(pn)) if pn is not None else None
+            Lrest = (WR[pn].inverted() @ WR[rb]) if pn is not None else WR[rb]
+            Pq = Lrest.inverted() @ ((Wp.inverted() @ W[rb]) if Wp is not None else W[rb])
+            pb = tgt.pose.bones[PFX + rb]
+            pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = Pq
+            pb.keyframe_insert('rotation_quaternion', frame=f)
+        pos.append(RZ @ (src.matrix_world @ src.pose.bones[PFX + 'Pelvis'].head))
+    # на месте: убираем путь вперёд (линейный), скорость клипа = путь / время
+    drift = pos[-1] - pos[0]; drift.z = 0.0
+    T = (frames[-1] - frames[0]) / fps
+    SPEEDS[clip] = round(drift.length / T, 4) if T > 0 else 0.0
+    rest_h = tgt.data.bones[PFX + 'Pelvis'].head_local
+    pbh = tgt.pose.bones[PFX + 'Pelvis']
+    for i, f in enumerate(frames):
+        p = pos[i] - drift * (i / max(1, len(frames) - 1))
+        d = Vector((p.x - pos[0].x, p.y - pos[0].y, p.z)) - Vector((0, 0, rest_h.z))   # высота — как в записи
+        pbh.location = WR['Pelvis'].inverted() @ d
+        pbh.keyframe_insert('location', frame=f)
+    print('RBCLIP', clip, fn, f0, f1, 'speed', SPEEDS[clip])
+    tgt.animation_data.action = None
+    t = tgt.animation_data.nla_tracks.new(); t.name = clip; t.strips.new(clip, f0, nact)
+    for o in new: bpy.data.objects.remove(o)
+if RB_ANIMS:
+    for clip, fn in RB_CLIPS.items():
+        bake_rb(clip, fn)
 for clip, fn in CLIPS.items():
     bake(clip, fn)
+import json
+json.dump(SPEEDS, open(OUT.replace('.glb', '_speeds.json'), 'w'))
 for o in list(newo): bpy.data.objects.remove(o)
 # вернуть позу в покой: экспортёр берёт «узлы» кадра, и остаток позы последнего клипа превращался в «покой» скелета
 for pb in tgt.pose.bones:

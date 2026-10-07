@@ -456,6 +456,8 @@ func _rebuild_sprites() -> void:
 # Закрывает ли крона/куст бойца на экране: точки тела (ноги, пояс, грудь, голова) попадают
 # в эллипс кроны (по высоте модели) на плоскости экрана камеры
 func occluded(pos: Vector3, h: float, cam: Camera3D) -> bool:
+	if _noplants:
+		return false
 	var right := cam.global_transform.basis.x
 	var up := cam.global_transform.basis.y
 	var back := cam.global_transform.basis.z

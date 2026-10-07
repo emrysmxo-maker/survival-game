@@ -3,7 +3,7 @@ extends Node3D
 # столкновения с деревьями/камнями, замедление в воде/болоте/в гору.
 # Позиция бойца хранится в тайлах (tile), как в браузерной версии.
 
-const SPEED := 3.7                 # тайлов/с по каждой оси: до упора ≈ 3.1 м/с — бег клипа RunF (Kevin Iglesias) идёт в своём темпе
+const SPEED := 3.5                 # тайлов/с (×1.41 в screen_to_tiles): до упора ≈ 4.1 м/с — спринт (RunFast), середина — бег
 const ACCEL := 14.0
 const BODY_TURN_RATE := 5.5        # рад/с — поворот тела при стрельбе
 # Стрельба на ходу (стиль «Корпус 90° → пятится» из браузерной версии):
@@ -33,10 +33,9 @@ var swim_t := 0.0                  # фаза гребков (процедурн
 const SWIM_SPEED := 0.5
 const SWIM_DEPTH := 1.0             # м: насколько ноги-точка модели ниже поверхности воды при плавании (подбирается по виду)
 var _running := false
-const WALK_ANIM_MPS := 2.0          # скорость клипа WalkF (Kevin Iglesias), м/с в единицах модели
-const RUN_ANIM_MPS := 4.0           # RunF
-const RUN_ENTER_MPS := 2.3          # м/с: быстрее — бег, медленнее RUN_EXIT — шаг
-const RUN_EXIT_MPS := 1.95
+var _gait := 0
+const GAIT_NAMES := ["WalkSlow", "Walk", "WalkFast", "RunSlow", "Run", "RunFast"]
+var _gait_mps := [0.66, 0.81, 1.2, 1.93, 2.3, 4.67]     # м/с при speed_scale 1 — из survivor_speeds.json (путь таза в записи × масштаб)
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -87,6 +86,13 @@ func _ready() -> void:
 		anim.add_animation_library("", AnimationLibrary.new())
 	_add_json_clips("res://assets/character/survivor_clips.json")
 	loop_all(anim)
+	var sf := FileAccess.open("res://assets/character/survivor_speeds.json", FileAccess.READ)
+	if sf:
+		var sp = JSON.parse_string(sf.get_as_text())
+		if sp is Dictionary:
+			for gi in GAIT_NAMES.size():
+				if sp.has(GAIT_NAMES[gi]) and float(sp[GAIT_NAMES[gi]]) > 0.1:
+					_gait_mps[gi] = float(sp[GAIT_NAMES[gi]]) * CHAR_SCALE
 	_make_rifle()
 	add_xray(model, true)
 	blob = make_blob(0.75)
@@ -310,20 +316,22 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
-		# шаг/бег (Kevin Iglesias, на месте): вперёд или назад — свои клипы; темп = скорость по земле / скорость клипа
+		# походка по скорости (живой мокап Rocketbox): медленный шаг → шаг → быстрый шаг → лёгкий бег → бег;
+		# темп = скорость по земле / скорость клипа (путь таза в записи) — стопа не скользит
 		if backpedal or water_depth > 0.15:
-			_running = false
-		elif _running:
-			_running = mps > RUN_EXIT_MPS
+			_gait = 1                 # пятясь и по воде — обычный шаг
 		else:
-			_running = mps > RUN_ENTER_MPS
-		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
-		var k := clampf(mps / clip_mps, 0.4, 1.35) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее
-		_play(("Run" if _running else "Walk") + ("B" if backpedal else "F"), k)
+			while _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
+				_gait += 1
+			while _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
+				_gait -= 1
+		_running = _gait >= 3
+		var k := clampf(mps / _gait_mps[_gait], 0.55, 1.5) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее
+		_play(GAIT_NAMES[_gait], -k if backpedal else k)
 	else:
 		anim_speed = 0.0
 		_running = false
-		_play("MilIdle", 1.0)
+		_play("Idle", 1.0)
 
 func apply_wet() -> void:
 	if wet_mat == null or absf(wet - _wet_set) < 0.01:
@@ -348,7 +356,7 @@ var forced_clip := ""          # отладка (devtest --gait=): принуд�
 func _play(n: String, speed: float) -> void:
 	if anim == null:
 		return
-	if forced_clip != "" and n in ["WalkF", "WalkB", "RunF", "RunB"]:
+	if forced_clip != "" and n in GAIT_NAMES:
 		n = forced_clip
 		speed = signf(speed)
 	if n != _cur_anim:

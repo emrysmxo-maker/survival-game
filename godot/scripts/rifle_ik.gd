@@ -76,6 +76,7 @@ func _process_modification() -> void:
 	var dt := get_process_delta_time()
 	_t += dt
 	_shot_t += dt
+	var run_k := clampf(float(player.anim_speed) * WorldGen.T / 2.4, 0.0, 1.0)
 	# 1) верх тела — поза с автоматом (дыхание из клипа), выстрел — клип отдачи
 	if _aim_anim != null and _aim_names.size() > 1:
 		var ta := fposmod(_t, _aim_anim.length)
@@ -89,6 +90,8 @@ func _process_modification() -> void:
 					var q2: Quaternion = _shot_anim.rotation_track_interpolate(ts, _shot_t)
 					q = q.slerp(q2, minf(1.0, _shot_t * 40.0) if _shot_t < 0.05 else 1.0)
 			var w: float = e[2]
+			if w < 1.0:
+				w *= lerpf(1.0, 0.55, run_k)          # на бегу корпус больше живёт по записи бега (наклон, качание)
 			skel.set_bone_pose_rotation(e[0], skel.get_bone_pose_rotation(e[0]).slerp(q, w))
 	# 2) скрутка корпуса к цели (часть поворота — тазом, остальное — по позвоночнику)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
@@ -99,6 +102,20 @@ func _process_modification() -> void:
 			var ci := _bone(pair[2])
 			var ax := skel.get_bone_rest(ci).origin.normalized() if ci >= 0 else Vector3.UP
 			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(ax, tw * pair[1]))
+	# 2б) «наготове»: без прицела руки с автоматом опущены (ствол вниз ~35°) — поворот обеих рук вокруг линии плеч
+	var ready: float = 1.0 - clampf(player.aim_blend, 0.0, 1.0)
+	if ready > 0.01:
+		var la := _bone("LeftArm")
+		var ra := _bone("RightArm")
+		var gl := skel.get_bone_global_pose(la)
+		var gr := skel.get_bone_global_pose(ra)
+		var axis := (gl.origin - gr.origin).normalized()
+		var rot := Basis(axis, deg_to_rad(35.0) * ready)
+		for bi in [la, ra]:
+			var g := skel.get_bone_global_pose(bi)
+			g.basis = rot * g.basis
+			var pg := skel.get_bone_global_pose(skel.get_bone_parent(bi))
+			skel.set_bone_pose_rotation(bi, (pg.basis.inverse() * g.basis).get_rotation_quaternion())
 	# 3) автомат по рукам: рукоять — правая кисть, цевьё — левая
 	var to_model := model.global_transform.affine_inverse() * skel.global_transform
 	var rh := skel.find_bone("Bip01_R_Finger2")
