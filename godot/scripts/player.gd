@@ -19,11 +19,6 @@ var AIM_ELEV_K := 0.7297           # sin(угла камеры): по верти
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
-const WALK_ANIM_MPS := 0.85         # клип Walk (Quaternius), шаг по стопе при speed_scale 1 в единицах модели
-const RUN_ENTER_MPS := 2.1          # м/с: быстрее — бег (клип Jog), медленнее RUN_EXIT — шаг (Jog на малой скорости = «прыжки»)
-const RUN_EXIT_MPS := 1.85
-const GAIT_TEMPO := 0.85           # шаги чуть спокойнее «физики» (в браузерной 0.7) — естественнее
-const RUN_ANIM_MPS := 3.0          # скорость шага в клипе Run (Jog) при speed_scale 1 (замер по стопе)
 
 var world
 var tile := Vector2.ZERO
@@ -38,6 +33,10 @@ var swim_t := 0.0                  # фаза гребков (процедурн
 const SWIM_SPEED := 0.5
 const SWIM_DEPTH := 1.0             # м: насколько ноги-точка модели ниже поверхности воды при плавании (подбирается по виду)
 var _running := false
+var _gait := 0
+var forced_gait := ""          # отладка: принудительный клип
+const GAIT_NAMES := ["Walk", "Gait1", "Gait2", "Gait3", "Run"]
+const GAIT_MPS := [0.77, 1.03, 2.19, 3.27, 4.17]   # скорость по земле (м/с) при speed_scale 1: замер скольжения стопы, devtest --test=feet
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -80,6 +79,7 @@ func _ready() -> void:
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
 	loop_all(anim)
+	_add_gait_clips()
 	_add_swim_clips()
 	_make_rifle()
 	add_xray(model, true)
@@ -301,15 +301,17 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
-		if _running:
-			_running = mps > RUN_EXIT_MPS
-		else:
-			_running = mps > RUN_ENTER_MPS
+		# походка подбирается по скорости: Walk → Gait1..3 (смеси Walk и Jog) → Run; темп = скорость / скорость клипа (стопа не скользит)
 		if backpedal or water_depth > 0.15:
-			_running = false          # по воде — шагом
-		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
-		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.8 if _running else 0.6, 1.3 if _running else 1.9) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
-		_play("Run" if _running else "Walk", -k if backpedal else k)
+			_gait = 0                 # по воде и пятясь — шагом
+		else:
+			while _gait < GAIT_MPS.size() - 1 and mps > (GAIT_MPS[_gait] + GAIT_MPS[_gait + 1]) * 0.5 * 1.06:
+				_gait += 1
+			while _gait > 0 and mps < (GAIT_MPS[_gait] + GAIT_MPS[_gait - 1]) * 0.5 * 0.94:
+				_gait -= 1
+		_running = _gait >= 3
+		var k := clampf(mps / GAIT_MPS[_gait], 0.5, 1.5) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
+		_play(GAIT_NAMES[_gait], -k if backpedal else k)
 	else:
 		anim_speed = 0.0
 		_running = false
@@ -337,6 +339,9 @@ func barrel_on_target() -> bool:
 func _play(n: String, speed: float) -> void:
 	if anim == null:
 		return
+	if forced_gait != "" and n in GAIT_NAMES:
+		n = forced_gait
+		speed = signf(speed)
 	if n != _cur_anim:
 		anim.play(n, 0.15)
 		_cur_anim = n
@@ -444,6 +449,45 @@ func _xr_set(n: Node, on: bool) -> void:
 # и замирал в позе полёта. Включаем зацикливание у всех.
 # Клипы плавания Swim_Fwd / Swim_Idle — из Universal Animation Library (Quaternius, CC0),
 # перенесены на скелет Mixamo заранее (tools/models/retarget.py → assets/character/swim.json)
+# Промежуточные походки: смесь Walk и Run (Jog) по фазе шага. У Quaternius шаг Walk слишком короткий,
+# а Jog — длинный (на скорости игры выглядит прыжками), поэтому между ними 3 запечённых клипа.
+const RUN_PHASE := -0.067          # фаза Run при той же стопе впереди, что в Walk (замер)
+func _add_gait_clips() -> void:
+	if anim == null or not anim.has_animation("Walk") or not anim.has_animation("Run"):
+		return
+	var lib := anim.get_animation_library("")
+	var w0: Animation = lib.get_animation("Walk")
+	var r0: Animation = lib.get_animation("Run")
+	for gi in 3:
+		var w := (gi + 1) * 0.25
+		var a := Animation.new()
+		a.length = lerpf(w0.length, r0.length, w)
+		a.loop_mode = Animation.LOOP_LINEAR
+		var n := 30
+		for ti in w0.get_track_count():
+			var path := w0.track_get_path(ti)
+			var tt := w0.track_get_type(ti)
+			if tt != Animation.TYPE_ROTATION_3D and tt != Animation.TYPE_POSITION_3D:
+				continue
+			var tj := r0.find_track(path, tt)
+			if tj < 0:
+				continue
+			var no := a.add_track(tt)
+			a.track_set_path(no, path)
+			for i in n:
+				var ph := float(i) / n
+				var tw := ph * w0.length
+				var tr := fposmod((ph + RUN_PHASE) * r0.length, r0.length)
+				if tt == Animation.TYPE_ROTATION_3D:
+					var qw: Quaternion = w0.rotation_track_interpolate(ti, tw)
+					var qr: Quaternion = r0.rotation_track_interpolate(tj, tr)
+					a.rotation_track_insert_key(no, ph * a.length, qw.slerp(qr, w))
+				else:
+					var pw: Vector3 = w0.position_track_interpolate(ti, tw)
+					var pr: Vector3 = r0.position_track_interpolate(tj, tr)
+					a.position_track_insert_key(no, ph * a.length, pw.lerp(pr, w))
+		lib.add_animation("Gait%d" % (gi + 1), a)
+
 func _add_swim_clips() -> void:
 	if anim == null or skel == null or anim.has_animation("Swim_Fwd"):
 		return
