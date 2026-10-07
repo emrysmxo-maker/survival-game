@@ -1,5 +1,5 @@
 # Собирает бойца из CC0-пакетов Quaternius (Universal Base Characters + Universal Animation Library):
-# тело Superhero_Male + одежда/жилет/шлем (по зонам весов) + клипы Idle/Walk/Run/Sprint/Swim_*.
+# тело Superhero_Male + гражданская одежда (куртка, джинсы, кроссовки — по зонам весов) + причёска и борода + клипы Idle/Walk/Run/Sprint/Swim_*.
 # Запуск: /tmp/claude-0/blender/v/bin/python -I build_soldier.py <папка_с_пакетами> <выход.glb>
 import bpy, sys, math, bmesh
 from mathutils import Vector
@@ -22,9 +22,8 @@ def mk(name, col, rough=0.9):
     b.inputs['Roughness'].default_value = rough
     b.inputs['Metallic'].default_value = 0.0
     return m
-M = {'jacket': mk('Jacket', (0.16, 0.20, 0.10, 1)), 'pants': mk('Pants', (0.14, 0.16, 0.09, 1)),
-     'boots': mk('Boots', (0.05, 0.04, 0.03, 1)), 'gloves': mk('Gloves', (0.06, 0.06, 0.05, 1)),
-     'vest': mk('Vest', (0.11, 0.12, 0.08, 1)), 'helmet': mk('Helmet', (0.13, 0.17, 0.09, 1), 0.7)}
+M = {'jacket': mk('Jacket', (0.20, 0.15, 0.10, 1)), 'pants': mk('Jeans', (0.07, 0.10, 0.17, 1)),
+     'boots': mk('Sneakers', (0.32, 0.31, 0.29, 1)), 'shirt': mk('Shirt', (0.30, 0.31, 0.28, 1))}
 base_n = len(body.data.materials)
 for k in M:
     body.data.materials.append(M[k])
@@ -34,13 +33,15 @@ vg = {g.index: g.name for g in body.vertex_groups}
 def zone(gname):
     g = gname.lower()
     if any(s in g for s in ('index_', 'middle_', 'ring_', 'pinky_', 'thumb_', 'hand')):
-        return 'gloves'
+        return None                     # руки голые
     if any(s in g for s in ('foot', 'ball')):
         return 'boots'
     if any(s in g for s in ('thigh', 'calf', 'pelvis')):
         return 'pants'
     if any(s in g for s in ('spine', 'clavicle', 'upperarm', 'lowerarm')):
         return 'jacket'
+    if 'neck' in g:
+        return None
     return None
 me = body.data
 def poly_group(p):
@@ -55,9 +56,9 @@ for p in me.polygons:
     z = zone(gname)
     pz.append((z, gname))
     if z:
-        p.material_index = idx[z]
+        p.material_index = idx[z if z != 'jacket' else 'shirt']
 
-# жилет и «рукава-нашивки»: раздутая копия торса
+# одежда — раздутые копии зон тела (не облегает как трико): куртка поверх футболки, джинсы
 def shell(name, pred, off, mat):
     o = body.copy(); o.data = body.data.copy(); o.name = name
     bpy.context.collection.objects.link(o)
@@ -72,29 +73,28 @@ def shell(name, pred, off, mat):
     for p in o.data.polygons:
         p.material_index = 0
     return o
-shell('Vest', lambda t: t[1].startswith('spine_0') and t[0] == 'jacket', 0.018, M['vest'])
-shell('Hips', lambda t: t[1] == 'pelvis', 0.012, M['pants'])
+shell('Jacket', lambda t: t[0] == 'jacket' and not t[1].startswith('spine_03_front'), 0.016, M['jacket'])
+shell('Jeans', lambda t: t[0] == 'pants', 0.010, M['pants'])
+shell('Sneakers', lambda t: t[0] == 'boots', 0.008, M['boots'])
 
-# шлем: сплюснутая сфера, вес 100% на кость Head
-hb = ca.data.bones['Head']
-hc = ca.matrix_world @ ((hb.head_local + hb.tail_local) / 2)
-bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=20, ring_count=12, location=(hc.x, hc.y + 0.01, hc.z + 0.055))
-h = bpy.context.object; h.name = 'Helmet'
-h.scale = (0.112, 0.125, 0.105)
-bpy.ops.object.transform_apply(scale=True)
-bm = bmesh.new(); bm.from_mesh(h.data)
-for v in list(bm.verts):
-    if v.co.z < hc.z - 0.02:      # нижняя часть срезана — лицо открыто
-        v.co.z = hc.z - 0.02 + (v.co.z - (hc.z - 0.02)) * 0.0
-bm.to_mesh(h.data); bm.free()
-h.data.materials.append(M['helmet'])
-g = h.vertex_groups.new(name='Head')
-g.add(list(range(len(h.data.vertices))), 1.0, 'REPLACE')
-h.parent = body.parent
-mod = h.modifiers.new('Armature', 'ARMATURE'); mod.object = ca
-for o in bpy.data.objects:
-    if o.type == 'MESH' and o.parent != ca and o.parent is not None and o.parent.type == 'ARMATURE':
-        pass
+# причёска и борода (CC0, привязаны к кости Head) — переносим на наш скелет
+HD = f'{SRC}/ubc/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)'
+for hn in ('Hair_SimpleParted', 'Hair_Beard'):
+    before_h = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=f'{HD}/{hn}.gltf')
+    new = list(set(bpy.data.objects) - before_h)
+    for o in new:
+        if o.type == 'MESH':
+            mw = o.matrix_world.copy()
+            o.parent = ca; o.matrix_world = mw
+            for md in o.modifiers:
+                if md.type == 'ARMATURE':
+                    md.object = ca
+            if not any(md.type == 'ARMATURE' for md in o.modifiers):
+                md = o.modifiers.new('Armature', 'ARMATURE'); md.object = ca
+    for o in new:
+        if o.type != 'MESH':
+            bpy.data.objects.remove(o)
 
 # клипы
 want = {'Idle_Loop': 'Idle', 'Walk_Loop': 'Walk', 'Jog_Fwd_Loop': 'Run', 'Sprint_Loop': 'Sprint', 'Walk_Formal_Loop': 'WalkF',
@@ -106,6 +106,6 @@ for a in bpy.data.actions:
         t = ca.animation_data.nla_tracks.new(); t.name = want[short]
         t.strips.new(want[short], int(a.frame_range[0]), a)
 ca.animation_data.action = None
-print('POSE', ca.data.bones['pelvis'].head_local, 'HELM', hc)
+print('POSE', ca.data.bones['pelvis'].head_local)
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', export_animation_mode='NLA_TRACKS',
                           export_apply=False, export_image_format='JPEG', export_jpeg_quality=80)

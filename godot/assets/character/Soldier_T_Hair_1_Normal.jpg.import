@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bv812e1afvu6p"
-path.s3tc="res://.godot/imported/Soldier_T_Superhero_Male_Dark.jpg-e4cf149dfe0841e132cf5d73c2b2512b.s3tc.ctex"
-path.etc2="res://.godot/imported/Soldier_T_Superhero_Male_Dark.jpg-e4cf149dfe0841e132cf5d73c2b2512b.etc2.ctex"
+uid="uid://bg5yau2pl4krc"
+path.s3tc="res://.godot/imported/Soldier_T_Hair_1_Normal.jpg-4525272c418c6cfcd1d6f032b3bb201e.s3tc.ctex"
+path.etc2="res://.godot/imported/Soldier_T_Hair_1_Normal.jpg-4525272c418c6cfcd1d6f032b3bb201e.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "9ba0fa36191be35c81e989dad3beb519"
+"md5": "b44931a0a0af989e36b9b89db62a0afb"
 }
 
 [deps]
 
-source_file="res://assets/character/Soldier_T_Superhero_Male_Dark.jpg"
-dest_files=["res://.godot/imported/Soldier_T_Superhero_Male_Dark.jpg-e4cf149dfe0841e132cf5d73c2b2512b.s3tc.ctex", "res://.godot/imported/Soldier_T_Superhero_Male_Dark.jpg-e4cf149dfe0841e132cf5d73c2b2512b.etc2.ctex"]
+source_file="res://assets/character/Soldier_T_Hair_1_Normal.jpg"
+dest_files=["res://.godot/imported/Soldier_T_Hair_1_Normal.jpg-4525272c418c6cfcd1d6f032b3bb201e.s3tc.ctex", "res://.godot/imported/Soldier_T_Hair_1_Normal.jpg-4525272c418c6cfcd1d6f032b3bb201e.etc2.ctex"]
 
 [params]
 
