@@ -1,24 +1,35 @@
 extends SkeletonModifier3D
-# Автомат в руках: автомат ставится относительно груди (поза «наготове» / «к плечу», отдача), обе руки тянутся
-# к точкам хвата (рукоять, цевьё — двухзвенный IK), кисти и пальцы берутся из записи «AssaultRifle_Aim01»
-# (Kevin Iglesias) — хват настоящий. Скрутка корпуса к цели — поверх ходьбы/бега. Работает после анимации.
-# Точки хвата оружия — константы RIFLE_* в player.gd (для другого оружия — свои).
+# Автомат в руках. Автомат — часть модели: меш со скином на правой кисти, положение в кисти взято из .blend
+# набора Kevin Iglesias (запись AssaultRifle_Aim01) — приклад в плече, левая кисть на цевье, пальцы на рукояти.
+# Работает после анимации ног:
+#  1) верх тела (руки, кисти, пальцы, шея, голова и большая часть позвоночника) — поза прицела из записи (с дыханием);
+#  2) позвоночник доворачивается так, чтобы ствол смотрел точно на цель (по горизонту и по высоте);
+#  3) не целится — «низкая готовность»: обе руки вместе с автоматом поворачиваются вокруг правого плеча (ствол вниз
+#     и поперёк тела), левая кисть остаётся на цевье (двухзвенный IK); при выстреле — короткая отдача;
+#  4) голова к прикладу (щека к автомату), пока целится.
+# Плывёт — автомат спрятан.
 
 var player
 
 var _b := {}
-var _hand_tracks: Array = []        # [индекс кости, трек] кисти и пальцев из записи прицела
-var _aim_anim: Animation
+var _aim: Animation
+var _tracks: Array = []        # [кость, трек, доля записи]
 var _t := 0.0
 var _ready_done := false
-# Калибровка хвата по записи прицела Iglesias: как кисть повёрнута относительно оси оружия (REL_*)
-# и где от запястья лежит середина ладони, обхватывающая рукоять/цевьё (V*, в осях кисти).
-var _nocal := not OS.get_cmdline_user_args().has("--cal")      # калибровка кистей по записи прицела — экспериментальная (опускала руки), по умолчанию выключена
-var _cal_state := 0            # 0 — нужна калибровка, 1 — готово
-var _rel_r := Basis()
-var _rel_l := Basis()
-var _v_r := Vector3.ZERO
-var _v_l := Vector3.ZERO
+var _mz_l := Vector3.ZERO      # дуло / приклад в осях правой кисти (покой)
+var _bt_l := Vector3.ZERO
+var _ok := false
+
+const SPINE_W := 0.75           # позвоночник: доля позы прицела (остальное — от ходьбы, живое покачивание)
+const READY_PITCH := 0.55       # наготове ствол вниз ~31° (вокруг приклада)
+const READY_YAW := 0.42         # и поперёк тела влево ~24°
+const AIM_PITCH := -0.03        # при прицеле — чуть ниже горизонта (цели на земле)
+# где торец приклада относительно правого плечевого сустава (метры модели): [внутрь к груди, вверх, вперёд]
+const BUTT_AIM := Vector3(0.06, 0.0, 0.10)      # в прицеле — в «карман» плеча, на уровне ключицы
+const BUTT_READY := Vector3(0.05, -0.12, 0.13)  # наготове — чуть ниже и впереди
+const EYE_BACK := 0.10          # глаз над прикладом: от торца вперёд по стволу
+const EYE_UP := 0.075           # и над осью ствола (линия прицела)
+const HEAD_MAX := 0.75          # предел наклона шеи+головы (рад)
 
 func _bone(n: String) -> int:
 	if not _b.has(n):
@@ -28,149 +39,160 @@ func _bone(n: String) -> int:
 func _setup(skel: Skeleton3D) -> void:
 	_ready_done = true
 	var anim: AnimationPlayer = player.anim
-	if anim == null or not anim.has_animation("AimAR"):
+	if anim == null or not anim.has_animation("AimAR") or player.rifle_pts.is_empty():
 		return
-	_aim_anim = anim.get_animation("AimAR")
-	for ti in _aim_anim.get_track_count():
-		if _aim_anim.track_get_type(ti) != Animation.TYPE_ROTATION_3D:
+	_aim = anim.get_animation("AimAR")
+	var spine := ["mixamorig_Spine", "mixamorig_Spine1", "mixamorig_Spine2"]
+	for ti in _aim.get_track_count():
+		if _aim.track_get_type(ti) != Animation.TYPE_ROTATION_3D:
 			continue
-		var nm := str(_aim_anim.track_get_path(ti)).get_slice(":", 1)
-		if nm == "mixamorig_LeftHand" or nm == "mixamorig_RightHand" or (nm.begins_with("Bip01 ") and nm.contains("Finger")):
-			var bi := skel.find_bone(nm)
-			if bi >= 0:
-				_hand_tracks.append([bi, ti])
+		var nm := str(_aim.track_get_path(ti)).get_slice(":", 1)
+		var w := -1.0
+		if nm in spine:
+			w = SPINE_W
+		elif nm in ["mixamorig_Neck", "mixamorig_Head"] or nm.contains("Shoulder") or nm.contains("Arm") or nm.contains("Hand") or nm.contains("Finger"):
+			w = 1.0
+		var bi := skel.find_bone(nm)
+		if w > 0.0 and bi >= 0:
+			_tracks.append([bi, ti, w])
+	var rh := _bone("RightHand")
+	if rh < 0:
+		return
+	# точки автомата: покой в координатах файла модели → оси скелета → оси правой кисти
+	var to_skel: Transform3D = skel.global_transform.affine_inverse() * player.glb.global_transform
+	var inv := skel.get_bone_global_rest(rh).affine_inverse()
+	_mz_l = inv * (to_skel * (player.rifle_pts["muzzle"] as Vector3))
+	_bt_l = inv * (to_skel * (player.rifle_pts["butt"] as Vector3))
+	_ok = true
 
 func fire() -> void:
 	pass
 
-# Ставим на скелет позу прицела (все кости из записи) и снимаем положение кистей относительно линии «правая — левая кисть»
-func _calibrate(skel: Skeleton3D) -> void:
-	_cal_state = 1
-	if _aim_anim == null:
-		return
-	for ti in _aim_anim.get_track_count():
-		var nm := str(_aim_anim.track_get_path(ti)).get_slice(":", 1)
-		var bi := skel.find_bone(nm)
-		if bi < 0:
-			continue
-		if _aim_anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D:
-			skel.set_bone_pose_rotation(bi, _aim_anim.rotation_track_interpolate(ti, 0.0))
-		elif _aim_anim.track_get_type(ti) == Animation.TYPE_POSITION_3D:
-			skel.set_bone_pose_position(bi, _aim_anim.position_track_interpolate(ti, 0.0))
-	var rh := _bone("RightHand")
-	var lh := _bone("LeftHand")
-	var rf := skel.find_bone("Bip01 R Finger2")
-	var lf := skel.find_bone("Bip01 L Finger2")
-	if rh < 0 or lh < 0 or rf < 0 or lf < 0:
-		return
-	var gr := skel.get_bone_global_pose(rh)
-	var gl := skel.get_bone_global_pose(lh)
-	var fr := skel.get_bone_global_pose(rf).origin
-	var fl := skel.get_bone_global_pose(lf).origin
-	var f := (fl - fr).normalized()
-	var y := (Vector3.UP - f * Vector3.UP.dot(f)).normalized()
-	var ref := Basis(y.cross(f).normalized(), y, f)
-	_rel_r = ref.inverse() * gr.basis.orthonormalized()
-	_rel_l = ref.inverse() * gl.basis.orthonormalized()
-	_v_r = gr.basis.orthonormalized().inverse() * (fr - gr.origin)
-	_v_l = gl.basis.orthonormalized().inverse() * (fl - gl.origin)
-	print("RIFLE_CAL hands ", (fl - fr).length(), " vR ", _v_r, " vL ", _v_l)
-
 func _process_modification() -> void:
 	var skel := get_skeleton()
-	if player == null or skel == null or player.rifle_rig == null:
+	if player == null or skel == null:
 		return
 	if not _ready_done:
 		_setup(skel)
-	var spine2 := _bone("Spine2")
+	if not _ok:
+		return
+	var rh := _bone("RightHand")
 	var r_arm := _bone("RightArm")
 	var l_arm := _bone("LeftArm")
-	if spine2 < 0 or r_arm < 0 or l_arm < 0:
-		return
-	var model: Node3D = player.model
+	var lh := _bone("LeftHand")
+	if player.rifle_mesh:
+		player.rifle_mesh.visible = not player.swimming
 	if player.swimming:
-		# плывёт: автомат на ремне за спиной (наискосок вдоль позвоночника), положение — по костям
-		var tm := model.global_transform.affine_inverse() * skel.global_transform
-		var ch: Vector3 = tm * skel.get_bone_global_pose(spine2).origin
-		var head := _bone("Head")
-		var up: Vector3 = ((tm * skel.get_bone_global_pose(head).origin) - ch).normalized() if head >= 0 else Vector3.UP
-		var right: Vector3 = ((tm * skel.get_bone_global_pose(r_arm).origin) - (tm * skel.get_bone_global_pose(l_arm).origin)).normalized()
-		var fwd := up.cross(right).normalized()
-		var z := (up * 0.92 + right * 0.3).normalized()
-		var y := (-fwd - z * (-fwd).dot(z)).normalized()
-		var x := y.cross(z).normalized()
-		player.rifle_rig.transform = Transform3D(Basis(x, y, z), ch - fwd * 0.17 - up * 0.1)
 		return
-	if _cal_state == 0 and _aim_anim != null and not _nocal:
-		_calibrate(skel)
-		return                                   # поза этого кадра испорчена калибровкой — следующий кадр анимация перезапишет
 	_t += get_process_delta_time()
-	# 1) хват: кисти и пальцы — из записи прицела (дыхание заодно)
-	if _aim_anim != null:
-		var ta := fposmod(_t, _aim_anim.length)
-		for e in _hand_tracks:
-			skel.set_bone_pose_rotation(e[0], _aim_anim.rotation_track_interpolate(e[1], ta))
-	# 2) скрутка корпуса к цели по позвоночнику (бёдра подвешены на таз — не едут)
-	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
-	for pair in [["Spine", 0.3, "Spine1"], ["Spine1", 0.35, "Spine2"], ["Spine2", 0.35, "Neck"]]:   # таз и бёдра не скручиваются — ноги стоят ровно
-		var bi := _bone(pair[0])
+	# 1) поза прицела из записи
+	var ta := fposmod(_t, _aim.length)
+	for e in _tracks:
+		var q: Quaternion = _aim.rotation_track_interpolate(e[1], ta)
+		if e[2] < 1.0:
+			q = skel.get_bone_pose_rotation(e[0]).slerp(q, e[2])
+		skel.set_bone_pose_rotation(e[0], q)
+	var model: Node3D = player.model
+	var m2s: Basis = skel.global_transform.basis.orthonormalized().inverse() * model.global_transform.basis.orthonormalized()
+	var s2m: Basis = m2s.inverse()
+	var up_s: Vector3 = (m2s * Vector3.UP).normalized()
+	# 2) позвоночник: ствол на цель. Направление ствола — в осях модели (+Z — лицо бойца)
+	var d := _barrel_m(skel, rh, s2m)
+	var want_yaw: float = player.aim_local
+	var err_yaw := wrapf(want_yaw - atan2(d.x, d.z), -PI, PI)
+	for pr in [["Spine", 0.3], ["Spine1", 0.35], ["Spine2", 0.35]]:
+		var bi := _bone(pr[0])
 		if bi >= 0:
-			var ci := _bone(pair[2])
-			var ax := skel.get_bone_rest(ci).origin.normalized() if ci >= 0 else Vector3.UP
-			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(ax, tw * pair[1]))
-	# 3) автомат: приклад в плече (прицел) или у рёбер (наготове), ствол по линии прицела; руки тянутся к рукояти и цевью.
-	#    Приклад привязан к правому плечу — рука согнута в локте, а не вытянута (как у живого стрелка).
-	var to_model := model.global_transform.affine_inverse() * skel.global_transform
-	var rs: Vector3 = to_model * skel.get_bone_global_pose(r_arm).origin        # правое плечо (модельные координаты)
-	var side := signf(rs.x)
+			var g := skel.get_bone_global_pose(bi)
+			g.basis = Basis(up_s, err_yaw * pr[1]) * g.basis
+			skel.set_bone_global_pose(bi, g)
+	d = _barrel_m(skel, rh, s2m)
+	var dh := Vector3(d.x, 0.0, d.z).normalized()
+	var lat_m := dh.cross(Vector3.UP).normalized()          # поворот вокруг этой оси на «+» поднимает дуло
+	var err_p := clampf(AIM_PITCH - asin(clampf(d.y, -1.0, 1.0)), -0.45, 0.45)
+	for pr in [["Spine1", 0.5], ["Spine2", 0.5]]:
+		var bi := _bone(pr[0])
+		if bi >= 0:
+			var g := skel.get_bone_global_pose(bi)
+			g.basis = Basis((m2s * lat_m).normalized(), err_p * pr[1]) * g.basis
+			skel.set_bone_global_pose(bi, g)
+	# 3) автомат как целое: приклад — к плечу (по высоте), наготове ствол вниз и поперёк тела (поворот вокруг приклада),
+	#    отдача — толчок назад и вверх. Обе кисти едут вместе с автоматом (двухзвенный IK, локти — как в записи).
+	var k: float = player.aim_blend
+	var m := 1.0 - k
+	var side := signf((s2m * (skel.get_bone_global_pose(r_arm).origin - skel.get_bone_global_pose(l_arm).origin)).x)
 	if side == 0.0:
 		side = 1.0
-	var k: float = player.aim_blend
 	var rc: float = player.recoil
-	var ay: float = player.aim_local
-	var yaw := -side * 0.22 * (1.0 - k) + ay
-	var pitch := 0.50 * (1.0 - k) - 0.03 * rc            # наготове ствол вниз ~28°, при прицеле — по горизонту
-	var fwd := Vector3(sin(yaw), 0.0, cos(yaw))
-	var lat := Vector3(cos(yaw), 0.0, -sin(yaw)) * side    # вправо от бойца
-	var butt_ready := rs + fwd * 0.10 - lat * 0.09 + Vector3(0, -0.20, 0)
-	var butt_aim := rs + fwd * 0.01 - lat * 0.05 + Vector3(0, -0.04, 0)
-	var butt := butt_ready.lerp(butt_aim, k) - fwd * (0.03 * rc)
-	var rig: Node3D = player.rifle_rig
-	var bas := Basis.from_euler(Vector3(pitch, yaw, 0.0), EULER_ORDER_YXZ)
-	rig.transform = Transform3D(bas, butt - bas * player.RIFLE_BUTT)
-	var rig_w := model.global_transform * rig.transform
-	var grip: Vector3 = rig_w * player.RIFLE_GRIP
-	var guard: Vector3 = rig_w * player.RIFLE_HANDGUARD
-	# базис оружия в осях скелета и желаемые повороты кистей (как у записи прицела относительно оружия)
-	var sk_b := skel.global_transform.basis.orthonormalized()
-	var rig_b := sk_b.inverse() * (model.global_transform.basis * rig.transform.basis).orthonormalized()
-	var hb_r := rig_b * _rel_r
-	var hb_l := rig_b * _rel_l
-	# запястье ставим так, чтобы середина ладони (а не запястье) легла на рукоять/цевьё
-	if not _nocal:
-		grip = grip - skel.global_transform.basis * (hb_r * _v_r)
-		guard = guard - skel.global_transform.basis * (hb_l * _v_l)
-	var mb := model.global_transform.basis
-	var pole_r: Vector3 = (skel.global_transform * skel.get_bone_global_pose(r_arm).origin) + mb * Vector3(side * 0.6, -0.8, -0.5)   # локоть вниз и чуть наружу
-	var pole_l: Vector3 = (skel.global_transform * skel.get_bone_global_pose(l_arm).origin) + mb * Vector3(-side * 0.6, -0.8, -0.2)
-	_ik(skel, r_arm, _bone("RightForeArm"), _bone("RightHand"), grip, pole_r)
-	_ik(skel, l_arm, _bone("LeftForeArm"), _bone("LeftHand"), guard, pole_l)
-	# кисти — по оси оружия, пальцы (из записи) обхватывают рукоять и цевьё
-	for pair in ([] if _nocal else [[_bone("RightHand"), hb_r], [_bone("LeftHand"), hb_l]]):
-		var hi: int = pair[0]
-		if hi < 0:
-			continue
-		var g := skel.get_bone_global_pose(hi)
-		g.basis = pair[1]
-		var pg := skel.get_bone_global_pose(skel.get_bone_parent(hi))
-		skel.set_bone_pose_rotation(hi, (pg.basis.orthonormalized().inverse() * (pair[1] as Basis)).get_rotation_quaternion())
+	var rh0 := skel.get_bone_global_pose(rh)
+	var lh0 := skel.get_bone_global_pose(lh)
+	var butt_s := rh0 * _bt_l
+	var sh_m: Vector3 = s2m * skel.get_bone_global_pose(r_arm).origin
+	var lsh_m: Vector3 = s2m * skel.get_bone_global_pose(l_arm).origin
+	var bt_m: Vector3 = s2m * butt_s
+	var inw := lsh_m - sh_m
+	inw = (inw - dh * inw.dot(dh)); inw.y = 0.0; inw = inw.normalized()
+	var bw: Vector3 = BUTT_READY.lerp(BUTT_AIM, k)
+	var want_bt: Vector3 = sh_m + inw * bw.x + Vector3.UP * bw.y + dh * bw.z
+	var dmov := (want_bt - bt_m).limit_length(0.35)
+	var rot_m := Basis(Vector3.UP, -side * READY_YAW * m) * Basis(lat_m, -READY_PITCH * m + 0.04 * rc)
+	var rot_s: Basis = m2s * rot_m * s2m
+	var off_s: Vector3 = m2s * (dmov - dh * (0.03 * rc))
+	var re0 := skel.get_bone_global_pose(_bone("RightForeArm")).origin
+	var le0 := skel.get_bone_global_pose(_bone("LeftForeArm")).origin
+	var xf := func(p: Vector3) -> Vector3: return butt_s + rot_s * (p - butt_s) + off_s
+	for ch in [[r_arm, _bone("RightForeArm"), rh, rh0.origin, re0], [l_arm, _bone("LeftForeArm"), lh, lh0.origin, le0]]:
+		var tgt: Vector3 = xf.call(ch[3])
+		var el: Vector3 = xf.call(ch[4])
+		var mid: Vector3 = (skel.get_bone_global_pose(ch[0]).origin + tgt) * 0.5
+		_ik(skel, ch[0], ch[1], ch[2], tgt, el + (el - mid))          # локоть — в той же стороне, что в записи
+	for pr in [[rh, rh0], [lh, lh0]]:
+		var pg := skel.get_bone_global_pose(skel.get_bone_parent(pr[0]))
+		var hb: Basis = rot_s * (pr[1] as Transform3D).basis
+		skel.set_bone_pose_rotation(pr[0], (pg.basis.orthonormalized().inverse() * hb.orthonormalized()).get_rotation_quaternion())
+	if OS.get_cmdline_user_args().has("--rifledbg") and Engine.get_process_frames() % 20 == 0:
+		var pr := func(v: Vector3) -> String: return str((s2m * v).snappedf(0.01))
+		print("RDBG k=", snappedf(k, 0.01), " dmov=", dmov.snappedf(0.01), " rh0=", pr.call(rh0.origin), " rh=", pr.call(skel.get_bone_global_pose(rh).origin), " rhT=", pr.call(xf.call(rh0.origin)), " lh0=", pr.call(lh0.origin), " lh=", pr.call(skel.get_bone_global_pose(lh).origin), " lhT=", pr.call(xf.call(lh0.origin)), " butt=", pr.call(butt_s), " sh=", pr.call(skel.get_bone_global_pose(r_arm).origin), " lsh=", pr.call(skel.get_bone_global_pose(l_arm).origin))
+	# 4) голова к прикладу: шея и голова наклоняются так, чтобы правый глаз лёг на линию прицела над прикладом
+	var head := _bone("Head")
+	var neck := _bone("Neck")
+	var eye := skel.find_bone("Bip01 REye")
+	if head >= 0 and neck >= 0 and eye >= 0 and k > 0.001:
+		var hp0 := skel.get_bone_global_pose(rh)
+		var bt1: Vector3 = hp0 * _bt_l
+		var z1: Vector3 = ((hp0 * _mz_l) - bt1).normalized()
+		var e_want: Vector3 = bt1 + z1 * EYE_BACK + up_s * EYE_UP
+		for pr in [[neck, 0.5], [head, 1.0]]:
+			var g := skel.get_bone_global_pose(pr[0])
+			var a := skel.get_bone_global_pose(eye).origin - g.origin
+			var b := e_want - g.origin
+			var q := Quaternion(a.normalized(), b.normalized())
+			var ang := minf(q.get_angle(), HEAD_MAX * 0.5) * k * float(pr[1])
+			if ang > 1e-4:
+				g.basis = Basis(q.get_axis().normalized(), ang) * g.basis
+				skel.set_bone_global_pose(pr[0], g)
+		if OS.get_cmdline_user_args().has("--rifledbg") and Engine.get_process_frames() % 20 == 0:
+			print("EYE want=", (s2m * e_want).snappedf(0.01), " got=", (s2m * skel.get_bone_global_pose(eye).origin).snappedf(0.01))
+	# опора автомата для выстрела: начало — приклад, +Z — по стволу (в осях модели)
+	var hp := skel.get_bone_global_pose(rh)
+	var to_m: Transform3D = model.global_transform.affine_inverse() * skel.global_transform
+	var bt: Vector3 = to_m * (hp * _bt_l)
+	var mz: Vector3 = to_m * (hp * _mz_l)
+	var z := (mz - bt).normalized()
+	var y := (Vector3.UP - z * z.y).normalized()
+	player.rifle_rig.transform = Transform3D(Basis(y.cross(z), y, z), bt)
+	player.rifle_len = bt.distance_to(mz)
+	if player.muzzle_flash:
+		player.muzzle_flash.position = Vector3(0, 0, player.rifle_len)
 
-func _ik(skel: Skeleton3D, up: int, lo: int, hand: int, target_w: Vector3, pole_w: Vector3) -> void:
+func _barrel_m(skel: Skeleton3D, rh: int, s2m: Basis) -> Vector3:
+	var hp := skel.get_bone_global_pose(rh)
+	return (s2m * ((hp * _mz_l) - (hp * _bt_l))).normalized()
+
+func _ik(skel: Skeleton3D, up: int, lo: int, hand: int, tgt: Vector3, pole: Vector3) -> void:
+	# двухзвенный IK в осях скелета
 	if lo < 0 or hand < 0:
 		return
-	var inv := skel.global_transform.affine_inverse()
-	var tgt := inv * target_w
-	var pole := inv * pole_w
 	var gu := skel.get_bone_global_pose(up)
 	var gl := skel.get_bone_global_pose(lo)
 	var gh := skel.get_bone_global_pose(hand)
@@ -201,4 +223,3 @@ func _ik(skel: Skeleton3D, up: int, lo: int, hand: int, target_w: Vector3, pole_
 	var q2 := Quaternion((gh.origin - gl.origin).normalized(), (want - gl.origin).normalized())
 	gl.basis = Basis(q2) * gl.basis
 	skel.set_bone_global_pose(lo, gl)
-

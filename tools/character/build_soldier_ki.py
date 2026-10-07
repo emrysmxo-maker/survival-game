@@ -267,6 +267,48 @@ if RB_ANIMS:
         bake_rb(clip, fn)
 for clip, fn in CLIPS.items():
     bake(clip, fn)
+
+# ---------- автомат в правой руке (как в записи Iglesias: модель Human_AssaultRifle на кости B-handProp.R) ----------
+# Смещение «кисть → автомат» берётся из записи прицела и переносится на кисть Rocketbox с учётом разницы осей костей;
+# автомат подвешивается к кости кисти (в Godot — BoneAttachment3D), поэтому всегда лежит в руке.
+def attach_rifle():
+    # Автомат и его место в кисти — прямо из .blend набора Iglesias (запись AssaultRifle_Aim01, кадр 0):
+    # extract_rifle_hold.py пишет матрицу автомата в осях кости B-hand.R; оси кисти записи → оси кисти Rocketbox через покой.
+    import json
+    hold = json.load(open(os.environ['RIFLE_HOLD']))
+    with bpy.data.libraries.load(os.environ['KI_BLEND']) as (src_d, dst_d):
+        dst_d.meshes = [hold['mesh']]
+    me = dst_d.meshes[0]
+    rifle = bpy.data.objects.new('Rifle', me); bpy.context.scene.collection.objects.link(rifle)
+    # материал: палитра Iglesias (UV уже указывают на нужные цвета)
+    mat = bpy.data.materials.new('RifleMat'); mat.use_nodes = True
+    nt = mat.node_tree; bsdf = nt.nodes['Principled BSDF']
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = bpy.data.images.load(ANIMS.replace('Animations/Male', 'Textures/HumanAnimations_ColorPalette.png'))
+    tex.interpolation = 'Closest'
+    nt.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Roughness'].default_value = 0.55; bsdf.inputs['Metallic'].default_value = 0.3
+    me.materials.clear(); me.materials.append(mat)
+    O = Matrix(hold['O'])
+    C = (trest('R Hand').inverted() @ SREST['R Hand']).to_matrix().to_4x4()   # оси кисти записи → оси кисти Rocketbox
+    for pb in tgt.pose.bones:
+        pb.rotation_mode = 'QUATERNION'; pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
+    bpy.context.view_layer.update()
+    hm = tgt.matrix_world @ tgt.data.bones[PFX + 'R Hand'].matrix_local
+    t, q, _ = hm.decompose()
+    W = Matrix.LocRotScale(t, q, None) @ C @ O
+    # не «объект на кости» (glTF/Godot сдвигают его на хвост кости), а меш со скином: все вершины — на кисти, вес 1
+    me.transform(W); rifle.matrix_world = tgt.matrix_world
+    me.transform(tgt.matrix_world.inverted())
+    rifle.parent = tgt; rifle.matrix_parent_inverse.identity()
+    vg = rifle.vertex_groups.new(name=PFX + 'R Hand'); vg.add(range(len(me.vertices)), 1.0, 'REPLACE')
+    mod = rifle.modifiers.new('Armature', 'ARMATURE'); mod.object = tgt
+    # точки автомата в покое — в осях Godot (glTF: x, z, -y) для survivor_speeds.json
+    def g(v): w = W @ Vector(v); return [round(w.x, 4), round(w.z, 4), round(-w.y, 4)]
+    SPEEDS['rifle'] = {'muzzle': g(hold['muzzle']), 'port': g(hold['port']), 'butt': g(hold['butt'])}
+    print('RIFLE attached from blend (skinned), rest godot', SPEEDS['rifle'])
+if os.environ.get('ATTACH_RIFLE', '1') == '1':
+    attach_rifle()
 import json
 json.dump(SPEEDS, open(OUT.replace('.glb', '_speeds.json'), 'w'))
 for o in list(newo): bpy.data.objects.remove(o)

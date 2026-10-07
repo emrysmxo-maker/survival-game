@@ -10,6 +10,9 @@ static func run(m, dt: float) -> void:
 		var an = m.player.anim
 		print("ANIM name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " foot=", snappedf(m.player.foot_offset(), 0.001))
 	if m._test_script == "idle" or m._test_script == "idleaim":
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--pyaw=") and m._test_script == "idle":
+				m.player.yaw = float(a.substr(7))
 		# стоит на месте (без стика); idleaim — прицел зажат вправо
 		if m._test_script == "idleaim":
 			m.stick_r.active = true

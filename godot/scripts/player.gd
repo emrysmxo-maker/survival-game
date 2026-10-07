@@ -64,11 +64,13 @@ var _cur_anim := ""
 var blob: MeshInstance3D
 var _anim_speed := 1.0
 
-const RIFLE_BUTT := Vector3(0, -0.04, -0.33)        # торец приклада (в плечо)
-const RIFLE_GRIP := Vector3(0, -0.10, -0.125)
-const RIFLE_HANDGUARD := Vector3(0, -0.035, 0.15)
-const RIFLE_MUZZLE := Vector3(0, 0.02, 0.37)
-const RIFLE_PORT := Vector3(0.03, 0.03, -0.02)
+# автомат — часть модели (меш со скином на правой кисти); rifle_ik.gd каждый кадр ставит опору rifle_rig:
+# начало — торец приклада, +Z — по стволу. Точки — в осях опоры.
+var RIFLE_BUTT := Vector3.ZERO
+var rifle_len := 0.6
+var rifle_pts := {}                 # дуло/приклад/окно в покое (координаты файла модели) — из survivor_speeds.json
+var rifle_mesh: Node3D
+var glb: Node3D
 
 func _ready() -> void:
 	var scn: PackedScene = load("res://assets/character/Survivor.glb")
@@ -77,7 +79,7 @@ func _ready() -> void:
 	model = Node3D.new()
 	model.scale = Vector3.ONE * CHAR_SCALE
 	add_child(model)
-	var glb: Node3D = scn.instantiate()
+	glb = scn.instantiate()
 	glb.rotation.y = PI
 	model.add_child(glb)
 	skel = _find(glb, "Skeleton3D")
@@ -99,6 +101,10 @@ func _ready() -> void:
 			for gi in GAIT_NAMES.size():
 				if sp.has(GAIT_NAMES[gi]) and float(sp[GAIT_NAMES[gi]]) > 0.1:
 					_gait_mps[gi] = float(sp[GAIT_NAMES[gi]]) * CHAR_SCALE
+			if sp.has("rifle"):
+				for kk in sp["rifle"]:
+					var a: Array = sp["rifle"][kk]
+					rifle_pts[kk] = Vector3(a[0], a[1], a[2])
 	_make_rifle()
 	add_xray(model, true)
 	blob = make_blob(0.75)
@@ -136,13 +142,9 @@ func _recolor(n: Node) -> void:
 func _make_rifle() -> void:
 	rifle_rig = Node3D.new()
 	model.add_child(rifle_rig)
-	var r: Node3D = (load("res://assets/character/Rifle_Assault.glb") as PackedScene).instantiate()
-	r.rotation.y = PI          # в файле ствол смотрит в -Z
-	rifle_rig.add_child(r)
-	_brighten(r)
+	rifle_mesh = glb.find_child("Rifle", true, false)
 	# вспышка у дула: два перекрещенных язычка + звезда, аддитивно
 	muzzle_flash = Node3D.new()
-	muzzle_flash.position = RIFLE_MUZZLE
 	rifle_rig.add_child(muzzle_flash)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -541,10 +543,10 @@ func _collide(prev: Vector2) -> void:
 
 # точки автомата в мире (для пуль, гильз)
 func muzzle_world() -> Vector3:
-	return rifle_rig.global_transform * RIFLE_MUZZLE
+	return rifle_rig.global_transform * Vector3(0, 0.0, rifle_len)
 
 func port_world() -> Vector3:
-	return rifle_rig.global_transform * RIFLE_PORT
+	return rifle_rig.global_transform * Vector3(0.03, 0.03, rifle_len * 0.4)
 
 func barrel_dir() -> Vector3:
 	return (rifle_rig.global_transform.basis * Vector3(0, 0, 1)).normalized()

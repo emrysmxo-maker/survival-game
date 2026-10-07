@@ -1,1 +1,1 @@
-{"Idle": 0.0, "WalkSlow": 0.821, "Walk": 1.0117, "WalkFast": 1.4954, "RunSlow": 2.4106, "Run": 2.8797, "RunFast": 5.8395, "WalkStart": 0.628, "RunStart": 0.903, "WalkStop": 0.6957, "RunStop": 1.2848}
+{"Idle": 0.0, "WalkSlow": 0.821, "Walk": 1.0117, "WalkFast": 1.4954, "RunSlow": 2.4106, "Run": 2.8797, "RunFast": 5.8395, "WalkStart": 0.628, "RunStart": 0.903, "WalkStop": 0.6957, "RunStop": 1.2848, "rifle": {"muzzle": [1.423, 1.3892, -0.0912], "port": [0.9509, 1.3903, -0.0586], "butt": [0.6643, 1.3906, -0.0887]}}
