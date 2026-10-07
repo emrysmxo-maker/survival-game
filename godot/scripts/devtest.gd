@@ -1,5 +1,5 @@
 extends RefCounted
-# Проверки без экрана (запуск с --test=run|side|sideaim|sidewalk|runaim|runback|fireback|zombie|behind|aim): сценарии
+# Проверки без экрана (запуск с --test=start|run|side|sideaim|sidewalk|runaim|runback|fireback|zombie|behind|aim): сценарии
 # управления и вывод замеров в лог. В обычной игре не используется.
 
 static func _yaw(d: Vector2) -> float:
@@ -9,6 +9,17 @@ static func run(m, dt: float) -> void:
 	if m._test_script == "run" and Engine.get_process_frames() % 10 == 0:
 		var an = m.player.anim
 		print("ANIM name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " foot=", snappedf(m.player.foot_offset(), 0.001))
+	if m._test_script == "start":
+		# с места: стик отпущен до 1.5 с, потом полный вперёд; замер расстановки ног (не путаются ли)
+		var pl2 = m.player
+		m.stick_l.active = m._tt > 1.5
+		m.stick_l.vec = Vector2(0, -1) if m._tt > 1.5 else Vector2.ZERO
+		var sk2: Skeleton3D = pl2.skel
+		var l2: Vector3 = sk2.global_transform * sk2.get_bone_global_pose(sk2.find_bone("mixamorig_LeftFoot")).origin
+		var r2: Vector3 = sk2.global_transform * sk2.get_bone_global_pose(sk2.find_bone("mixamorig_RightFoot")).origin
+		var fwd := Vector3(sin(pl2.yaw), 0, cos(pl2.yaw))
+		var rgt := Vector3(fwd.z, 0, -fwd.x)
+		print("S ", snappedf(m._tt, 0.001), " ", pl2.anim.current_animation, " ", snappedf(pl2.anim.current_animation_position, 0.01), " lat=", snappedf((l2 - r2).dot(rgt), 0.001), " lon=", snappedf((l2 - r2).dot(fwd), 0.001), " v=", snappedf(pl2.vel.length(), 0.01))
 	if m._test_script == "feet":
 		var pl = m.player
 		for a in OS.get_cmdline_user_args():

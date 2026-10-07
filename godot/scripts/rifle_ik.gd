@@ -1,18 +1,16 @@
 extends SkeletonModifier3D
-# Верх тела бойца: поза с автоматом берётся из настоящей анимации (Kevin Iglesias «AssaultRifle_Aim01»:
-# обе руки на оружии, живое дыхание), накладывается на ноги/таз из ходьбы или бега. Автомат ставится
-# по рукам (правая — рукоять, левая — цевьё). Скрутка корпуса к цели — поверх. Работает после анимации.
+# Автомат в руках: автомат ставится относительно груди (поза «наготове» / «к плечу», отдача), обе руки тянутся
+# к точкам хвата (рукоять, цевьё — двухзвенный IK), кисти и пальцы берутся из записи «AssaultRifle_Aim01»
+# (Kevin Iglesias) — хват настоящий. Скрутка корпуса к цели — поверх ходьбы/бега. Работает после анимации.
+# Точки хвата оружия — константы RIFLE_* в player.gd (для другого оружия — свои).
 
 var player
 
 var _b := {}
-var _aim_names: Array = []      # кости верха тела: [индекс кости, трек, вес]
+var _hand_tracks: Array = []        # [индекс кости, трек] кисти и пальцев из записи прицела
 var _aim_anim: Animation
-var _shot_anim: Animation
 var _t := 0.0
-var _shot_t := 99.0
-const UPPER_W := {"Spine1": 0.7, "Spine2": 0.85, "Neck": 0.5, "Head": 0.5}
-const LEG_WORDS := ["UpLeg", "Leg", "Foot", "ToeBase", "Hips"]
+var _ready_done := false
 
 func _bone(n: String) -> int:
 	if not _b.has(n):
@@ -20,39 +18,28 @@ func _bone(n: String) -> int:
 	return _b[n]
 
 func _setup(skel: Skeleton3D) -> void:
-	_aim_names = [true]
+	_ready_done = true
 	var anim: AnimationPlayer = player.anim
 	if anim == null or not anim.has_animation("AimAR"):
 		return
 	_aim_anim = anim.get_animation("AimAR")
-	_shot_anim = anim.get_animation("ShootAR") if anim.has_animation("ShootAR") else null
 	for ti in _aim_anim.get_track_count():
 		if _aim_anim.track_get_type(ti) != Animation.TYPE_ROTATION_3D:
 			continue
 		var nm := str(_aim_anim.track_get_path(ti)).get_slice(":", 1)
-		var bi := skel.find_bone(nm)
-		if bi < 0:
-			continue
-		var short := nm.trim_prefix("mixamorig_")
-		var skip := false
-		for w in LEG_WORDS:
-			if short == w or short.ends_with("Left" + w) or short.ends_with("Right" + w) or short == "Left" + w or short == "Right" + w:
-				skip = true
-		if short == "Spine" or nm.begins_with("Bip01_") and (nm.contains("Thigh") or nm.contains("Calf") or nm.contains("Foot") or nm.contains("Toe")) or nm == "mixamorig_Hips":
-			skip = true
-		if skip:
-			continue
-		_aim_names.append([bi, ti, UPPER_W.get(short, 1.0)])
+		if nm == "mixamorig_LeftHand" or nm == "mixamorig_RightHand" or (nm.begins_with("Bip01_") and nm.contains("Finger")):
+			var bi := skel.find_bone(nm)
+			if bi >= 0:
+				_hand_tracks.append([bi, ti])
 
-# Обновление времени позы (вызывается из player каждый кадр) и выстрела
 func fire() -> void:
-	_shot_t = 0.0
+	pass
 
 func _process_modification() -> void:
 	var skel := get_skeleton()
 	if player == null or skel == null or player.rifle_rig == null:
 		return
-	if _aim_names.is_empty():
+	if not _ready_done:
 		_setup(skel)
 	var spine2 := _bone("Spine2")
 	var r_arm := _bone("RightArm")
@@ -73,65 +60,81 @@ func _process_modification() -> void:
 		var x := y.cross(z).normalized()
 		player.rifle_rig.transform = Transform3D(Basis(x, y, z), ch - fwd * 0.17 - up * 0.1)
 		return
-	var dt := get_process_delta_time()
-	_t += dt
-	_shot_t += dt
-	var run_k := clampf(float(player.anim_speed) * WorldGen.T / 2.4, 0.0, 1.0)
-	# 1) верх тела — поза с автоматом (дыхание из клипа), выстрел — клип отдачи
-	if _aim_anim != null and _aim_names.size() > 1:
+	_t += get_process_delta_time()
+	# 1) хват: кисти и пальцы — из записи прицела (дыхание заодно)
+	if _aim_anim != null:
 		var ta := fposmod(_t, _aim_anim.length)
-		var use_shot: bool = _shot_anim != null and _shot_t < _shot_anim.length
-		for i in range(1, _aim_names.size()):
-			var e: Array = _aim_names[i]
-			var q: Quaternion = _aim_anim.rotation_track_interpolate(e[1], ta)
-			if use_shot:
-				var ts := _shot_anim.find_track(_aim_anim.track_get_path(e[1]), Animation.TYPE_ROTATION_3D)
-				if ts >= 0:
-					var q2: Quaternion = _shot_anim.rotation_track_interpolate(ts, _shot_t)
-					q = q.slerp(q2, minf(1.0, _shot_t * 40.0) if _shot_t < 0.05 else 1.0)
-			var w: float = e[2]
-			if w < 1.0:
-				w *= lerpf(1.0, 0.55, run_k)          # на бегу корпус больше живёт по записи бега (наклон, качание)
-			skel.set_bone_pose_rotation(e[0], skel.get_bone_pose_rotation(e[0]).slerp(q, w))
+		for e in _hand_tracks:
+			skel.set_bone_pose_rotation(e[0], _aim_anim.rotation_track_interpolate(e[1], ta))
 	# 2) скрутка корпуса к цели (часть поворота — тазом, остальное — по позвоночнику)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
 	for pair in [["Hips", 0.22, "Spine"], ["Spine", 0.26, "Spine1"], ["Spine1", 0.26, "Spine2"], ["Spine2", 0.26, "Neck"]]:
 		var bi := _bone(pair[0])
 		if bi >= 0:
-			# ось скрутки — вдоль позвоночника (к следующей кости)
 			var ci := _bone(pair[2])
 			var ax := skel.get_bone_rest(ci).origin.normalized() if ci >= 0 else Vector3.UP
 			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(ax, tw * pair[1]))
-	# 2б) «наготове»: без прицела руки с автоматом опущены (ствол вниз ~35°) — поворот обеих рук вокруг линии плеч
-	var ready: float = 1.0 - clampf(player.aim_blend, 0.0, 1.0)
-	if ready > 0.01:
-		var la := _bone("LeftArm")
-		var ra := _bone("RightArm")
-		var gl := skel.get_bone_global_pose(la)
-		var gr := skel.get_bone_global_pose(ra)
-		var axis := (gl.origin - gr.origin).normalized()
-		var rot := Basis(axis, deg_to_rad(35.0) * ready)
-		for bi in [la, ra]:
-			var g := skel.get_bone_global_pose(bi)
-			g.basis = rot * g.basis
-			var pg := skel.get_bone_global_pose(skel.get_bone_parent(bi))
-			skel.set_bone_pose_rotation(bi, (pg.basis.inverse() * g.basis).get_rotation_quaternion())
-	# 3) автомат по рукам: рукоять — правая кисть, цевьё — левая
+	# 3) автомат относительно груди и руки к точкам хвата
 	var to_model := model.global_transform.affine_inverse() * skel.global_transform
-	var rh := skel.find_bone("Bip01_R_Finger2")
-	var lh := skel.find_bone("Bip01_L_Finger2")
-	if rh < 0 or lh < 0:
-		rh = _bone("RightHand"); lh = _bone("LeftHand")
-	var rp: Vector3 = to_model * skel.get_bone_global_pose(rh).origin
-	var lp: Vector3 = to_model * skel.get_bone_global_pose(lh).origin
-	var f := (lp - rp)
-	if f.length() < 0.05:
-		return
-	f = f.normalized()
-	var up_v := Vector3.UP
-	var y2 := (up_v - f * up_v.dot(f)).normalized()
-	var x2 := y2.cross(f).normalized()
-	var basis := Basis(x2, y2, f)
+	var chest: Vector3 = to_model * skel.get_bone_global_pose(spine2).origin
+	var side := signf((to_model * skel.get_bone_global_pose(r_arm).origin).x)
+	if side == 0.0:
+		side = 1.0
+	var k: float = player.aim_blend
 	var rc: float = player.recoil
-	var origin: Vector3 = rp - basis * player.RIFLE_GRIP - f * (0.03 * rc)
-	player.rifle_rig.transform = Transform3D(basis, origin)
+	var ay: float = player.aim_local
+	var cx := side * (0.05 + 0.04 * k)
+	var cy := -0.21 + 0.31 * k
+	var cz := 0.26 + 0.07 * k - 0.035 * rc
+	var px := cx * cos(ay) + cz * sin(ay)
+	var pz := -cx * sin(ay) + cz * cos(ay)
+	var pitch := 0.42 * (1.0 - k) - 0.03 * rc
+	var yaw := -side * 0.22 * (1.0 - k) + ay
+	var rig: Node3D = player.rifle_rig
+	rig.transform = Transform3D(Basis.from_euler(Vector3(pitch, yaw, 0.0), EULER_ORDER_YXZ), chest + Vector3(px, cy, pz))
+	var rig_w := model.global_transform * rig.transform
+	var grip: Vector3 = rig_w * player.RIFLE_GRIP
+	var guard: Vector3 = rig_w * player.RIFLE_HANDGUARD
+	var mb := model.global_transform.basis
+	var pole_r: Vector3 = (skel.global_transform * skel.get_bone_global_pose(r_arm).origin) + mb * Vector3(side * 0.5, -1.0, -0.5)
+	var pole_l: Vector3 = (skel.global_transform * skel.get_bone_global_pose(l_arm).origin) + mb * Vector3(-side * 0.5, -1.0, -0.3)
+	_ik(skel, r_arm, _bone("RightForeArm"), _bone("RightHand"), grip, pole_r)
+	_ik(skel, l_arm, _bone("LeftForeArm"), _bone("LeftHand"), guard, pole_l)
+
+func _ik(skel: Skeleton3D, up: int, lo: int, hand: int, target_w: Vector3, pole_w: Vector3) -> void:
+	if lo < 0 or hand < 0:
+		return
+	var inv := skel.global_transform.affine_inverse()
+	var tgt := inv * target_w
+	var pole := inv * pole_w
+	var gu := skel.get_bone_global_pose(up)
+	var gl := skel.get_bone_global_pose(lo)
+	var gh := skel.get_bone_global_pose(hand)
+	var s := gu.origin
+	var e := gl.origin
+	var h := gh.origin
+	var a := s.distance_to(e)
+	var b := e.distance_to(h)
+	if a < 1e-5 or b < 1e-5:
+		return
+	var to := tgt - s
+	var c := clampf(to.length(), 0.01 * (a + b), (a + b) * 0.999)
+	var dir := to.normalized()
+	var cos_a := clampf((a * a + c * c - b * b) / (2.0 * a * c), -1.0, 1.0)
+	var sin_a := sqrt(1.0 - cos_a * cos_a)
+	var pn := pole - s
+	pn = pn - dir * pn.dot(dir)
+	if pn.length() < 1e-5:
+		return
+	pn = pn.normalized()
+	var e2 := s + dir * a * cos_a + pn * a * sin_a
+	var q1 := Quaternion((e - s).normalized(), (e2 - s).normalized())
+	gu.basis = Basis(q1) * gu.basis
+	skel.set_bone_global_pose(up, gu)
+	gl = skel.get_bone_global_pose(lo)
+	gh = skel.get_bone_global_pose(hand)
+	var want := s + dir * c
+	var q2 := Quaternion((gh.origin - gl.origin).normalized(), (want - gl.origin).normalized())
+	gl.basis = Basis(q2) * gl.basis
+	skel.set_bone_global_pose(lo, gl)
+

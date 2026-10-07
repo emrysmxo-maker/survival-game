@@ -1,1 +1,1 @@
-{"Idle": 0.0, "WalkSlow": 0.821, "Walk": 1.0117, "WalkFast": 1.4954, "RunSlow": 2.4106, "Run": 2.8797, "RunFast": 5.8395}
+{"Idle": 0.0, "WalkSlow": 0.821, "Walk": 1.0117, "WalkFast": 1.4954, "RunSlow": 2.4106, "Run": 2.8797, "RunFast": 5.8395, "WalkStart": 0.628, "RunStart": 0.903, "WalkStop": 0.6957, "RunStop": 1.2848}

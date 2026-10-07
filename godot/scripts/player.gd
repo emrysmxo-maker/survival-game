@@ -34,7 +34,7 @@ const SWIM_SPEED := 0.5
 const SWIM_DEPTH := 1.0             # м: насколько ноги-точка модели ниже поверхности воды при плавании (подбирается по виду)
 var _running := false
 var _gait := 0
-const GAIT_NAMES := ["WalkSlow", "Walk", "WalkFast", "RunSlow", "Run", "RunFast"]
+const GAIT_NAMES := ["WalkSlow", "Walk", "WalkFast", "RunSlow", "Run", "RunFast"]   # + WalkStart/RunStart/WalkStop/RunStop в модели
 var _gait_mps := [0.66, 0.81, 1.2, 1.93, 2.3, 4.67]     # м/с при speed_scale 1 — из survivor_speeds.json (путь таза в записи × масштаб)
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
@@ -86,6 +86,9 @@ func _ready() -> void:
 		anim.add_animation_library("", AnimationLibrary.new())
 	_add_json_clips("res://assets/character/survivor_clips.json")
 	loop_all(anim)
+	for sn in ["WalkStart", "RunStart"]:
+		if anim.has_animation(sn):
+			anim.get_animation(sn).loop_mode = Animation.LOOP_NONE    # запись «начало шага» играется один раз
 	var sf := FileAccess.open("res://assets/character/survivor_speeds.json", FileAccess.READ)
 	if sf:
 		var sp = JSON.parse_string(sf.get_as_text())
@@ -186,9 +189,7 @@ func _flash_tex() -> Texture2D:
 
 func shot_fired() -> void:
 	recoil = 1.0
-	for c in skel.get_children() if skel else []:
-		if c.has_method("fire"):
-			c.fire()
+
 	flash_t = 0.035
 	if muzzle_flash:
 		var k := randf_range(0.75, 1.25)
@@ -245,7 +246,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.15, 1.0, clampf((stick.length() - 0.1) / 0.75, 0.0, 1.0))   # слегка — медленный шаг, до упора — бег
 		want *= _terrain_speed(want)
 		move_dir = want.normalized()
-		vel += (want - vel) * minf(1.0, ACCEL * dt)
+		vel += (want - vel) * minf(1.0, (5.0 if _starting else ACCEL) * dt)   # на старте разгон плавнее — под запись «начало шага»
 	else:
 		vel *= maxf(0.0, 1.0 - 18.0 * dt)
 		if vel.length() < 0.05:
@@ -313,25 +314,110 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		# плавание: база — стойка, руки и ноги гребут процедурно (rifle_ik.gd), тело наклонено вперёд
 		_play("Swim_Fwd" if moving else "Swim_Idle", 1.0)
 		return
+	_gait_t += dt
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
-		# походка по скорости (живой мокап Rocketbox): медленный шаг → шаг → быстрый шаг → лёгкий бег → бег;
-		# темп = скорость по земле / скорость клипа (путь таза в записи) — стопа не скользит
-		if backpedal or water_depth > 0.15:
-			_gait = 1                 # пятясь и по воде — обычный шаг
+		var tgt_mps := want.length() * WorldGen.T          # куда стик просит разогнаться
+		var slow_mode := backpedal or water_depth > 0.15   # пятясь и по воде — обычный шаг, без стартовых клипов
+		if _cur_anim == "Idle" or _cur_anim == "" or _cur_anim.begins_with("Swim"):
+			# старт с места: живая запись «начало шага» вместо перескока по ступеням походки (иначе ноги путались)
+			_gait = _pick_gait(tgt_mps) if not slow_mode else 1
+			if not slow_mode:
+				_start_name = "RunStart" if _gait >= 3 else "WalkStart"
+				if anim and anim.has_animation(_start_name):
+					_starting = true
+					_gait_t = 0.0
+					anim.play(_start_name, 0.12)
+					anim.speed_scale = 1.5
+					_cur_anim = _start_name
+		if _starting:
+			var sa := anim.get_animation(_start_name)
+			if anim.current_animation != _start_name or anim.current_animation_position >= sa.length - 0.03 or not anim.is_playing():
+				_starting = false
+				var t := _match_phase(_start_name, sa.length, GAIT_NAMES[_gait])
+				_play_at(GAIT_NAMES[_gait], t)
+		elif slow_mode:
+			_set_gait(1)
 		else:
-			while _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
-				_gait += 1
-			while _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
-				_gait -= 1
+			# походка по скорости: не чаще раза в 0.4 с и на одну ступень; фаза шага сохраняется
+			if _gait_t > 0.4:
+				var want_g := _gait
+				if _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
+					want_g = _gait + 1
+				elif _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
+					want_g = _gait - 1
+				if want_g != _gait:
+					_set_gait(want_g)
 		_running = _gait >= 3
 		var k := clampf(mps / _gait_mps[_gait], 0.55, 1.5) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее
-		_play(GAIT_NAMES[_gait], -k if backpedal else k)
+		if _starting:
+			anim.speed_scale = 1.5
+		else:
+			_play(GAIT_NAMES[_gait], -k if backpedal else k)
 	else:
 		anim_speed = 0.0
 		_running = false
+		_starting = false
 		_play("Idle", 1.0)
+
+var _starting := false
+var _start_name := ""
+var _gait_t := 0.0
+
+func _pick_gait(mps: float) -> int:
+	var g := 0
+	while g < _gait_mps.size() - 1 and mps > (_gait_mps[g] + _gait_mps[g + 1]) * 0.5:
+		g += 1
+	return g
+
+# смена походки без «перекрестия» ног: новая запись входит в той же фазе шага
+func _set_gait(g: int) -> void:
+	if g == _gait and _cur_anim == GAIT_NAMES[g]:
+		return
+	var from := _cur_anim
+	var pos := anim.current_animation_position if anim else 0.0
+	_gait = g
+	_gait_t = 0.0
+	if from in GAIT_NAMES and anim.has_animation(from):
+		_play_at(GAIT_NAMES[g], _match_phase(from, pos, GAIT_NAMES[g]))
+
+func _play_at(n: String, pos: float) -> void:
+	if forced_clip != "" and n in GAIT_NAMES:
+		n = forced_clip
+	anim.play(n, 0.12)
+	anim.seek(pos, false)
+	_cur_anim = n
+
+# Фаза записи «в», в которой ноги стоят так же, как в записи «из» в момент pos (минимум разницы поз ног)
+const LEG_BONES := ["LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot"]
+func _match_phase(from_n: String, pos: float, to_n: String) -> float:
+	if anim == null or not anim.has_animation(from_n) or not anim.has_animation(to_n):
+		return 0.0
+	var fa := anim.get_animation(from_n)
+	var ta := anim.get_animation(to_n)
+	var pairs: Array = []
+	for lb in LEG_BONES:
+		for ti in fa.get_track_count():
+			if fa.track_get_type(ti) == Animation.TYPE_ROTATION_3D and str(fa.track_get_path(ti)).ends_with(":mixamorig_" + lb):
+				var tj := ta.find_track(fa.track_get_path(ti), Animation.TYPE_ROTATION_3D)
+				if tj >= 0:
+					pairs.append([ti, tj, fa.rotation_track_interpolate(ti, minf(pos, fa.length))])
+	if pairs.is_empty():
+		return 0.0
+	var best := 0.0
+	var best_d := 1e9
+	var steps := 48
+	for i in steps:
+		var t := ta.length * i / steps
+		var d := 0.0
+		for e in pairs:
+			var q: Quaternion = ta.rotation_track_interpolate(e[1], t)
+			d += (e[2] as Quaternion).angle_to(q)
+		if d < best_d:
+			best_d = d
+			best = t
+	return best
 
 func apply_wet() -> void:
 	if wet_mat == null or absf(wet - _wet_set) < 0.01:
@@ -355,6 +441,11 @@ func barrel_on_target() -> bool:
 var forced_clip := ""          # отладка (devtest --gait=): принудительный клип, темп 1
 func _play(n: String, speed: float) -> void:
 	if anim == null:
+		return
+	if n == "Idle" and _cur_anim != "Idle" and _cur_anim != "":
+		anim.play(n, 0.3)          # остановка — мягко (0.3 с), ноги не дёргаются
+		_cur_anim = n
+		anim.speed_scale = 1.0
 		return
 	if forced_clip != "" and n in GAIT_NAMES:
 		n = forced_clip

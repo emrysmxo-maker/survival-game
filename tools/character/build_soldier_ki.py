@@ -11,7 +11,8 @@ MODEL = ANIMS.replace('Animations/Male', 'Models/HumanM_Model.fbx')
 # у бега Iglesias таз стоит на одной высоте, ноги «пружинят» — для ходьбы/бега он не годится.
 RB_ANIMS = os.environ.get('RB_ANIMS', '')
 RB_CLIPS = {'Idle': 'm_idle_neutral_01', 'WalkSlow': 'm_walk_slow_01', 'Walk': 'm_walk_neutral_01', 'WalkFast': 'm_walk_fast_01',
-            'RunSlow': 'm_run_slow_01', 'Run': 'm_run_neutral_01', 'RunFast': 'm_run_fast_01'}
+            'RunSlow': 'm_run_slow_01', 'Run': 'm_run_neutral_01', 'RunFast': 'm_run_fast_01',
+            'WalkStart': 'm_walk_start', 'RunStart': 'm_run_start', 'WalkStop': 'm_walk_stop', 'RunStop': 'm_run_stop'}
 SPEEDS = {}
 CLIPS = {   # Iglesias: поза с автоматом (верх тела), выстрел, перезарядка, военная стойка
     'MilIdle': 'Idles/HumanM@MilitaryIdle01',
