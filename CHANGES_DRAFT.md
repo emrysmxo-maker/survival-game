@@ -315,5 +315,5 @@
 - Боец: тело Quaternius Superhero_Male (CC0) + одежда по зонам весов (куртка, штаны, ботинки, перчатки), жилет, шлем — собирается `tools/character/build_soldier.py`; кости переименованы в mixamorig_* (`rename_bones.py`), код игры не менялся.
 - Анимации: Quaternius Universal Animation Library (CC0) — Idle, Walk, Run (Jog), Sprint, Swim_Fwd, Swim_Idle прямо внутри Soldier.glb (swim.json и ретаргет Mixamo удалены).
 - Зомби: тот же CC0-меш, привязан к новому скелету (`tools/zombie/rig_zombie.py`), клипы Quaternius.
-- Модель смотрит в +Z (поворот на 180° убран из player.gd и zombies.gd). Темп шага пересчитан под новые клипы (Walk 0.85, Run 3.0 м/с модели; бег от 1.35 м/с).
+- Модель смотрит в +Z (поворот на 180° убран из player.gd и zombies.gd). Темп шага пересчитан под новые клипы (Walk 0.85, Run 3.0 м/с модели; бег от 2.1 м/с (Jog на малой скорости выглядит прыжками), шаг Walk до 1.9×).
 - Модели лежат в APK → `apk_min.txt` = 37: старый APK не примет новый код по воздуху, нужно поставить новый APK.

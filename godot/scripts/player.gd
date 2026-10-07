@@ -20,8 +20,8 @@ const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
 const WALK_ANIM_MPS := 0.85         # клип Walk (Quaternius), шаг по стопе при speed_scale 1 в единицах модели
-const RUN_ENTER_MPS := 1.35         # м/с: быстрее — бег (клип Jog), медленнее RUN_EXIT — шаг
-const RUN_EXIT_MPS := 1.2
+const RUN_ENTER_MPS := 2.1          # м/с: быстрее — бег (клип Jog), медленнее RUN_EXIT — шаг (Jog на малой скорости = «прыжки»)
+const RUN_EXIT_MPS := 1.85
 const GAIT_TEMPO := 0.85           # шаги чуть спокойнее «физики» (в браузерной 0.7) — естественнее
 const RUN_ANIM_MPS := 3.0          # скорость шага в клипе Run (Jog) при speed_scale 1 (замер по стопе)
 
@@ -308,7 +308,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		if backpedal or water_depth > 0.15:
 			_running = false          # по воде — шагом
 		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
-		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.62, 1.3) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
+		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.8 if _running else 0.6, 1.3 if _running else 1.9) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
 		_play("Run" if _running else "Walk", -k if backpedal else k)
 	else:
 		anim_speed = 0.0
