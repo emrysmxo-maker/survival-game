@@ -10,11 +10,13 @@ const BODY_TURN_RATE := 5.5        # рад/с — поворот тела пр�
 # НОГИ ВСЕГДА ИДУТ ПО НАПРАВЛЕНИЮ ДВИЖЕНИЯ — лицом вперёд или спиной вперёд (тот же
 # бег, проигранный назад). К цели поворачивается только верх: корпус (скручивание
 # позвоночника до TWIST) и руки (ещё ARMS). Цель дальше — боец разворачивается и пятится.
-const TWIST := 1.05                # 60°: скрутка 90° у реалистичной модели выглядела как резина — дальше разворачиваются ноги
+const TWIST := 0.55                # ~30°: корпус лишь «опережает» ноги при быстрой смене прицела — большая скрутка выглядела как резина
 const ARMS := 0.2618               # 15°
 const REACH := TWIST + ARMS
-const FIRE_SPEED := 0.65           # скорость бега при прицеле (×)
-const BACK_SPEED := 0.45           # скорость пятясь (×)
+const FIRE_SPEED := 0.62           # скорость при прицеле, вперёд (×)
+const STRAFE_SPEED := 0.55         # вбок (×)
+const BACK_SPEED := 0.45           # назад (×)
+const AIM_BODY_TURN := 4.2         # рад/с — разворот бойца к цели (~240°/с: быстрее человека, но игра мобильная)
 var AIM_ELEV_K := 0.7297           # sin(угла камеры): по вертикали экрана земля сжата — поправка прицела (задаёт main.gd)
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
@@ -159,11 +161,6 @@ func _make_rifle() -> void:
 		q.rotation = Vector3(0, -PI / 2, 0) if i == 0 else Vector3(PI / 2, -PI / 2, 0)
 		q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		muzzle_flash.add_child(q)
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.75, 0.4)
-	light.light_energy = 2.5
-	light.omni_range = 3.5
-	muzzle_flash.add_child(light)
 	muzzle_flash.visible = false
 
 func _brighten(n: Node) -> void:
@@ -242,7 +239,8 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	if moving:
 		var mf := 1.0
 		if aiming:
-			mf = BACK_SPEED if backpedal else FIRE_SPEED
+			var rel0 := absf(wrapf(tiles_to_yaw(screen_to_tiles(stick.normalized())) - yaw, -PI, PI))
+			mf = FIRE_SPEED if rel0 < 1.0 else (STRAFE_SPEED if rel0 < 2.1 else BACK_SPEED)
 		# лёгкий наклон стика — шаг (не меньше 55% скорости), чтобы не топтаться на месте
 		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.15, 1.0, clampf((stick.length() - 0.1) / 0.75, 0.0, 1.0))   # слегка — медленный шаг, до упора — бег
 		want *= _terrain_speed(want)
@@ -276,91 +274,139 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	flash_t = maxf(0.0, flash_t - dt)
 	muzzle_flash.visible = flash_t > 0.0
 
-	# --- тело: точный перенос браузерной версии (src/character.js) ---
-	# Ноги — строго по движению; цель дальше REACH — разворот лицом к цели и шаг назад.
-	# Тело поворачивается с ограниченной скоростью (5.5 рад/с), на ~180° — в сторону прицела.
+	# --- тело: как в нормальных шутерах. Целится — боец ЛИЦОМ к цели (разворот с конечной скоростью, шагая ногами),
+	# а ноги играют запись шага вперёд/вбок/назад относительно взгляда. Не целится — лицом по ходу. Корпус не скручивается:
+	# только небольшой «опережающий» доворот (aim_local) при быстрой смене прицела.
 	var move_yaw := tiles_to_yaw(move_dir) if moving else yaw
-	var legs := move_yaw
-	if aiming and moving:
-		var rel := absf(wrapf(aim_world - move_yaw, -PI, PI))
-		backpedal = rel > (REACH - 0.17 if backpedal else REACH)   # гистерезис 10°
-		if backpedal:
-			legs = wrapf(move_yaw + PI, -PI, PI)
-	elif aiming:
-		backpedal = false
-		legs = aim_world
-	else:
-		backpedal = false
+	var turn_target := yaw
 	if aiming:
-		var d2 := wrapf(legs - yaw, -PI, PI)
-		if absf(d2) > 2.9:
-			var side := signf(wrapf(aim_world - yaw, -PI, PI))
-			if side != 0.0 and signf(d2) != side:
-				d2 += side * TAU
-		yaw = wrapf(yaw + clampf(d2, -BODY_TURN_RATE * dt, BODY_TURN_RATE * dt), -PI, PI)
+		turn_target = aim_world
 	elif moving:
-		yaw = lerp_angle(yaw, move_yaw, minf(1.0, 24.0 * dt))
+		turn_target = move_yaw
+	var d2 := wrapf(turn_target - yaw, -PI, PI)
+	var rate := AIM_BODY_TURN if aiming else 24.0
+	_turn_left = d2
+	if aiming:
+		yaw = wrapf(yaw + clampf(d2, -rate * dt, rate * dt), -PI, PI)
+	elif moving:
+		yaw = lerp_angle(yaw, move_yaw, minf(1.0, rate * dt))
 	model.rotation.y = yaw
-
-	# ствол относительно ног: добирают корпус (скручивание) и руки, дальше — не довернуть
+	backpedal = false
 	var aim_rel := 0.0
 	if aiming:
-		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -REACH, REACH)
-	aim_local += (aim_rel - aim_local) * minf(1.0, (12.0 if aiming else 8.0) * dt)
+		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -TWIST, TWIST)
+	aim_local += (aim_rel - aim_local) * minf(1.0, 14.0 * dt)
 
-	# Анимация как в браузерной версии: по скорости — ходьба (Walk) или бег (Run) с гистерезисом;
-	# пятится — всегда шагом, тот же клип назад. Темп шага = скорость по земле / скорость клипа.
+	# Анимация ног. Вперёд (и всегда, пока не целится) — живой мокап Rocketbox: медленный шаг → шаг → быстрый шаг → бег → спринт.
+	# Вбок и назад (целясь) — записи Iglesias: шаг/бег в 8 направлениях. Темп = скорость по земле / скорость записи.
 	model.rotation.x = lerpf(model.rotation.x, 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
 	if swimming:
-		# плавание: база — стойка, руки и ноги гребут процедурно (rifle_ik.gd), тело наклонено вперёд
 		_play("Swim_Fwd" if moving else "Swim_Idle", 1.0)
 		return
 	_gait_t += dt
+	var turning := aiming and absf(_turn_left) > 0.25 and not moving
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
-		var tgt_mps := want.length() * WorldGen.T          # куда стик просит разогнаться
-		var slow_mode := backpedal or water_depth > 0.15   # пятясь и по воде — обычный шаг, без стартовых клипов
-		if _cur_anim == "Idle" or _cur_anim == "" or _cur_anim.begins_with("Swim"):
-			# старт с места: живая запись «начало шага» вместо перескока по ступеням походки (иначе ноги путались)
-			_gait = _pick_gait(tgt_mps) if not slow_mode else 1
-			if not slow_mode:
-				_start_name = "RunStart" if _gait >= 3 else "WalkStart"
-				if anim and anim.has_animation(_start_name):
-					_starting = true
-					_gait_t = 0.0
-					anim.play(_start_name, 0.12)
-					anim.speed_scale = 1.5
-					_cur_anim = _start_name
-		if _starting:
-			var sa := anim.get_animation(_start_name)
-			if anim.current_animation != _start_name or anim.current_animation_position >= sa.length - 0.03 or not anim.is_playing():
-				_starting = false
-				var t := _match_phase(_start_name, sa.length, GAIT_NAMES[_gait])
-				_play_at(GAIT_NAMES[_gait], t)
-		elif slow_mode:
-			_set_gait(1)
+		var rel := wrapf(move_yaw - yaw, -PI, PI)             # куда идёт относительно взгляда: + налево
+		_dir_sector = _pick_sector(rel)
+		if _dir_sector == 0 or not aiming:
+			_leg_forward(mps, dt)
 		else:
-			# походка по скорости: не чаще раза в 0.4 с и на одну ступень; фаза шага сохраняется
-			if _gait_t > 0.4:
-				var want_g := _gait
-				if _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
-					want_g = _gait + 1
-				elif _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
-					want_g = _gait - 1
-				if want_g != _gait:
-					_set_gait(want_g)
-		_running = _gait >= 3
-		var k := clampf(mps / _gait_mps[_gait], 0.55, 1.5) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее
-		if _starting:
-			anim.speed_scale = 1.5
-		else:
-			_play(GAIT_NAMES[_gait], -k if backpedal else k)
+			_leg_strafe(mps)
+	elif turning:
+		# поворот на месте: переступает ногами (медленный шаг на месте, темп по скорости поворота)
+		_starting = false
+		_play("WalkSlow", clampf(absf(_turn_left) * 1.6, 0.8, 1.5))
 	else:
 		anim_speed = 0.0
 		_running = false
 		_starting = false
 		_play("Idle", 1.0)
+
+var _turn_left := 0.0
+var _dir_sector := 0
+const SECTOR_NAMES := ["Forward", "ForwardLeft", "Left", "BackwardLeft", "Backward", "BackwardRight", "Right", "ForwardRight"]
+
+# сектор направления (0 вперёд, 1 вперёд-влево, 2 влево, 3 назад-влево, 4 назад, 5 назад-вправо, 6 вправо, 7 вперёд-вправо) с гистерезисом ±10°
+func _pick_sector(rel: float) -> int:
+	var idx := int(roundf(rel / (PI / 4.0)))      # -4..4
+	idx = posmod(idx, 8)
+	if idx != _dir_sector:
+		var cur_c := float(_dir_sector) * PI / 4.0
+		if _dir_sector > 4:
+			cur_c -= TAU
+		var diff := absf(wrapf(rel - cur_c, -PI, PI))
+		if diff < PI / 8.0 + 0.17:
+			return _dir_sector
+	return idx
+
+func _leg_forward(mps: float, dt: float) -> void:
+	var tgt_mps := vel.length() * WorldGen.T
+	var slow_mode := water_depth > 0.15      # по воде — обычный шаг, без стартовых клипов
+	if _cur_anim == "Idle" or _cur_anim == "" or _cur_anim.begins_with("Swim") or _cur_anim.begins_with("SWalk") or _cur_anim.begins_with("SRun"):
+		# старт с места: живая запись «начало шага»
+		_gait = _pick_gait(maxf(tgt_mps, mps)) if not slow_mode else 1
+		if not slow_mode:
+			_start_name = "RunStart" if _gait >= 3 else "WalkStart"
+			if anim and anim.has_animation(_start_name):
+				_starting = true
+				_gait_t = 0.0
+				anim.play(_start_name, 0.12)
+				anim.speed_scale = 1.5
+				_cur_anim = _start_name
+	if _starting:
+		var sa := anim.get_animation(_start_name)
+		if anim.current_animation != _start_name or anim.current_animation_position >= sa.length - 0.03 or not anim.is_playing():
+			_starting = false
+			var t := _match_phase(_start_name, sa.length, GAIT_NAMES[_gait])
+			_play_at(GAIT_NAMES[_gait], t)
+	elif slow_mode:
+		_set_gait(1)
+	else:
+		if _gait_t > 0.4:
+			var want_g := _gait
+			if _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
+				want_g = _gait + 1
+			elif _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
+				want_g = _gait - 1
+			if want_g != _gait:
+				_set_gait(want_g)
+	_running = _gait >= 3
+	if _starting:
+		anim.speed_scale = 1.5
+	else:
+		var k := clampf(mps / _gait_mps[_gait], 0.55, 1.5) * (0.82 if water_depth > 0.15 else 1.0)
+		_play(GAIT_NAMES[_gait], k)
+
+# Шаг вбок/назад (записи Iglesias, на месте): ходьба до ~2.3 м/с, дальше бег
+func _leg_strafe(mps: float) -> void:
+	_starting = false
+	var run: bool = mps > (2.4 if _cur_anim.begins_with("SWalk") else 2.15)
+	var clip: String = ("SRun" if run else "SWalk") + str(SECTOR_NAMES[_dir_sector])
+	if anim == null or not anim.has_animation(clip):
+		_play(GAIT_NAMES[1], 1.0)
+		return
+	var base := (4.0 if run else 2.0) * CHAR_SCALE            # скорость записи (м/с в мире)
+	var k := clampf(mps / base, 0.55, 1.5)
+	_running = run
+	if clip != _cur_anim:
+		var from := _cur_anim
+		var pos := anim.current_animation_position if anim else 0.0
+		if from.begins_with("SWalk") or from.begins_with("SRun"):
+			# между направлениями — та же фаза шага
+			var fa := anim.get_animation(from)
+			var ta := anim.get_animation(clip)
+			pos = fposmod(pos / fa.length * ta.length, ta.length)
+			_play_at(clip, pos)
+		else:
+			_play_at(clip, _match_phase_name(from, pos, clip))
+	anim.speed_scale = k
+
+func _match_phase_name(from_n: String, pos: float, to_n: String) -> float:
+	if from_n in GAIT_NAMES or from_n == "Idle":
+		return _match_phase(from_n, pos, to_n)
+	return 0.0
 
 var _starting := false
 var _start_name := ""

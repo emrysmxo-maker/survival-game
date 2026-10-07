@@ -14,12 +14,15 @@ RB_CLIPS = {'Idle': 'm_idle_neutral_01', 'WalkSlow': 'm_walk_slow_01', 'Walk': '
             'RunSlow': 'm_run_slow_01', 'Run': 'm_run_neutral_01', 'RunFast': 'm_run_fast_01',
             'WalkStart': 'm_walk_start', 'RunStart': 'm_run_start', 'WalkStop': 'm_walk_stop', 'RunStop': 'm_run_stop'}
 SPEEDS = {}
-CLIPS = {   # Iglesias: поза с автоматом (верх тела), выстрел, перезарядка, военная стойка
+CLIPS = {   # Iglesias: поза с автоматом (верх тела), выстрел, перезарядка, военная стойка + ходьба/бег в 8 направлениях (для шага вбок и назад при прицеливании)
     'MilIdle': 'Idles/HumanM@MilitaryIdle01',
     'AimAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Aim01', 'ShootAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Aim01_Shoot01',
     'ReloadAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Reload01',
 }
-# Rocketbox-кость -> кость Iglesias (None = сам объект-арматура: таз). Пары идут родитель → потомок.
+for _d in ('Forward', 'Backward', 'Left', 'Right', 'ForwardLeft', 'ForwardRight', 'BackwardLeft', 'BackwardRight'):
+    CLIPS['SWalk' + _d] = f'Movement/Walk/HumanM@Walk01_{_d}'
+    CLIPS['SRun' + _d] = f'Movement/Run/HumanM@Run01_{_d}'
+# Какие кости несёт каждый клип: у Iglesias-«S*» берём ВСЕ кости (ноги тоже); у AimAR/ShootAR/ReloadAR/MilIdle — все, но в игре применяется только верх тела
 PAIRS = [('Pelvis', None), ('Spine', 'B-spine'), ('Spine1', 'B-spine+chest'), ('Spine2', 'B-chest'),
          ('Neck', 'B-neck'), ('Head', 'B-head')]
 for s_, S_ in (('L', 'L'), ('R', 'R')):
