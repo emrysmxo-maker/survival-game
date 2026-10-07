@@ -2,21 +2,18 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bd7800n5cbc4e"
-path.s3tc="res://.godot/imported/Zombie_Zombie.jpg-9dc7dfa058ba4459b8921a5e62c6a29c.s3tc.ctex"
-path.etc2="res://.godot/imported/Zombie_Zombie.jpg-9dc7dfa058ba4459b8921a5e62c6a29c.etc2.ctex"
+uid="uid://clb0ckx4csfkw"
+path.s3tc="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.s3tc.ctex"
+path.etc2="res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "52ecc2067bf0f0c330c8b9cb6d52c0b8"
-}
 
 [deps]
 
-source_file="res://assets/character/Zombie_Zombie.jpg"
-dest_files=["res://.godot/imported/Zombie_Zombie.jpg-9dc7dfa058ba4459b8921a5e62c6a29c.s3tc.ctex", "res://.godot/imported/Zombie_Zombie.jpg-9dc7dfa058ba4459b8921a5e62c6a29c.etc2.ctex"]
+source_file="res://assets/character/Soldier_vanguard_vanguard_diffuse_tga.jpg"
+dest_files=["res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.s3tc.ctex", "res://.godot/imported/Soldier_vanguard_vanguard_diffuse_tga.jpg-9877a198ce4d266df3f497708c392a76.etc2.ctex"]
 
 [params]
 

@@ -9,21 +9,6 @@ static func run(m, dt: float) -> void:
 	if m._test_script == "run" and Engine.get_process_frames() % 10 == 0:
 		var an = m.player.anim
 		print("ANIM name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " foot=", snappedf(m.player.foot_offset(), 0.001))
-	if m._test_script == "feet":
-		var pl = m.player
-		for a in OS.get_cmdline_user_args():
-			if a.begins_with("--gait="):
-				pl.forced_gait = a.substr(7)
-		var mag := 0.4 if m._tt < 4.0 else (0.7 if m._tt < 8.0 else 1.0)
-		m.stick_l.active = true
-		m.stick_l.vec = Vector2(0, -mag)
-		pl.anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL   # кадры в тесте медленные: двигаем клип по фикс. dt
-		pl.anim.advance(dt)
-		var sk: Skeleton3D = pl.skel
-		var lf: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_LeftFoot")).origin
-		var rf: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_RightFoot")).origin
-		var hp: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Hips")).origin
-		print("F ", snappedf(m._tt, 0.001), " ", pl.anim.current_animation, " ", snappedf(pl.anim.speed_scale, 0.001), " ", pl.global_position.x, " ", pl.global_position.z, " ", lf.x, " ", lf.y, " ", lf.z, " ", rf.x, " ", rf.y, " ", rf.z, " ", hp.y - pl.global_position.y)
 	match m._test_script:
 		"run":
 			m.stick_l.active = true

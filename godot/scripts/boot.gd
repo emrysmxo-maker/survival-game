@@ -51,7 +51,7 @@ func _ready() -> void:
 	_start_preload()
 	http = HTTPRequest.new()
 	http.max_redirects = 8
-	http.timeout = 30.0
+	http.timeout = 15.0
 	add_child(http)
 	http.request_completed.connect(_on_done)
 	if from_game:
@@ -140,6 +140,7 @@ func _preload_left() -> int:
 func _stamp() -> String:
 	return str(int(Time.get_unix_time_from_system()))
 
+var _retry := 0
 func check() -> void:
 	if _phase != "":
 		return
@@ -163,8 +164,16 @@ func _fail(msg: String) -> void:
 
 func _on_done(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		_fail("Не удалось проверить (код %d/%d). Запускаю как есть." % [result, code])
+		if _phase == "json" and _retry < 2:
+			_retry += 1                     # GitHub иногда не отвечает с первого раза — повторяем
+			_phase = ""
+			status.text = "Сеть не ответила, повторяю (%d)…" % _retry
+			get_tree().create_timer(1.0).timeout.connect(check)
+			return
+		var why := "сеть не ответила" if result == HTTPRequest.RESULT_TIMEOUT else "код %d/%d" % [result, code]
+		_fail("Не удалось проверить (%s). Запускаю как есть." % why)
 		return
+	_retry = 0
 	if _phase == "json":
 		var d = JSON.parse_string(body.get_string_from_utf8())
 		if not (d is Dictionary):

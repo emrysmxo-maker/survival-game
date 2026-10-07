@@ -2,21 +2,18 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b2bdqf1jwbsb"
-path.s3tc="res://.godot/imported/Soldier_T_Eye_Brown.jpg-4ac7951d2d330d7b19ea6f4f041a3b57.s3tc.ctex"
-path.etc2="res://.godot/imported/Soldier_T_Eye_Brown.jpg-4ac7951d2d330d7b19ea6f4f041a3b57.etc2.ctex"
+uid="uid://duumoeey5nqxk"
+path.s3tc="res://.godot/imported/Soldier_file2.jpg-504d209e4d0e05e7bc61aa079d13ec08.s3tc.ctex"
+path.etc2="res://.godot/imported/Soldier_file2.jpg-504d209e4d0e05e7bc61aa079d13ec08.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "1ed4ce37e1a706e4e6637f722cc8601d"
-}
 
 [deps]
 
-source_file="res://assets/character/Soldier_T_Eye_Brown.jpg"
-dest_files=["res://.godot/imported/Soldier_T_Eye_Brown.jpg-4ac7951d2d330d7b19ea6f4f041a3b57.s3tc.ctex", "res://.godot/imported/Soldier_T_Eye_Brown.jpg-4ac7951d2d330d7b19ea6f4f041a3b57.etc2.ctex"]
+source_file="res://assets/character/Soldier_file2.jpg"
+dest_files=["res://.godot/imported/Soldier_file2.jpg-504d209e4d0e05e7bc61aa079d13ec08.s3tc.ctex", "res://.godot/imported/Soldier_file2.jpg-504d209e4d0e05e7bc61aa079d13ec08.etc2.ctex"]
 
 [params]
 
