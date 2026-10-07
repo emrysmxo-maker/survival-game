@@ -13,6 +13,7 @@ var _dirty := false
 var _state := {}             # объект -> {x, y, acc, side}
 
 func _ready() -> void:
+	_make_steps()
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -114,28 +115,34 @@ var _steps: Array = []
 var _players: Array = []
 var _pi := 0
 func _make_steps() -> void:
-	for v in 4:
+	for v in 5:
 		var rate := 22050
-		var n := int(rate * 0.11)
+		var n := int(rate * 0.13)
 		var data := PackedByteArray()
 		data.resize(n * 2)
-		var lp := 0.0
 		var rng := RandomNumberGenerator.new()
-		rng.seed = 77 + v
+		rng.seed = 77 + v * 13
+		var lp := 0.0
+		var prev := 0.0
 		for i in n:
-			var t := float(i) / n
-			var env := pow(1.0 - t, 3.0) * minf(1.0, t * 40.0)
-			lp += (rng.randf_range(-1.0, 1.0) - lp) * (0.18 + 0.06 * v)
-			var x := int(clampf(lp * env * 2.2, -1.0, 1.0) * 32000.0)
-			data.encode_s16(i * 2, x)
+			var t := float(i) / rate
+			# сухой хруст: высокочастотный шум с резкой атакой и быстрым спадом + короткий мягкий удар
+			var nz := rng.randf_range(-1.0, 1.0)
+			lp += (nz - lp) * 0.5
+			var hp := lp - prev * 0.0
+			prev = lp
+			var crunch := (nz * 0.6 + hp * 0.4) * exp(-t * (55.0 + v * 8.0)) * minf(1.0, t * 800.0)
+			var thud := sin(TAU * (70.0 + v * 6.0) * t) * exp(-t * 60.0) * 0.5
+			var x := clampf((crunch * 0.8 + thud) * 0.9, -1.0, 1.0)
+			data.encode_s16(i * 2, int(x * 30000.0))
 		var st := AudioStreamWAV.new()
 		st.format = AudioStreamWAV.FORMAT_16_BITS
 		st.mix_rate = rate
 		st.data = data
 		_steps.append(st)
-	for i in 3:
+	for i in 4:
 		var p := AudioStreamPlayer.new()
-		p.volume_db = -16.0
+		p.volume_db = -10.0
 		add_child(p)
 		_players.append(p)
 
@@ -145,5 +152,5 @@ func _step_sound(soft: float) -> void:
 	var p: AudioStreamPlayer = _players[_pi % _players.size()]
 	_pi += 1
 	p.stream = _steps[randi() % _steps.size()]
-	p.pitch_scale = randf_range(0.85, 1.15) * (0.85 if soft > 0.5 else 1.0)
+	p.pitch_scale = randf_range(0.92, 1.1) * (0.9 if soft > 0.5 else 1.0)
 	p.play()

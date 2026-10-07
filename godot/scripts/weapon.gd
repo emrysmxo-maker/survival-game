@@ -32,7 +32,7 @@ var _puff_pool: Array = []
 
 func _ready() -> void:
 	_tracer_mesh = BoxMesh.new()
-	_tracer_mesh.size = Vector3(0.012, 0.012, 0.55)
+	_tracer_mesh.size = Vector3(0.005, 0.005, 0.22)
 	_tracer_mat = StandardMaterial3D.new()
 	_tracer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_tracer_mat.albedo_color = Color(1.0, 0.92, 0.65, 0.55)
@@ -49,7 +49,8 @@ func _ready() -> void:
 	_puff_mat.shader = load("res://shaders/puff.gdshader")
 	_puff_mat.set_shader_parameter("tex", _soft_tex())
 	_casing_mesh = QuadMesh.new()
-	_casing_mesh.size = Vector2(0.07, 0.07)
+	_casing_mesh.size = Vector2(0.05, 0.05)
+	_make_gun_sound()
 
 # Автострельба: ближайший живой зомби в радиусе. Возвращает экранный вектор прицела или null.
 func auto_target(force := false):
@@ -70,6 +71,8 @@ func auto_target(force := false):
 	return player.tiles_to_aim(d2)
 
 func update_weapon(dt: float, firing: bool) -> void:
+	if _warm < 3:
+		_warm_up()
 	cooldown -= dt
 	var ready: bool = player.aim_blend > 0.75 and player.barrel_on_target()
 	if firing and ready and cooldown <= 0.0:
@@ -81,6 +84,7 @@ func update_weapon(dt: float, firing: bool) -> void:
 
 func _shoot() -> void:
 	player.shot_fired()
+	_gun_sound()
 	var mz: Vector3 = player.muzzle_world()
 	var dir3: Vector3 = player.barrel_dir()
 	var d := Vector2(dir3.x, dir3.z).normalized().rotated(randf_range(-BULLET_SPREAD, BULLET_SPREAD))
@@ -120,7 +124,8 @@ func _place_bullet(b: Dictionary) -> void:
 	var n: MeshInstance3D = b.node
 	n.global_position = p
 	var fwd := Vector3(b.dx, b.vz, b.dy).normalized()
-	n.look_at(p + fwd, Vector3.UP)
+	n.global_position = p + fwd * 0.11
+	n.look_at(p + fwd * 2.0, Vector3.UP)
 
 func _update_bullets(dt: float) -> void:
 	for i in range(bullets.size() - 1, -1, -1):
@@ -239,3 +244,74 @@ func _update_casings(dt: float) -> void:
 				c.b += 1
 			else:
 				c.rest = true
+
+# --- прогрев: первый выстрел не должен подвисать (шейдеры/пулы создаются заранее) ---
+var _warm := 0
+func _warm_up() -> void:
+	_warm += 1
+	if _warm == 1:
+		var p: Vector3 = player.global_position
+		var tr := MeshInstance3D.new()
+		tr.mesh = _tracer_mesh
+		tr.material_override = _tracer_mat
+		tr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		tr.scale = Vector3.ONE * 0.01
+		add_child(tr)
+		tr.global_position = p + Vector3(0, 1, 0)
+		var c := MeshInstance3D.new()
+		c.mesh = _casing_mesh
+		c.material_override = _casing_mat
+		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		c.scale = Vector3.ONE * 0.01
+		add_child(c)
+		c.global_position = p + Vector3(0, 1, 0)
+		_puff(p + Vector3(0, 1, 0), Vector3.ZERO, Color(1, 1, 1, 0.01), 0.01, 0.05)
+		_tracer_pool.append(tr)
+		_casing_pool.append(c)
+	elif _warm == 3:
+		for n in [_tracer_pool, _casing_pool]:
+			for m in n:
+				m.scale = Vector3.ONE
+				m.visible = false
+
+# --- звук автомата: синтез при старте (щелчок + треск + низкий удар), пул из 4 плееров ---
+var _gun_snd: Array = []
+var _gun_players: Array = []
+var _gun_i := 0
+func _make_gun_sound() -> void:
+	var rate := 22050
+	for v in 3:
+		var n := int(rate * 0.22)
+		var data := PackedByteArray()
+		data.resize(n * 2)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 900 + v
+		var lp := 0.0
+		var ph := 0.0
+		for i in n:
+			var t := float(i) / rate
+			var crack := rng.randf_range(-1.0, 1.0) * exp(-t * 90.0)
+			lp += (rng.randf_range(-1.0, 1.0) - lp) * 0.22
+			var body := lp * exp(-t * 20.0) * 1.6
+			var f := 140.0 * exp(-t * 14.0) + 45.0
+			ph += TAU * f / rate
+			var thump := sin(ph) * exp(-t * 26.0) * 0.9
+			var x := clampf((crack * 0.9 + body + thump) * 0.8, -1.0, 1.0)
+			data.encode_s16(i * 2, int(x * 30000.0))
+		var st := AudioStreamWAV.new()
+		st.format = AudioStreamWAV.FORMAT_16_BITS
+		st.mix_rate = rate
+		st.data = data
+		_gun_snd.append(st)
+	for i in 4:
+		var p := AudioStreamPlayer.new()
+		p.volume_db = -7.0
+		add_child(p)
+		_gun_players.append(p)
+
+func _gun_sound() -> void:
+	var p: AudioStreamPlayer = _gun_players[_gun_i % _gun_players.size()]
+	_gun_i += 1
+	p.stream = _gun_snd[randi() % _gun_snd.size()]
+	p.pitch_scale = randf_range(0.95, 1.06)
+	p.play()

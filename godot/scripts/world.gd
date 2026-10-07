@@ -144,18 +144,49 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 	if shadow and not leaf.is_empty():
 		var pm := MultiMesh.new()
 		pm.transform_format = MultiMesh.TRANSFORM_3D
-		var sph := SphereMesh.new()
-		sph.radius = 1.0
-		sph.height = 2.0
-		sph.radial_segments = 10
-		sph.rings = 5
-		pm.mesh = sph
+		pm.mesh = _crown_mesh(key.begins_with("fir") or key.begins_with("pine"))
 		proxy = MultiMeshInstance3D.new()
 		proxy.multimesh = pm
 		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		proxy.extra_cull_margin = 2.0
 		add_child(proxy)
 	kinds[key] = {"proxy": proxy, "mmis": mmis, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
+
+# Нерегулярная крона для тени: хвойные — стопка конусов, лиственные — кучка шаров
+static var _crown_cache := {}
+func _crown_mesh(conifer: bool) -> ArrayMesh:
+	if _crown_cache.has(conifer):
+		return _crown_cache[conifer]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var parts: Array = []
+	if conifer:
+		for i in 4:
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.0
+			cm.bottom_radius = 1.0 - i * 0.2
+			cm.height = 1.0
+			cm.radial_segments = 7
+			cm.rings = 1
+			parts.append([cm, Vector3(0, -0.7 + i * 0.4, 0), Vector3.ONE])
+	else:
+		var offs := [Vector3(0, 0, 0), Vector3(0.55, -0.1, 0.2), Vector3(-0.5, 0.1, 0.35), Vector3(0.1, 0.15, -0.6), Vector3(-0.25, -0.2, -0.45)]
+		var szs := [0.6, 0.5, 0.45, 0.5, 0.4]
+		for i in offs.size():
+			var sm := SphereMesh.new()
+			sm.radial_segments = 8
+			sm.rings = 4
+			parts.append([sm, offs[i], Vector3.ONE * szs[i] * 2.0])
+	for p in parts:
+		var arr: Array = p[0].get_mesh_arrays()
+		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var ix: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		for i in ix:
+			st.add_vertex(vs[i] * p[2] + p[1])
+	st.generate_normals()
+	var m := st.commit()
+	_crown_cache[conifer] = m
+	return m
 
 # ---------- чанки ----------
 func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
@@ -406,7 +437,11 @@ func _rebuild_sprites() -> void:
 				var rh: float = kd.cr * sc
 				var rv: float = kd.top * (0.3 if tall else 0.5) * sc
 				var ey: float = kd.top * (0.62 if tall else 0.5) * sc
-				pb[o] = rh; pb[o + 5] = rv; pb[o + 10] = rh
+				var k: float = 1.0 / (sc * float(kd.bs))
+				for r in 3:
+					pb[o + r * 4] = buf[o + r * 4] * k * rh
+					pb[o + r * 4 + 1] = buf[o + r * 4 + 1] * k * rv
+					pb[o + r * 4 + 2] = buf[o + r * 4 + 2] * k * rh
 				pb[o + 3] = buf[o + 3]; pb[o + 7] = buf[o + 7] + ey; pb[o + 11] = buf[o + 11]
 			if px.multimesh.instance_count != n:
 				px.multimesh.instance_count = n
