@@ -11,6 +11,14 @@ var _hand_tracks: Array = []        # [индекс кости, трек] кис
 var _aim_anim: Animation
 var _t := 0.0
 var _ready_done := false
+# Калибровка хвата по записи прицела Iglesias: как кисть повёрнута относительно оси оружия (REL_*)
+# и где от запястья лежит середина ладони, обхватывающая рукоять/цевьё (V*, в осях кисти).
+var _nocal := not OS.get_cmdline_user_args().has("--cal")      # калибровка кистей по записи прицела — экспериментальная (опускала руки), по умолчанию выключена
+var _cal_state := 0            # 0 — нужна калибровка, 1 — готово
+var _rel_r := Basis()
+var _rel_l := Basis()
+var _v_r := Vector3.ZERO
+var _v_l := Vector3.ZERO
 
 func _bone(n: String) -> int:
 	if not _b.has(n):
@@ -27,13 +35,46 @@ func _setup(skel: Skeleton3D) -> void:
 		if _aim_anim.track_get_type(ti) != Animation.TYPE_ROTATION_3D:
 			continue
 		var nm := str(_aim_anim.track_get_path(ti)).get_slice(":", 1)
-		if nm == "mixamorig_LeftHand" or nm == "mixamorig_RightHand" or (nm.begins_with("Bip01_") and nm.contains("Finger")):
+		if nm == "mixamorig_LeftHand" or nm == "mixamorig_RightHand" or (nm.begins_with("Bip01 ") and nm.contains("Finger")):
 			var bi := skel.find_bone(nm)
 			if bi >= 0:
 				_hand_tracks.append([bi, ti])
 
 func fire() -> void:
 	pass
+
+# Ставим на скелет позу прицела (все кости из записи) и снимаем положение кистей относительно линии «правая — левая кисть»
+func _calibrate(skel: Skeleton3D) -> void:
+	_cal_state = 1
+	if _aim_anim == null:
+		return
+	for ti in _aim_anim.get_track_count():
+		var nm := str(_aim_anim.track_get_path(ti)).get_slice(":", 1)
+		var bi := skel.find_bone(nm)
+		if bi < 0:
+			continue
+		if _aim_anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D:
+			skel.set_bone_pose_rotation(bi, _aim_anim.rotation_track_interpolate(ti, 0.0))
+		elif _aim_anim.track_get_type(ti) == Animation.TYPE_POSITION_3D:
+			skel.set_bone_pose_position(bi, _aim_anim.position_track_interpolate(ti, 0.0))
+	var rh := _bone("RightHand")
+	var lh := _bone("LeftHand")
+	var rf := skel.find_bone("Bip01 R Finger2")
+	var lf := skel.find_bone("Bip01 L Finger2")
+	if rh < 0 or lh < 0 or rf < 0 or lf < 0:
+		return
+	var gr := skel.get_bone_global_pose(rh)
+	var gl := skel.get_bone_global_pose(lh)
+	var fr := skel.get_bone_global_pose(rf).origin
+	var fl := skel.get_bone_global_pose(lf).origin
+	var f := (fl - fr).normalized()
+	var y := (Vector3.UP - f * Vector3.UP.dot(f)).normalized()
+	var ref := Basis(y.cross(f).normalized(), y, f)
+	_rel_r = ref.inverse() * gr.basis.orthonormalized()
+	_rel_l = ref.inverse() * gl.basis.orthonormalized()
+	_v_r = gr.basis.orthonormalized().inverse() * (fr - gr.origin)
+	_v_l = gl.basis.orthonormalized().inverse() * (fl - gl.origin)
+	print("RIFLE_CAL hands ", (fl - fr).length(), " vR ", _v_r, " vL ", _v_l)
 
 func _process_modification() -> void:
 	var skel := get_skeleton()
@@ -60,6 +101,9 @@ func _process_modification() -> void:
 		var x := y.cross(z).normalized()
 		player.rifle_rig.transform = Transform3D(Basis(x, y, z), ch - fwd * 0.17 - up * 0.1)
 		return
+	if _cal_state == 0 and _aim_anim != null and not _nocal:
+		_calibrate(skel)
+		return                                   # поза этого кадра испорчена калибровкой — следующий кадр анимация перезапишет
 	_t += get_process_delta_time()
 	# 1) хват: кисти и пальцы — из записи прицела (дыхание заодно)
 	if _aim_anim != null:
@@ -97,11 +141,29 @@ func _process_modification() -> void:
 	var rig_w := model.global_transform * rig.transform
 	var grip: Vector3 = rig_w * player.RIFLE_GRIP
 	var guard: Vector3 = rig_w * player.RIFLE_HANDGUARD
+	# базис оружия в осях скелета и желаемые повороты кистей (как у записи прицела относительно оружия)
+	var sk_b := skel.global_transform.basis.orthonormalized()
+	var rig_b := sk_b.inverse() * (model.global_transform.basis * rig.transform.basis).orthonormalized()
+	var hb_r := rig_b * _rel_r
+	var hb_l := rig_b * _rel_l
+	# запястье ставим так, чтобы середина ладони (а не запястье) легла на рукоять/цевьё
+	if not _nocal:
+		grip = grip - skel.global_transform.basis * (hb_r * _v_r)
+		guard = guard - skel.global_transform.basis * (hb_l * _v_l)
 	var mb := model.global_transform.basis
 	var pole_r: Vector3 = (skel.global_transform * skel.get_bone_global_pose(r_arm).origin) + mb * Vector3(side * 0.6, -0.8, -0.5)   # локоть вниз и чуть наружу
 	var pole_l: Vector3 = (skel.global_transform * skel.get_bone_global_pose(l_arm).origin) + mb * Vector3(-side * 0.6, -0.8, -0.2)
 	_ik(skel, r_arm, _bone("RightForeArm"), _bone("RightHand"), grip, pole_r)
 	_ik(skel, l_arm, _bone("LeftForeArm"), _bone("LeftHand"), guard, pole_l)
+	# кисти — по оси оружия, пальцы (из записи) обхватывают рукоять и цевьё
+	for pair in ([] if _nocal else [[_bone("RightHand"), hb_r], [_bone("LeftHand"), hb_l]]):
+		var hi: int = pair[0]
+		if hi < 0:
+			continue
+		var g := skel.get_bone_global_pose(hi)
+		g.basis = pair[1]
+		var pg := skel.get_bone_global_pose(skel.get_bone_parent(hi))
+		skel.set_bone_pose_rotation(hi, (pg.basis.orthonormalized().inverse() * (pair[1] as Basis)).get_rotation_quaternion())
 
 func _ik(skel: Skeleton3D, up: int, lo: int, hand: int, target_w: Vector3, pole_w: Vector3) -> void:
 	if lo < 0 or hand < 0:

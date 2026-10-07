@@ -15,6 +15,8 @@ static func run(m, dt: float) -> void:
 			m.stick_r.active = true
 			m.stick_r.vec = Vector2(1, 0)
 			m.stick_r.len_px = 60.0
+		if Engine.get_process_frames() % 4 == 0:
+			print("IDLEAIM aiming=", m.player.aiming, " blend=", snappedf(m.player.aim_blend, 0.01), " aim_local=", snappedf(m.player.aim_local, 0.01), " muzzle_h=", snappedf(m.player.muzzle_world().y - m.player.global_position.y, 0.01), " butt_h=", snappedf((m.player.rifle_rig.global_transform * m.player.RIFLE_BUTT).y - m.player.global_position.y, 0.01), " shoulder_h=", snappedf((m.player.skel.global_transform * m.player.skel.get_bone_global_pose(m.player.skel.find_bone("mixamorig_RightArm")).origin).y - m.player.global_position.y, 0.01), " rHand_h=", snappedf((m.player.skel.global_transform * m.player.skel.get_bone_global_pose(m.player.skel.find_bone("mixamorig_RightHand")).origin).y - m.player.global_position.y, 0.01))
 	if m._test_script == "start":
 		# с места: стик отпущен до 1.5 с, потом полный вперёд; замер расстановки ног (не путаются ли)
 		var pl2 = m.player
