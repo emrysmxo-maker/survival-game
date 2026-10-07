@@ -20,6 +20,7 @@ var kinds := {}            # вид -> {"mmis": [MultiMeshInstance3D], "pre", "b
 var kinds_meta := {}
 var _scenes := {}
 var gallery := OS.get_cmdline_user_args().has("--gallery")
+const TREE_K := 0.72                    # масштаб деревьев (1.0 — как раньше)
 var crown_shadows := true
 var _noplants := OS.get_cmdline_user_args().has("--noplants")
 var ground_detail := true:
@@ -122,6 +123,8 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 	var aabb: AABB = (ref[1] as Transform3D) * (ref[0] as MeshInstance3D).mesh.get_aabb()
 	var top := maxf(aabb.end.y, 0.05)
 	var bs: float = float(kd.h) / top if kd.h > 0.0 else float(kd.sc)
+	if cat == "tree" or cat == "dead":
+		bs *= TREE_K                  # деревья уменьшены (были слишком большими рядом с бойцом)
 	var flat: bool = cat in WorldGen.FLAT_CATS
 	var pre := Transform3D((ref[1] as Transform3D).basis, Vector3(0.0, (ref[1] as Transform3D).origin.y, 0.0))
 	var shadow: bool = not flat and not (cat in ["grass", "flower", "moss"])
