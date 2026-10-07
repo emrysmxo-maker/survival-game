@@ -7,7 +7,7 @@ const CAM_ELEV_MIN := 22.0          # наклон камеры: почти го
 const CAM_ELEV_MAX := 82.0
 const CAM_ELEV_SPEED := 60.0
 const CAM_SIZE := 7.6               # метров по вертикали на экране (боец ~1/6 высоты экрана, как раньше)
-const CAM_SIZE_MIN := 1.7           # приближение (вплотную к бойцу)
+const CAM_SIZE_MIN := 1.0           # приближение (вплотную к бойцу)
 const CAM_SIZE_MAX := 16.0          # отдаление
 const CAM_ROT_SPEED := 150.0        # °/с при полном отклонении джойстика камеры
 const CAM_ZOOM_SPEED := 1.1         # скорость приближения (экспонента)
@@ -143,7 +143,9 @@ func teleport(t: Vector2) -> void:
 func _follow(k: float) -> void:
 	var p: Vector3 = player.global_position
 	cam_h = lerpf(cam_h, p.y, k)
-	var target := Vector3(p.x, cam_h, p.z)
+	# вплотную камера смотрит на корпус, а не на ступни (иначе голова уходит за кадр)
+	var lift := 1.1 * (1.0 - smoothstep(1.3, 5.0, cam_size))
+	var target := Vector3(p.x, cam_h + lift, p.z)
 	cam.global_position = target + cam.global_transform.basis.z * 60.0
 
 func _update_camera(dt: float) -> void:
