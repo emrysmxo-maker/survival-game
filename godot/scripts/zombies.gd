@@ -1,7 +1,7 @@
 extends Node3D
 # Зомби (кнопка «ЗОМБИ +»): идут к бойцу, пуля попадает в случайную часть тела.
 # Голова — много урона; рука может оторваться; нога — ломается, зомби ползёт.
-# Перенос src/zombie.js (модель Zombie.glb на скелете Mixamo, клипы Walk/Idle/Run).
+# Перенос src/zombie.js (модель Zombie.glb на скелете Quaternius (кости названы mixamorig_*), клипы Walk/Idle/Run).
 
 const HP := 250.0
 const WALK_TPS := 0.55
@@ -64,7 +64,6 @@ func spawn() -> void:
 	z.model.scale = Vector3.ONE * 0.8
 	z.node.add_child(z.model)
 	var glb: Node3D = _scene.instantiate()
-	glb.rotation.y = PI
 	z.model.add_child(glb)
 	player.add_xray(glb)
 	z.node.add_child(player.make_blob(0.8))

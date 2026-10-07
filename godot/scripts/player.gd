@@ -19,11 +19,11 @@ var AIM_ELEV_K := 0.7297           # sin(угла камеры): по верти
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
-const WALK_ANIM_MPS := 1.37         # клип Walk (2.94 × 1.32/2.83 — соотношение клипов из браузерной версии)
-const RUN_ENTER_MPS := 2.0          # м/с: быстрее — бег, медленнее RUN_EXIT — шаг (2.4/2.0 браузерной в наших метрах)
-const RUN_EXIT_MPS := 1.66
+const WALK_ANIM_MPS := 0.85         # клип Walk (Quaternius), шаг по стопе при speed_scale 1 в единицах модели
+const RUN_ENTER_MPS := 1.35         # м/с: быстрее — бег (клип Jog), медленнее RUN_EXIT — шаг
+const RUN_EXIT_MPS := 1.2
 const GAIT_TEMPO := 0.85           # шаги чуть спокойнее «физики» (в браузерной 0.7) — естественнее
-const RUN_ANIM_MPS := 2.94         # скорость шага в клипе Run при speed_scale 1 (замер по стопе)
+const RUN_ANIM_MPS := 3.0          # скорость шага в клипе Run (Jog) при speed_scale 1 (замер по стопе)
 
 var world
 var tile := Vector2.ZERO
@@ -71,19 +71,16 @@ const RIFLE_PORT := Vector3(0.03, 0.03, -0.02)
 
 func _ready() -> void:
 	var scn: PackedScene = load("res://assets/character/Soldier.glb")
-	# модель в файле смотрит в -Z: кладём её в «опору», развёрнутую на 180°,
-	# у опоры +Z — лицо бойца (на опору опираются автомат и прицел)
+	# модель смотрит в +Z (лицо бойца); на «опору» опираются автомат и прицел
 	model = Node3D.new()
 	model.scale = Vector3.ONE * CHAR_SCALE
 	add_child(model)
 	var glb: Node3D = scn.instantiate()
-	glb.rotation.y = PI
 	model.add_child(glb)
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
 	loop_all(anim)
 	_add_swim_clips()
-	_recolor(glb)
 	_make_rifle()
 	add_xray(model, true)
 	blob = make_blob(0.75)
@@ -311,7 +308,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		if backpedal or water_depth > 0.15:
 			_running = false          # по воде — шагом
 		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
-		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.5, 1.3) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
+		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.62, 1.3) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
 		_play("Run" if _running else "Walk", -k if backpedal else k)
 	else:
 		anim_speed = 0.0
@@ -448,7 +445,7 @@ func _xr_set(n: Node, on: bool) -> void:
 # Клипы плавания Swim_Fwd / Swim_Idle — из Universal Animation Library (Quaternius, CC0),
 # перенесены на скелет Mixamo заранее (tools/models/retarget.py → assets/character/swim.json)
 func _add_swim_clips() -> void:
-	if anim == null or skel == null:
+	if anim == null or skel == null or anim.has_animation("Swim_Fwd"):
 		return
 	var f := FileAccess.open("res://assets/character/swim.json", FileAccess.READ)
 	if f == null:
