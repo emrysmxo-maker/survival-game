@@ -37,10 +37,14 @@ func _process_modification() -> void:
 		return
 	# скручивание позвоночника к цели (корпус добирает до TWIST, остальное — руки)
 	var tw: float = clampf(player.aim_local, -player.TWIST, player.TWIST)
-	for pair in [["Spine", 0.3], ["Spine1", 0.35], ["Spine2", 0.35]]:
+	for pair in [["Spine", 0.3, "Spine1"], ["Spine1", 0.35, "Spine2"], ["Spine2", 0.35, "Neck"]]:
 		var bi := _bone(pair[0])
 		if bi >= 0:
-			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(Vector3.UP, tw * pair[1]))
+			# ось скрутки — вдоль позвоночника (к следующей кости): у Mixamo это локальная Y, у Rocketbox (Biped) — X;
+			# раньше всегда бралась Y, и на новой модели корпус гнуло вперёд/вбок вместо поворота
+			var ci := _bone(pair[2])
+			var ax := skel.get_bone_rest(ci).origin.normalized() if ci >= 0 else Vector3.UP
+			skel.set_bone_pose_rotation(bi, skel.get_bone_pose_rotation(bi) * Quaternion(ax, tw * pair[1]))
 	var to_model := model.global_transform.affine_inverse() * skel.global_transform
 	var chest: Vector3 = to_model * skel.get_bone_global_pose(spine2).origin
 	var side := signf((to_model * skel.get_bone_global_pose(r_arm).origin).x)

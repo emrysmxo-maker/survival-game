@@ -115,42 +115,24 @@ var _steps: Array = []
 var _players: Array = []
 var _pi := 0
 func _make_steps() -> void:
-	for v in 5:
-		var rate := 22050
-		var n := int(rate * 0.13)
-		var data := PackedByteArray()
-		data.resize(n * 2)
-		var rng := RandomNumberGenerator.new()
-		rng.seed = 77 + v * 13
-		var lp := 0.0
-		var prev := 0.0
-		for i in n:
-			var t := float(i) / rate
-			# сухой хруст: высокочастотный шум с резкой атакой и быстрым спадом + короткий мягкий удар
-			var nz := rng.randf_range(-1.0, 1.0)
-			lp += (nz - lp) * 0.5
-			var hp := lp - prev * 0.0
-			prev = lp
-			var crunch := (nz * 0.6 + hp * 0.4) * exp(-t * (55.0 + v * 8.0)) * minf(1.0, t * 800.0)
-			var thud := sin(TAU * (70.0 + v * 6.0) * t) * exp(-t * 60.0) * 0.5
-			var x := clampf((crunch * 0.8 + thud) * 0.9, -1.0, 1.0)
-			data.encode_s16(i * 2, int(x * 30000.0))
-		var st := AudioStreamWAV.new()
-		st.format = AudioStreamWAV.FORMAT_16_BITS
-		st.mix_rate = rate
-		st.data = data
-		_steps.append(st)
+	# настоящие записи шагов (Kenney RPG Audio, CC0): синтез шумом звучал как «заводящийся трактор»
+	for i in 10:
+		var st = load("res://assets/sfx/footstep%02d.ogg" % i)
+		if st:
+			_steps.append(st)
 	for i in 4:
 		var p := AudioStreamPlayer.new()
-		p.volume_db = -10.0
+		p.volume_db = -14.0
 		add_child(p)
 		_players.append(p)
 
 func _step_sound(soft: float) -> void:
 	if _steps.is_empty():
 		_make_steps()
+	if _steps.is_empty():
+		return
 	var p: AudioStreamPlayer = _players[_pi % _players.size()]
 	_pi += 1
 	p.stream = _steps[randi() % _steps.size()]
-	p.pitch_scale = randf_range(0.92, 1.1) * (0.9 if soft > 0.5 else 1.0)
+	p.pitch_scale = randf_range(0.9, 1.08) * (0.92 if soft > 0.5 else 1.0)
 	p.play()
