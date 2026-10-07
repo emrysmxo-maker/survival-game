@@ -19,11 +19,6 @@ var AIM_ELEV_K := 0.7297           # sin(угла камеры): по верти
 const SPEED_WATER := 0.5
 const SPEED_SWAMP := 0.65
 const CHAR_SCALE := 0.8            # боец в тех же пропорциях к деревьям, что в браузерной версии
-const WALK_ANIM_MPS := 1.37         # клип Walk (2.94 × 1.32/2.83 — соотношение клипов из браузерной версии)
-const RUN_ENTER_MPS := 2.0          # м/с: быстрее — бег, медленнее RUN_EXIT — шаг (2.4/2.0 браузерной в наших метрах)
-const RUN_EXIT_MPS := 1.66
-const GAIT_TEMPO := 0.85           # шаги чуть спокойнее «физики» (в браузерной 0.7) — естественнее
-const RUN_ANIM_MPS := 2.0           # клип Run (Mixamo Jogging от владельца, на месте): путь таза 1.98 м/с в единицах модели
 
 var world
 var tile := Vector2.ZERO
@@ -38,6 +33,9 @@ var swim_t := 0.0                  # фаза гребков (процедурн
 const SWIM_SPEED := 0.5
 const SWIM_DEPTH := 1.0             # м: насколько ноги-точка модели ниже поверхности воды при плавании (подбирается по виду)
 var _running := false
+var _gait := 0
+const GAIT_NAMES := ["WalkSlow", "Walk", "RunSlow", "Run"]
+var _gait_mps := [0.66, 0.81, 1.93, 2.3]     # м/с при speed_scale 1 — пересчитываются из записи (_inplace_clips)
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -88,6 +86,7 @@ func _ready() -> void:
 		anim.add_animation_library("", AnimationLibrary.new())
 	_add_json_clips("res://assets/character/survivor_clips.json")
 	loop_all(anim)
+	_inplace_clips()
 	_make_rifle()
 	add_xray(model, true)
 	blob = make_blob(0.75)
@@ -234,7 +233,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		if aiming:
 			mf = BACK_SPEED if backpedal else FIRE_SPEED
 		# лёгкий наклон стика — шаг (не меньше 55% скорости), чтобы не топтаться на месте
-		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.55, 1.0, clampf((stick.length() - 0.1) / 0.7, 0.0, 1.0))
+		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.15, 1.0, clampf((stick.length() - 0.1) / 0.75, 0.0, 1.0))   # слегка — медленный шаг, до упора — бег
 		want *= _terrain_speed(want)
 		move_dir = want.normalized()
 		vel += (want - vel) * minf(1.0, ACCEL * dt)
@@ -308,15 +307,18 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	if moving and real_speed > 0.15:
 		anim_speed += (real_speed - anim_speed) * minf(1.0, 6.0 * dt)
 		var mps := anim_speed * WorldGen.T
-		if _running:
-			_running = mps > RUN_EXIT_MPS
-		else:
-			_running = mps > RUN_ENTER_MPS
+		# походка по скорости: медленный шаг → шаг → лёгкий бег → бег (мокап Rocketbox);
+		# темп = скорость по земле / скорость клипа (путь таза в записи) — стопа не скользит
 		if backpedal or water_depth > 0.15:
-			_running = false          # по воде — шагом
-		var clip_mps := (RUN_ANIM_MPS if _running else WALK_ANIM_MPS) * CHAR_SCALE
-		var k := clampf(GAIT_TEMPO * mps / clip_mps, 0.5, 1.3) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее и реже
-		_play("Run" if _running else "Walk", -k if backpedal else k)
+			_gait = 1                 # пятясь и по воде — обычный шаг
+		else:
+			while _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
+				_gait += 1
+			while _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
+				_gait -= 1
+		_running = _gait >= 2
+		var k := clampf(mps / _gait_mps[_gait], 0.6, 1.6) * (0.82 if water_depth > 0.15 else 1.0)   # в воде шаг тяжелее
+		_play(GAIT_NAMES[_gait], -k if backpedal else k)
 	else:
 		anim_speed = 0.0
 		_running = false
@@ -345,7 +347,7 @@ var forced_clip := ""          # отладка (devtest --gait=): принуд�
 func _play(n: String, speed: float) -> void:
 	if anim == null:
 		return
-	if forced_clip != "" and n in ["Walk", "Run"]:
+	if forced_clip != "" and n in GAIT_NAMES:
 		n = forced_clip
 		speed = signf(speed)
 	if n != _cur_anim:
@@ -465,6 +467,8 @@ func _add_json_clips(path: String) -> void:
 	var base: String = str(anim.get_node(anim.root_node).get_path_to(skel))
 	var lib := anim.get_animation_library("")
 	for cname in data.clips:
+		if anim.has_animation(cname):
+			continue          # свои клипы модели важнее (из json берётся только плавание)
 		var c: Dictionary = data.clips[cname]
 		var a := Animation.new()
 		a.length = c.len
@@ -484,6 +488,32 @@ func _add_json_clips(path: String) -> void:
 		for i in n:
 			a.position_track_insert_key(hp, float(i) / 30.0, Vector3(pos[i][0], pos[i][1], pos[i][2]))
 		lib.add_animation(cname, a)
+
+# Мокап Rocketbox записан с движением вперёд: убираем путь таза (клип на месте),
+# а скорость клипа (путь / длительность × масштаб) берём для темпа шага.
+func _inplace_clips() -> void:
+	for gi in GAIT_NAMES.size():
+		var cname: String = GAIT_NAMES[gi]
+		if not anim.has_animation(cname):
+			continue
+		var a := anim.get_animation(cname)
+		for ti in a.get_track_count():
+			if a.track_get_type(ti) != Animation.TYPE_POSITION_3D or not str(a.track_get_path(ti)).ends_with(":mixamorig_Hips"):
+				continue
+			var n := a.track_get_key_count(ti)
+			if n < 2:
+				continue
+			var p0: Vector3 = a.track_get_key_value(ti, 0)
+			var drift: Vector3 = (a.track_get_key_value(ti, n - 1) as Vector3) - p0
+			drift.y = 0.0
+			var t0 := a.track_get_key_time(ti, 0)
+			var L := a.track_get_key_time(ti, n - 1) - t0
+			if L <= 0.0 or drift.length() < 0.05:
+				continue
+			for i in n:
+				var v: Vector3 = a.track_get_key_value(ti, i)
+				a.track_set_key_value(ti, i, v - drift * ((a.track_get_key_time(ti, i) - t0) / L))
+			_gait_mps[gi] = drift.length() / L * CHAR_SCALE
 
 static func loop_all(ap: AnimationPlayer) -> void:
 	if ap == null:

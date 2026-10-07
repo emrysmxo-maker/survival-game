@@ -1,5 +1,5 @@
 extends RefCounted
-# Проверки без экрана (запуск с --test=run|runaim|runback|fireback|zombie|behind|aim): сценарии
+# Проверки без экрана (запуск с --test=run|side|sideaim|sidewalk|runaim|runback|fireback|zombie|behind|aim): сценарии
 # управления и вывод замеров в лог. В обычной игре не используется.
 
 static func _yaw(d: Vector2) -> float:
@@ -23,11 +23,19 @@ static func run(m, dt: float) -> void:
 		var lf: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_LeftFoot")).origin
 		var rf: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_RightFoot")).origin
 		var hp: Vector3 = sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Hips")).origin
-		print("F ", snappedf(m._tt, 0.001), " ", pl.anim.current_animation, " ", snappedf(pl.anim.speed_scale, 0.001), " ", pl.global_position.x, " ", pl.global_position.z, " ", lf.x, " ", lf.y, " ", lf.z, " ", rf.x, " ", rf.y, " ", rf.z, " ", hp.y - pl.global_position.y)
+		print("F ", snappedf(m._tt, 0.001), " ", pl.anim.current_animation, " ", snappedf(pl.anim.speed_scale, 0.001), " ", pl.global_position.x, " ", pl.global_position.z, " ", lf.x, " ", lf.y, " ", lf.z, " ", rf.x, " ", rf.y, " ", rf.z, " ", hp.y - pl.global_position.y, " ", lf.y - pl.global_position.y, " ", rf.y - pl.global_position.y)
 	match m._test_script:
 		"run":
 			m.stick_l.active = true
 			m.stick_l.vec = Vector2(0, -1)
+		"side", "sideaim", "sidewalk":
+			# бег/шаг вбок по экрану — снимок в профиль
+			m.stick_l.active = true
+			m.stick_l.vec = Vector2(0.35 if m._test_script == "sidewalk" else 1.0, 0)
+			if m._test_script == "sideaim":
+				m.stick_r.active = true
+				m.stick_r.vec = Vector2(1, 0)
+				m.stick_r.len_px = 60.0
 		"fireback":
 			m.stick_l.vec = Vector2(0, -1)
 			if m._tt > 0.5:

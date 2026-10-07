@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bcx5w8ngvgqsm"
-path.s3tc="res://.godot/imported/Survivor_Bitmaptexture_3.jpg-009e8cd6832b2bd9d7d469b0106c827c.s3tc.ctex"
-path.etc2="res://.godot/imported/Survivor_Bitmaptexture_3.jpg-009e8cd6832b2bd9d7d469b0106c827c.etc2.ctex"
+uid="uid://b6nmn1dh8qgl"
+path.s3tc="res://.godot/imported/Survivor_Map #14.jpg-8ae7ae3fd966af96a482b3e49cd0f8a7.s3tc.ctex"
+path.etc2="res://.godot/imported/Survivor_Map #14.jpg-8ae7ae3fd966af96a482b3e49cd0f8a7.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "9e365312b3523002ec4fa0e3423e0c8b"
+"md5": "8a1402aa6f8a9a7449c0dcf4adaa567e"
 }
 
 [deps]
 
-source_file="res://assets/character/Survivor_Bitmaptexture_3.jpg"
-dest_files=["res://.godot/imported/Survivor_Bitmaptexture_3.jpg-009e8cd6832b2bd9d7d469b0106c827c.s3tc.ctex", "res://.godot/imported/Survivor_Bitmaptexture_3.jpg-009e8cd6832b2bd9d7d469b0106c827c.etc2.ctex"]
+source_file="res://assets/character/Survivor_Map #14.jpg"
+dest_files=["res://.godot/imported/Survivor_Map #14.jpg-8ae7ae3fd966af96a482b3e49cd0f8a7.s3tc.ctex", "res://.godot/imported/Survivor_Map #14.jpg-8ae7ae3fd966af96a482b3e49cd0f8a7.etc2.ctex"]
 
 [params]
 

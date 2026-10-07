@@ -21,6 +21,7 @@ var kinds_meta := {}
 var _scenes := {}
 var gallery := OS.get_cmdline_user_args().has("--gallery")
 var crown_shadows := true
+var _noplants := OS.get_cmdline_user_args().has("--noplants")
 var ground_detail := true:
 	set(v):
 		ground_detail = v
@@ -424,6 +425,9 @@ func _rebuild_sprites() -> void:
 				mm.instance_count = n
 			if n > 0:
 				mm.buffer = buf
+		if _noplants:
+			for mmi in kinds[key].mmis:
+				mmi.visible = false        # отладка: --noplants (снимки бойца без кустов)
 		var px: MultiMeshInstance3D = kinds[key].proxy
 		if px:
 			px.visible = crown_shadows
