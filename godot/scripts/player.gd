@@ -14,8 +14,10 @@ const TWIST := 0.55                # ~30°: корпус лишь «опереж
 const ARMS := 0.2618               # 15°
 const REACH := TWIST + ARMS
 const FIRE_SPEED := 0.62           # скорость при прицеле, вперёд (×)
-const STRAFE_SPEED := 0.55         # вбок (×)
-const BACK_SPEED := 0.45           # назад (×)
+const STRAFE_SPEED := 0.42         # вбок (×) ≈ 1,7 м/с — под темп записи шага вбок (при 0.55 запись шла ×1.4: частые короткие шажки)
+const BACK_SPEED := 0.38           # назад (×) ≈ 1,6 м/с
+const MOVE_TURN := 9.0             # рад/с — разворот по ходу без прицела (180° ≈ 0,35 с)
+const TURN_SLOW := 0.3             # при развороте на 180° скорость падает до 30%
 const AIM_BODY_TURN := 4.2         # рад/с — разворот бойца к цели (~240°/с: быстрее человека, но игра мобильная)
 var AIM_ELEV_K := 0.7297           # sin(угла камеры): по вертикали экрана земля сжата — поправка прицела (задаёт main.gd)
 const SPEED_WATER := 0.5
@@ -276,6 +278,10 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		# лёгкий наклон стика — шаг (не меньше 55% скорости), чтобы не топтаться на месте
 		want = screen_to_tiles(stick.normalized()) * SPEED * mf * lerpf(0.15, 1.0, clampf((stick.length() - 0.1) / 0.75, 0.0, 1.0))   # слегка — медленный шаг, до упора — бег
 		want *= _terrain_speed(want)
+		if not aiming:
+			# разворот на бегу: пока тело не довернулось к новому направлению, человек тормозит (не «скользит» боком/спиной)
+			var off_ang := absf(wrapf(tiles_to_yaw(want) - yaw, -PI, PI))
+			want *= clampf(1.0 - (off_ang - 0.5) / 1.6, TURN_SLOW, 1.0)
 		move_dir = want.normalized()
 		vel += (want - vel) * minf(1.0, (5.0 if _starting else ACCEL) * dt)   # на старте разгон плавнее — под запись «начало шага»
 	else:
@@ -327,12 +333,13 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	elif moving:
 		turn_target = move_yaw
 	var d2 := wrapf(turn_target - yaw, -PI, PI)
-	var rate := AIM_BODY_TURN if aiming else 24.0
+	var rate := AIM_BODY_TURN if aiming else MOVE_TURN
 	_turn_left = d2
 	if aiming:
 		yaw = wrapf(yaw + clampf(d2, -rate * dt, rate * dt), -PI, PI)
 	elif moving:
-		yaw = lerp_angle(yaw, move_yaw, minf(1.0, rate * dt))
+		# поворот с конечной скоростью (раньше — почти мгновенно: 143° за кадр, таз «прокручивался»)
+		yaw = wrapf(yaw + clampf(d2 * minf(1.0, 12.0 * dt), -rate * dt, rate * dt), -PI, PI)
 	model.rotation.y = yaw
 	backpedal = false
 	var aim_rel := 0.0
@@ -407,11 +414,17 @@ func _leg_forward(mps: float, dt: float) -> void:
 	elif slow_mode:
 		_set_gait(1)
 	else:
-		if _gait_t > 0.4:
+		if _gait_t > 0.2 and (mps > _gait_mps[_gait] * 1.3 or mps < _gait_mps[_gait] * 0.7):
+			# сильно не в темпе (разгон/торможение): сразу на подходящую запись, но не чаще раза в 0.2 с —
+			# иначе записи менялись каждый кадр и ноги путались
+			_set_gait(_pick_gait(mps))
+		elif _gait_t > 0.4:
 			var want_g := _gait
-			if _gait < _gait_mps.size() - 1 and mps > (_gait_mps[_gait] + _gait_mps[_gait + 1]) * 0.5 * 1.06:
+			# граница — среднее геометрическое темпов соседних записей: выбирается та, что крутится ближе к ×1
+			# (по среднему арифметическому полный стик 4,1 м/с попадал в Run ×1.5 — частые короткие шаги)
+			if _gait < _gait_mps.size() - 1 and mps > sqrt(_gait_mps[_gait] * _gait_mps[_gait + 1]) * 1.05:
 				want_g = _gait + 1
-			elif _gait > 0 and mps < (_gait_mps[_gait] + _gait_mps[_gait - 1]) * 0.5 * 0.94:
+			elif _gait > 0 and mps < sqrt(_gait_mps[_gait] * _gait_mps[_gait - 1]) * 0.95:
 				want_g = _gait - 1
 			if want_g != _gait:
 				_set_gait(want_g)
@@ -457,7 +470,7 @@ var _gait_t := 0.0
 
 func _pick_gait(mps: float) -> int:
 	var g := 0
-	while g < _gait_mps.size() - 1 and mps > (_gait_mps[g] + _gait_mps[g + 1]) * 0.5:
+	while g < _gait_mps.size() - 1 and mps > sqrt(_gait_mps[g] * _gait_mps[g + 1]):
 		g += 1
 	return g
 

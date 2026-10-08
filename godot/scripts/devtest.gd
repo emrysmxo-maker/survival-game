@@ -46,6 +46,29 @@ static func pose_report(m) -> void:
 		" elbowR_out=", snappedf((_bp(sk, "RightForeArm") - _bp(sk, "Spine2")).dot(-m.player.model.global_transform.basis.x.normalized()), 0.01),
 		" elbowL_out=", snappedf((_bp(sk, "LeftForeArm") - _bp(sk, "Spine2")).dot(m.player.model.global_transform.basis.x.normalized()), 0.01))
 
+static var _pf := {}
+static func strafe_log(m) -> void:
+	if _ik == null:
+		for c in m.player.skel.get_children():
+			if c is SkeletonModifier3D and "dbg" in c:
+				_ik = c
+	if _ik == null or not _ik.dbg.has("hips_fwd"):
+		return
+	var pl = m.player
+	var mf: Vector3 = pl.model.global_transform.basis.z
+	var hf: Vector3 = _ik.dbg["hips_fwd"]
+	var hy := rad_to_deg(wrapf(atan2(hf.x, hf.z) - atan2(mf.x, mf.z), -PI, PI))
+	var out := ""
+	for sd in ["LeftFoot", "RightFoot"]:
+		var p: Vector3 = _ik.dbg[sd]
+		var low: bool = p.y - pl.global_position.y < 0.12
+		var sp := 0.0
+		if _pf.has(sd):
+			sp = Vector2(p.x - _pf[sd].x, p.z - _pf[sd].z).length() / 0.033
+		_pf[sd] = p
+		out += " %s=%.2f/%.3f" % [sd.substr(0, 1), sp, p.y - pl.global_position.y]
+	print("ST t=", snappedf(m._tt, 0.033), " anim=", pl.anim.current_animation, " k=", snappedf(pl.anim.speed_scale, 0.01), " v=", snappedf(pl.vel.length() * WorldGen.T, 0.01), " hipyaw=", snappedf(hy, 1), " yaw=", snappedf(rad_to_deg(pl.yaw), 1), out)
+
 static func run(m, dt: float) -> void:
 	if OS.get_cmdline_user_args().has("--pose") and Engine.get_process_frames() % 5 == 0 and m._tt > 0.3:
 		pose_report(m)
@@ -149,6 +172,29 @@ static func run(m, dt: float) -> void:
 			if Engine.get_process_frames() % 20 == 0 and m._tt > 1.0:
 				var bd: Vector3 = m.player.barrel_dir()
 				print("RUNAIM t=", snappedf(m._tt, 0.1), " legs=", snappedf(rad_to_deg(m.player.yaw), 1), " move=", snappedf(rad_to_deg(_yaw(m.player.move_dir)), 1), " aim=", snappedf(rad_to_deg(m.player.aim_yaw), 1), " twist=", snappedf(rad_to_deg(m.player.aim_local), 1), " barrel=", snappedf(rad_to_deg(atan2(bd.x, bd.z)), 1), " back=", m.player.backpedal, " anim=", m.player.anim.current_animation, " spd=", snappedf(m.player.anim.speed_scale, 0.01), " bullets=", m.weapon.bullets.size())
+		"lr", "lrwalk":
+			# без прицела: вправо, с 2.5 с — влево, с 5 с — вверх, с 7 с — вниз
+			m.stick_l.active = true
+			var mag2 := 0.45 if m._test_script == "lrwalk" else 1.0
+			var v2 := Vector2(1, 0)
+			if m._tt > 2.5: v2 = Vector2(-1, 0)
+			if m._tt > 5.0: v2 = Vector2(0, -1)
+			if m._tt > 7.0: v2 = Vector2(0, 1)
+			m.stick_l.vec = v2 * mag2
+			strafe_log(m)
+		"strafe", "strafewalk":
+			# целится вверх по экрану, идёт вправо, с 2.5 с — влево, с 5 с — вперёд (вверх), с 7 с — назад
+			m.stick_r.active = true
+			m.stick_r.vec = Vector2(0, -1)
+			m.stick_r.len_px = 60.0
+			m.stick_l.active = true
+			var mag := 0.5 if m._test_script == "strafewalk" else 1.0
+			var v := Vector2(1, 0)
+			if m._tt > 2.5: v = Vector2(-1, 0)
+			if m._tt > 5.0: v = Vector2(0, -1)
+			if m._tt > 7.0: v = Vector2(0, 1)
+			m.stick_l.vec = v * mag
+			strafe_log(m)
 		"aim":
 			m.stick_r.active = true
 			m.stick_r.vec = Vector2(1, 0.3)

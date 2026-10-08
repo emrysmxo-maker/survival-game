@@ -281,6 +281,8 @@ func _process_modification() -> void:
 	if _dbg:
 		for i in skel.get_bone_count():
 			dbg[skel.get_bone_name(i).trim_prefix("mixamorig_")] = skel.global_transform * skel.get_bone_global_pose(i).origin
+		var hb := skel.global_transform.basis * skel.get_bone_global_pose(_bone("Hips")).basis
+		dbg["hips_fwd"] = hb.z
 		dbg["butt"] = skel.global_transform * (hp * (st.bt as Vector3))
 		dbg["muzzle"] = skel.global_transform * (hp * (st.mz as Vector3))
 
