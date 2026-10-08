@@ -21,29 +21,24 @@ const FEATURES := {
 	"lakebase": {"x": 118.0, "y": 52.0, "r": 13.0, "name": "Рыбацкая база"},
 	"farm": {"x": 25.0, "y": 150.0, "r": 22.0, "name": "Колхоз «Рассвет»"},
 	"bunker": {"x": -150.0, "y": 125.0, "r": 22.0, "name": "Военный бункер"},
-	"tower": {"x": -35.0, "y": -178.0, "r": 12.0, "name": "Радиовышка"},
+	"tower": {"x": -35.0, "y": -178.0, "r": 18.0, "name": "Радиовышка"},
 }
 const LANDMARKS := ["camp", "village", "sawmill", "lakebase", "farm", "bunker", "tower"]
 # хутора, дачи, кордоны: малые поляны с постройками (расстановка — scripts/props.gd); ровная земля, леса нет, к каждому ведёт просёлок
 const HAMLETS := {
-	"h_stone": {"x": -75.0, "y": -150.0, "r": 10.0, "name": "Хутор Каменный"},
-	"h_pond": {"x": -175.0, "y": -82.0, "r": 10.0, "name": "Починок"},
 	"h_vyselki": {"x": -85.0, "y": -60.0, "r": 12.0, "name": "Выселки"},
 	"h_zarechye": {"x": -45.0, "y": 118.0, "r": 12.0, "name": "Заречье"},
 	"h_dachi": {"x": 70.0, "y": 25.0, "r": 14.0, "name": "Дачный посёлок"},
-	"h_novo": {"x": 100.0, "y": 118.0, "r": 11.0, "name": "Новосёлки"},
 	"h_bereza": {"x": 140.0, "y": -25.0, "r": 11.0, "name": "Берёзовка"},
 	"h_ranger": {"x": 15.0, "y": -105.0, "r": 9.0, "name": "Лесничество"},
 	"h_hunter": {"x": -20.0, "y": -140.0, "r": 7.0, "name": "Охотничья заимка"},
-	"h_sosn": {"x": 95.0, "y": -65.0, "r": 9.0, "name": "Хутор Сосновый"},
 	"h_cem": {"x": -140.0, "y": -62.0, "r": 8.0, "name": "Старое кладбище"},
-	"h_yuzhny": {"x": 75.0, "y": 175.0, "r": 10.0, "name": "Хутор Южный"},
 	"h_poselok": {"x": -54.0, "y": -105.0, "r": 12.0, "name": "Посёлок Луговой"},
-	"h_lager": {"x": -99.0, "y": 104.0, "r": 16.0, "name": "Детский лагерь «Берёзка»"},
+	"h_lager": {"x": -100.0, "y": -22.0, "r": 16.0, "name": "Детский лагерь «Берёзка»"},
 }
-const TRACKS := [["h_stone", "tower"], ["h_pond", "village"], ["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"], ["h_novo", "farm"],
-	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_sosn", "sawmill"], ["h_cem", "village"], ["h_yuzhny", "farm"],
-	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "h_zarechye"]]
+const TRACKS := [["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"],
+	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_cem", "village"],
+	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "h_vyselki"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
 # озёра: центр, радиус (берег неровный), глубина
@@ -201,10 +196,17 @@ static func init() -> void:
 		var pb := Vector2(b.x, b.y)
 		var n := (pb - pa).normalized().orthogonal()
 		var pts := PackedVector2Array()
-		for i in 11:
-			var t := i / 10.0
+		for i in 21:
+			var t := i / 20.0
 			var wob := sin(t * PI) * (9.0 * sin(seed * 1.7) + 5.0 * sin(t * PI * 3.0 + seed))
-			pts.append(pa.lerp(pb, t) + n * wob)
+			var q := pa.lerp(pb, t) + n * wob
+			if i > 0 and i < 20:
+				for L in LAKES:                                        # дорога огибает озеро (берег неровный — запас)
+					var lc := Vector2(L.x, L.y)
+					var rr: float = L.r * 1.45 + 5.0
+					if q.distance_to(lc) < rr:
+						q = lc + (q - lc).normalized() * rr
+			pts.append(q)
 		seed += 1
 		var bb := Rect2(pts[0], Vector2.ZERO)
 		for p in pts:
@@ -534,7 +536,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if not ok:
 			continue
 		var spot := tree_spot(x, y, r0)
-		if spot.is_empty() or cleared(x, y, 3.0):
+		if spot.is_empty() or cleared(x, y, 4.5):            # запас 4,5 тайла (~3,8 м): крона не нависает над домом
 			continue
 		var dead: bool = rng.randf() < (eco.dead + (0.2 if spot[3] > 0.5 else 0.0) + morok(x, y) * 0.7)
 		var set: Array = DEAD if dead else _pick_weighted(eco.canopy, rng.randf())

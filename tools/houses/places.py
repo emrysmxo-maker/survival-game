@@ -1,6 +1,6 @@
 # Новые места (этап 10): АЗС и кафе, железная дорога (рельсы, вагоны, переезд, платформа), корпус лагеря/санатория,
 # свалка, обломки вертолёта. Строится теми же средствами, что дома (house.py: HB, mat, фото-текстуры).
-import bpy, math, random, sys, os
+import zlib, bpy, math, random, sys, os
 from mathutils import Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import house as H
@@ -180,6 +180,91 @@ def heli_wreck(name):
 	ob.rotation_euler = (0.25, 0.0, 0.0)                                # завалился на бок
 	return _join(o2, ob, name), None
 
+# ---------------- общественные и придорожные здания: дом + вывеска над входом ----------------
+def signed(name, spec, seed, text, size=0.5, board=(0.92, 0.92, 0.9), tcol=(0.12, 0.2, 0.55)):
+	"""Здание по house() и вывеска на фасаде (-Y) над дверью."""
+	ob, rf = house(name, spec, seed)
+	L, D = spec["L"], spec["D"]
+	H = spec["h"] * spec.get("floors", 1) + 0.3 * (spec.get("floors", 1) - 1) + spec.get("plinth", 0.5)
+	bw = min(L * 0.8, len(text) * size * 0.72 + 0.8)
+	dx = spec.get("sign_x", 0.0)
+	hb = HB()
+	hb.box(mat("frame_white"), (dx, -D / 2 - 0.08, H - 0.45), (bw, 0.08, size * 1.5), board)
+	text_mesh(hb, "spray", text, size, (dx, -D / 2 - 0.13, H - 0.45), tcol)
+	return _join(ob, hb.build(name + "_sign", ao=False), name), rf
+
+def _row(x0, x1, step, w, h, skip=()):
+	xs = []
+	x = x0
+	while x <= x1 + 1e-6:
+		if all(abs(x - k) > 1.0 for k in skip):
+			xs.append((x, w, h))
+		x += step
+	return xs
+
+PUBLIC = {
+	# школа: 2 этажа, белый кирпич, ленты окон
+	"school": (dict(L=30.0, D=11.0, wall="brick_white", t=0.4, h=3.3, floors=2, plinth=0.6, plinth_mat="concrete", roof="gable", rmat="slate", rcol=(0.78, 0.74, 0.68), pitch=18,
+		inner="paint_wall", icol=(0.75, 0.88, 0.85), floor="linoleum", front=_row(-13.0, 13.0, 2.6, 1.8, 1.8, skip=(0.0,)), front2=_row(-13.0, 13.0, 2.6, 1.8, 1.8),
+		back=_row(-13.0, 13.0, 2.6, 1.8, 1.8), left=W(-2.5, 2.5, w=1.6, h=1.8), right=W(-2.5, 2.5, w=1.6, h=1.8), door=(0.0, 1.8),
+		porch=dict(w=4.5, d=2.6, roof=True, mat="concrete"), frame="frame_white", state="broken", rooms=[("x", 1.2, -14.6, 14.6, -6.0), ("y", -6.0, 1.2, 5.1, 3.0), ("y", 6.0, 1.2, 5.1, 3.0)],
+		extras=["downpipe"]), "ШКОЛА", 0.7),
+	# администрация: 2 этажа, красный кирпич, вальма, флагшток у входа
+	"admin": (dict(L=16.0, D=10.0, wall="brick_red", wcol=(1.0, 0.85, 0.78), t=0.4, h=3.1, floors=2, plinth=0.6, plinth_mat="concrete", roof="hip", rmat="profnastil", rcol=(0.30, 0.42, 0.36), pitch=20,
+		inner="paint_wall", floor="linoleum", front=_row(-6.6, 6.6, 2.2, 1.4, 1.6, skip=(0.0,)), front2=_row(-6.6, 6.6, 2.2, 1.4, 1.6), back=_row(-6.6, 6.6, 2.2, 1.4, 1.6),
+		left=W(-2.0, 2.0, w=1.4, h=1.6), right=W(-2.0, 2.0, w=1.4, h=1.6), door=(0.0, 1.4), door_kind="metal", porch=dict(w=3.6, d=2.2, roof=True, mat="concrete"),
+		pvc=True, frame="frame_white", state="broken", rooms=[("x", 1.0, -7.6, 7.6, -1.0)], extras=["downpipe", "ac"]), "АДМИНИСТРАЦИЯ", 0.45),
+	# ФАП: одноэтажный, белая штукатурка, зелёная кровля
+	"fap": (dict(L=12.0, D=8.0, wall="plaster_white", t=0.35, h=2.9, plinth=0.5, plinth_mat="concrete", roof="gable", rmat="profnastil", rcol=(0.36, 0.62, 0.45), pitch=24,
+		inner="paint_wall", icol=(0.92, 0.95, 0.95), floor="linoleum", front=W(-4.0, -2.0, 2.4, 4.4, w=1.3, h=1.5), back=W(-3.0, 0.0, 3.0, w=1.3, h=1.5), left=W(0.0, w=1.3, h=1.5),
+		right=W(0.0, w=1.3, h=1.5), door=(0.4, 1.2), door_kind="metal", porch=dict(w=2.6, d=1.8, roof=True, mat="concrete"), pvc=True, frame="frame_white", state="broken",
+		rooms=[("x", 0.8, -5.6, 5.6, 0.4)], extras=["downpipe"], sign_x=0.4), "ФАП", 0.6, (0.95, 0.95, 0.95), (0.7, 0.08, 0.06)),
+	# пожарная часть: кирпич, высокие ворота, вышка-сушилка
+	"fire_station": (dict(L=16.0, D=11.0, wall="brick_red", t=0.4, h=4.6, plinth=0.3, plinth_mat="concrete", roof="gable", rmat="profnastil", rcol=(0.55, 0.12, 0.10), pitch=16,
+		inner="paint_wall", floor="linoleum", front=W(-6.5, 6.5, w=1.2, h=1.4), back=W(-4.0, 0.0, 4.0, w=1.4, h=1.4), left=W(0.0, w=1.4, h=1.4), right=W(0.0, w=1.4, h=1.4),
+		door=(-2.2, 3.4), door_kind="metal", frame="frame_white", state="broken", rooms=[]), "ПОЖАРНАЯ ЧАСТЬ", 0.45, (0.92, 0.92, 0.9), (0.7, 0.08, 0.06)),
+	# придорожное
+	"supermarket": (dict(L=26.0, D=18.0, wall="plaster_white", t=0.3, h=4.6, plinth=0.2, plinth_mat="concrete", roof="gable", rmat="profnastil", rcol=(0.7, 0.72, 0.74), pitch=7,
+		inner="paint_wall", floor="linoleum", front=_row(-11.0, 11.0, 2.4, 2.0, 2.8, skip=(-2.0,)), back=[], left=[], right=W(0.0, w=1.0, h=1.0), door=(-2.0, 2.4), door_kind="metal",
+		porch=dict(w=8.0, d=3.0, roof=True, mat="concrete"), pvc=True, frame="frame_white", state="broken", rooms=[("x", 4.0, -12.6, 12.6, 8.0)], extras=["ac"], sign_x=-2.0),
+		"ПРОДУКТЫ 24", 0.8, (0.85, 0.15, 0.10), (0.98, 0.95, 0.9)),
+	"tire_shop": (dict(L=10.0, D=7.0, wall="planks_peel", wcol=(0.75, 0.78, 0.8), t=0.2, h=3.6, plinth=0.15, plinth_mat="concrete", roof="gable", rmat="tin_rust", rcol=(0.9, 0.9, 0.9), pitch=10,
+		inner="paint_wall", floor="floor_wood", front=W(3.2, w=1.0, h=1.0), back=[], left=W(0.0, w=0.9, h=0.9), right=[], door=(-1.2, 3.0), door_kind="metal", frame="frame_white",
+		state="broken", rooms=[], sign_x=-0.5), "ШИНОМОНТАЖ", 0.42, (0.98, 0.85, 0.15), (0.08, 0.08, 0.08)),
+	"auto_service": (dict(L=15.0, D=10.0, wall="block", t=0.3, h=4.4, plinth=0.15, plinth_mat="concrete", roof="gable", rmat="profnastil", rcol=(0.30, 0.38, 0.55), pitch=10,
+		inner="paint_wall", floor="linoleum", front=W(5.6, w=1.2, h=1.2), back=W(-4.0, 4.0, w=1.2, h=1.0), left=[], right=W(0.0, w=1.2, h=1.2), door=(-2.6, 3.4), door_kind="metal",
+		frame="frame_white", state="broken", rooms=[("x", 3.0, -7.3, 7.3, 4.5)], sign_x=0.0), "АВТОСЕРВИС", 0.55, (0.15, 0.3, 0.6), (0.95, 0.95, 0.95)),
+	"motel": (dict(L=18.0, D=10.0, wall="plaster_beige", t=0.35, h=2.9, floors=2, plinth=0.5, plinth_mat="concrete", roof="hip", rmat="profnastil", rcol=(0.55, 0.30, 0.22), pitch=22,
+		inner="wallpaper", floor="linoleum", front=_row(-7.5, 7.5, 2.5, 1.3, 1.5, skip=(0.0,)), front2=_row(-7.5, 7.5, 2.5, 1.3, 1.5), back=_row(-7.5, 7.5, 2.5, 1.3, 1.5),
+		left=W(-2.0, 2.0, w=1.3, h=1.5), right=W(-2.0, 2.0, w=1.3, h=1.5), door=(0.0, 1.4), door_kind="metal", porch=dict(w=3.4, d=2.0, roof=True, mat="concrete"),
+		pvc=True, frame="frame_white", state="broken", rooms=[("x", 0.6, -8.6, 8.6, 0.0)], extras=["ac", "dish", "downpipe"]), "ГОСТИНИЦА", 0.55, (0.15, 0.25, 0.45), (0.95, 0.9, 0.7)),
+	"dps_post": (dict(L=6.0, D=4.5, wall="plaster_white", t=0.25, h=2.8, plinth=0.4, plinth_mat="concrete", roof="hip", rmat="profnastil", rcol=(0.25, 0.32, 0.55), pitch=18,
+		inner="paint_wall", floor="linoleum", front=W(-1.5, 1.5, w=1.4, h=1.4), back=W(0.0, w=1.2, h=1.2), left=W(0.0, w=1.2, h=1.2), right=[], door=(-2.3, 0.9), door_kind="metal",
+		pvc=True, frame="frame_white", state="broken", rooms=[], sign_x=0.4), "ДПС", 0.55, (0.15, 0.3, 0.65), (0.95, 0.95, 0.95)),
+}
+
+def burnt(name, base, seed):
+	"""Сгоревший дом: тот же дом без крыши (обгоревшие стропила), стены в копоти."""
+	import house as Hm
+	spec = dict(Hm.TYPES[base])
+	spec["state"] = "ruin"
+	ob, rf = house(name, spec, seed)
+	for o in (ob, rf):
+		cl = o.data.color_attributes["Color"]
+		rnd = random.Random(seed)
+		for i, d in enumerate(cl.data):
+			c = d.color
+			k = 0.22 + 0.25 * rnd.random()
+			d.color = (c[0] * k, c[1] * k * 0.95, c[2] * k * 0.9, 1.0)
+	# крыши почти нет: оставим только каркас — уберём 70% граней крыши
+	import bmesh
+	bm = bmesh.new(); bm.from_mesh(rf.data)
+	rnd = random.Random(seed + 1)
+	kill = [f for f in bm.faces if rnd.random() < 0.7]
+	bmesh.ops.delete(bm, geom=kill, context="FACES")
+	bm.to_mesh(rf.data); bm.free()
+	return ob, rf
+
 def _join(a, b, name):
 	bpy.ops.object.select_all(action="DESELECT")
 	a.select_set(True); b.select_set(True)
@@ -202,7 +287,11 @@ JOBS = {
 	"dump_pile_a": lambda: dump_pile("dump_pile_a", 1),
 	"dump_pile_b": lambda: dump_pile("dump_pile_b", 2),
 	"heli_wreck": lambda: heli_wreck("heli_wreck"),
+	"house_izba_burnt": lambda: burnt("house_izba_burnt", "house_izba_a", 31),
+	"house_brick_burnt": lambda: burnt("house_brick_burnt", "house_brick_small", 32),
 }
+for _k, _v in PUBLIC.items():
+	JOBS[_k] = (lambda k=_k, v=_v: signed(k, v[0], zlib.crc32(k.encode()), *v[1:]))
 
 if __name__ == "__main__":
 	out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/houses/out"

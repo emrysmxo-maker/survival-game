@@ -44,6 +44,7 @@ const SMALL_CATS := ["grass", "flower", "fern", "nettle", "branch", "moss"]
 
 func _ready() -> void:
 	WorldGen.init()
+	_backdrop()
 	ground_mat = ShaderMaterial.new()
 	ground_mat.shader = load("res://shaders/ground.gdshader")
 	ground_mat.set_shader_parameter("t_albedo", load("res://assets/ground2/ground_diff_array.jpg"))
@@ -293,6 +294,60 @@ func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 	_rebuild_t -= get_process_delta_time()
 	if _dirty and _rebuild_t <= 0.0:
 		_rebuild_sprites()
+
+# подложка: вся карта одним грубым мешем (шаг 4 тайла) чуть ниже настоящей земли — вдали и при быстром отдалении
+# вместо черноты видна местность (лес, поля, вода); чанки рисуются поверх
+func _backdrop() -> void:
+	var t0 := Time.get_ticks_msec()
+	var st := 4.0
+	var r := WorldGen.MAP_RADIUS + 40.0
+	var n := int(r * 2.0 / st) + 1
+	var verts := PackedVector3Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	verts.resize(n * n)
+	cols.resize(n * n)
+	for j in n:
+		for i in n:
+			var x := -r + i * st
+			var y := -r + j * st
+			var t := WorldGen.terrain(x, y)
+			var h := WorldGen.height_m(x, y)
+			var c := Color(0.44, 0.39, 0.25).lerp(Color(0.36, 0.35, 0.21), WorldGen.vnoise(x, y, 31.0, 5))
+			c = c.lerp(Color(0.14, 0.18, 0.1), clampf(WorldGen.forest_mask(x, y) * 1.6 - 0.3, 0.0, 1.0))
+			var w := WorldGen.water_at(x, y)
+			if w.x > 0.05:
+				c = Color(0.2, 0.32, 0.36)
+			elif WorldGen.path_dist(x, y) < 2.0:
+				c = Color(0.36, 0.34, 0.3)
+			if not WorldGen.in_map(x, y, 0.0):
+				c = c.darkened(0.25)
+			verts[j * n + i] = Vector3(x * WorldGen.T, h - 0.25, y * WorldGen.T)
+			cols[j * n + i] = c
+	for j in n - 1:
+		for i in n - 1:
+			var a := j * n + i
+			idx.append_array([a, a + 1, a + n, a + 1, a + n + 1, a + n])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_INDEX] = idx
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 1.0
+	m.surface_set_material(0, mat)
+	var st2 := SurfaceTool.new()
+	st2.create_from(m, 0)
+	st2.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st2.commit()
+	mi.mesh.surface_set_material(0, mat)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	print("подложка: ", n * n, " вершин за ", Time.get_ticks_msec() - t0, " мс")
 
 func ensure_now(tile_pos: Vector2, r: int) -> void:
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))
