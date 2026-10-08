@@ -1,0 +1,23 @@
+name: Restore complete changes log
+on:
+  push:
+    paths: ['.github/workflows/restore-complete-log.yml']
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore complete history and append latest fix
+        run: |
+          git show a33e763:CHANGES_DRAFT.md > CHANGES_DRAFT.md
+          printf '\n- 2026-10-09 — Perplexity — Исправлены белые машины и вертолёт: `vcolor.gd` подключает шейдер чтения цвета вершин к импортированным моделям `props.glb`; материалы без цвета вершин не меняются. У вертолёта убран чёрный квадрат от выжженной земли: такие плоскости теперь используют прозрачный режим. Сборка №82. Коммит: a33e763\n' >> CHANGES_DRAFT.md
+          rm .github/workflows/restore-complete-log.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGES_DRAFT.md .github/workflows/restore-complete-log.yml
+          git commit -m 'docs: restore complete changes history'
+          git push
