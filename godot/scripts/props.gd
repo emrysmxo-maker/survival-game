@@ -11,8 +11,13 @@ const K := 1.25                       # старые смещения и рад�
 const CELL := 40.0
 const T := WorldGen.T
 const M := 1.0 / WorldGen.T           # тайлов в метре
-const CARS := ["car_sedan_red", "car_sedan_blue", "car_sedan_white", "car_sedan_burnt", "car_sedan_green", "car_sedan_yellow", "car_van_olive", "car_van_white", "car_van_orange", "car_truck_blue", "car_truck_green", "car_bus_yellow", "car_bus_blue", "tractor_blue", "tractor_red"]
-const YARD_CARS := ["car_sedan_red", "car_sedan_blue", "car_sedan_white", "car_sedan_green", "car_van_white", "car_van_olive"]
+# брошенные машины (tools/cars/car.py): ~55% 2010–2026, ~30% 2000-х, ~15% старые; без логотипов
+const CARS := ["car_sedan_red", "car_sedan_white", "car_solaris_silver", "car_granta_graphite", "car_vesta_black", "car_hatch_white", "car_hatch_red", "car_sedan_blue",
+	"car_duster_brown", "car_crossover_silver", "car_crossover_white", "car_suv_green", "car_wagon_silver", "car_wagon_beige", "car_van_white", "car_van_orange",
+	"car_niva_beige", "car_niva_white", "car_classic_blue", "car_sedan_green", "car_sedan_burnt", "car_sedan_yellow", "car_van_olive",
+	"car_truck_blue", "car_truck_green", "car_bus_yellow", "car_bus_blue", "tractor_blue", "tractor_red"]
+const YARD_CARS := ["car_solaris_silver", "car_granta_graphite", "car_duster_brown", "car_crossover_silver", "car_crossover_white", "car_suv_green", "car_wagon_silver",
+	"car_wagon_beige", "car_hatch_white", "car_niva_white", "car_niva_beige", "car_classic_blue", "car_sedan_white", "car_vesta_black"]
 # дома (tools/houses/house.py): длина по фасаду, глубина, вынос крыльца с ступенями — метры
 const HOUSE := {"house_izba_a": [8.0, 6.6, 2.4], "house_izba_b": [7.2, 6.2, 2.0], "house_izba_c": [7.6, 6.4, 2.3], "house_brick": [10.0, 8.4, 2.3],
 	"house_brick_small": [8.0, 7.0, 2.1], "house_new_a": [10.0, 9.0, 2.2], "house_new_b": [9.0, 8.0, 2.4], "house_cottage": [10.0, 10.0, 2.6],
@@ -41,7 +46,7 @@ const HAMLETS := {
 	"h_yuzhny": {"houses": ["house_izba_a", "house_dacha_a", "house_brick_small"], "kind": "old", "ext": [["tractor_red", -6, 6, 140], ["haystack", 9, -6, 0], ["bales_square", 1, 8, 0]]},
 	"h_dachi": {"houses": ["house_dacha_a", "house_dacha_b", "house_dacha_c", "house_dacha_d", "house_dacha_b", "house_dacha_a", "house_dacha_d", "house_dacha_c"], "kind": "dacha", "ext": [["car_sedan_yellow", -3, 0.3, 5]]},
 	"h_poselok": {"houses": ["house_new_a", "house_new_b", "house_cottage", "house_brick", "house_new_a", "house_new_b", "house_brick_small", "house_cottage", "house_new_b", "house_new_a"], "kind": "new",
-		"ext": [["bus_stop", 3, -6, 0], ["well_a", -3, 5, 0]]},
+		"ext": [["bus_stop", 3, -6, 0], ["well_a", -3, 5, 0], ["car_ambulance", -6, 2, 60]]},
 }
 const VILLAGE_HOUSES := ["house_izba_a", "house_izba_c", "house_brick", "house_izba_b", "house_brick_small", "house_izba_a", "house_new_b", "house_cabin", "house_izba_c", "house_brick",
 	"house_izba_b", "house_new_a", "house_izba_a", "house_dacha_d", "house_izba_c", "house_brick_small", "house_izba_b", "house_cabin"]
@@ -51,7 +56,8 @@ const LOCS := {
 	"camp": [["tent_army", -4, -3, 10], ["tent_army", -5, 2.5, -20], ["tent_tan", 3.5, -5, 160], ["tarp_shelter", 5, 3, 15], ["campfire", 0, 0, 0], ["bench_log", -2.4, 2.2, 0], ["bench_log", 2.6, -1.8, 90],
 		["bench_log", 1.4, 3.0, 20], ["camp_table", -8, -0.5, 80], ["barricade", 0, -9.5, 0], ["barricade", 7, -7, 40], ["barricade", -7, -7.5, -40], ["barricade", 9.5, 1, 90], ["watch_tower", 9, -8, 0], ["clothesline", -2, 7, 0],
 		["sandbags", 7, 7, -20], ["barrels_a", -8, 6, 0], ["crates", 8, 0, 0], ["car_van_olive", -9, -6, 160], ["woodpile", 4.5, 8, 180]],
-	"village": [["well_a", -3.5, -2.5, 0], ["car_bus_yellow", 4, 1.2, 12], ["car_sedan_burnt", -6, 2.0, 160], ["tractor_blue", -2, -5, 70], ["barrels_b", 6, -4, 0]],
+	"village": [["well_a", -3.5, -2.5, 0], ["car_bus_yellow", 4, 1.2, 12], ["car_sedan_burnt", -6, 2.0, 160], ["tractor_blue", -2, -5, 70], ["barrels_b", 6, -4, 0],
+		["car_police", 2, -7, 35], ["car_fire", -8, 6, 200]],
 	"sawmill": [["sawmill_hall", 0, -2, 0], ["log_pile", -9, 6, 0], ["log_pile", -9, 10, 0], ["lumber_stack", 8, 7, 0], ["lumber_stack", 8, 10, 0], ["lumber_stack", 12, 7, 0], ["sawdust", 7, -8, 0], ["log_heap", -3, 9, 30], ["log_heap", 4, 11, -20],
 		["house_cabin", -11, -8, 30], ["car_truck_logs", 11, 2, 160], ["tractor_red", 5, 13, 140], ["barrels_a", -12, -3, 0], ["woodpile", -14, 0, 90]],
 	"lakebase": [["pier", 8.5, 0.5, 0], ["boat_row_wood", 5.5, -1.5, 15], ["boat_row_up", 4, 3.5, -25], ["boat_motor", 6.5, 5, 80], ["boat_row_blue", 5.2, -5.5, 5], ["boat_shed", -3, -6, 0], ["fish_rack", 1, 6, 0], ["nets", -4.5, 4.5, 20], ["house_cabin", -9, 2, 90],

@@ -8,6 +8,8 @@ from common import reset
 import houses, vehicles, rural, buildings, locs, locs2
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'houses'))
 import house as house2                      # реалистичные дома (tools/houses): оболочка + крыша «<имя>_roof»
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'cars'))
+import car as cars2                         # реалистичные машины (tools/cars)
 reset()
 count = 0
 names = []
@@ -20,10 +22,15 @@ for nm, fn in house2.JOBS.items():
     if roof is not None:
         roof.name = nm + '_roof'
         names.append(nm + '_roof')
+for nm, fn in cars2.JOBS.items():
+    if only and nm not in only.split(','): continue
+    o = fn()
+    o.name = nm
+    names.append(nm); count += 1
 for mod in (houses, vehicles, rural, buildings, locs, locs2):
     for nm, fn in mod.JOBS.items():
         if only and nm not in only.split(','): continue
-        if nm in house2.JOBS: continue         # заменены новыми домами
+        if nm in house2.JOBS or nm in cars2.JOBS: continue         # заменены новыми домами и машинами
         o = fn()
         o.name = nm
         names.append(nm); count += 1

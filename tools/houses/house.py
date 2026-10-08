@@ -90,8 +90,9 @@ def _img(f, noncolor=False):
 # ---------------- накопитель геометрии ----------------
 class HB:
 	"""Геометрия по материалам; у каждого примитива — цвет (оттенок краски/копоть), UV по мировым осям в метрах."""
-	def __init__(s):
+	def __init__(s, keep_winding=False):
 		s.bms = {}
+		s.keep_winding = keep_winding                                  # True — не пересчитывать нормали (кузов машины задан наружу)
 
 	def _bm(s, m):
 		if m not in s.bms:
@@ -151,7 +152,8 @@ class HB:
 		mats = list(s.bms.keys())
 		for mi, m in enumerate(mats):
 			bm = s.bms[m]
-			bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+			if not s.keep_winding:
+				bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 			tw, th = m["tile"]
 			rot = bool(m["rot"])
 			cl = bm.loops.layers.color["Color"]
@@ -621,7 +623,7 @@ for _n, _s in TYPES.items():
 JOBS.update(EXTRA)
 
 # ---------------- показ / самостоятельный запуск ----------------
-def preview(objs, path, cut=False, res=(1600, 1000), samples=32, persp=False):
+def preview(objs, path, cut=False, res=(1600, 1000), samples=32, persp=False, pad=16.0, dist_k=0.95, elev=None):
 	sc = bpy.context.scene
 	sc.render.engine = "CYCLES"; sc.cycles.device = "CPU"; sc.cycles.samples = samples; sc.cycles.use_denoising = True
 	sc.view_settings.view_transform = "AgX"
@@ -659,15 +661,15 @@ def preview(objs, path, cut=False, res=(1600, 1000), samples=32, persp=False):
 		bpy.ops.mesh.primitive_plane_add(size=1000); g = bpy.context.object; g.data.materials.append(gm)
 	xs = [o.location.x for o in objs]; ys = [o.location.y for o in objs]
 	cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-	span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.6) + 16
+	span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.6) + pad
 	cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam")); sc.collection.objects.link(cam); sc.camera = cam
 	cam.data.clip_end = 2000
-	el = math.radians(62 if cut else 38)
+	el = math.radians(elev if elev is not None else (62 if cut else 38))
 	d = Vector((-0.45, -math.cos(el), math.sin(el))).normalized()
-	look = Vector((cx, cy, 2.0))
+	look = Vector((cx, cy, 2.0 if pad > 8 else 0.8))
 	if persp:
 		cam.data.lens = 32
-		cam.location = look + d * span * 0.95
+		cam.location = look + d * span * dist_k
 	else:
 		cam.data.type = "ORTHO"
 		cam.data.ortho_scale = span
