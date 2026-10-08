@@ -48,6 +48,7 @@
 - Сборка 77: асфальт на ROADS (`asphalt_dist`, terrain t[8], канал дороги: 0–0,5 грунт / 0,5–1 асфальт), разметка `road_dash`, мосты `bridge` (`_road_marks`), провода `wire_unit` между столбами (`_wires`), знаки `sign_town/round/info`, фонари `lamp_post` на улицах. Нужен новый APK (apk_min 77).
 - Сборка 78: атмосфера — `_quarantine()` (блокпосты, колонна, вещи), граффити `graffiti_*` (текст Blender, `text_mesh`), морок `WorldGen.MOROK/morok()` + шейдер земли, окна `glass_lit` и костёр (`props.set_night` из main по `daynight.night`). Нужен новый APK (apk_min 78).
 - Сборка 79: новые места — `tools/houses/places.py` (rail_seg, wagon_*, rail_crossing, rail_platform, gas_station, cafe, camp_corpus, dump_pile_*, heli_wreck); в props.gd `_railway()`, `_gas_station()`, `_children_camp()` (h_lager), `_dump_and_wreck()`. Нужен новый APK (apk_min 79).
+- Сборка 80: workflow «Tools» (Godot+Blender на GitHub, снимки игры, результат в ветке `tools-out`), снимки разрешены, сборка APK проверяет разбор и пересобирает модели при смене их скриптов. СЛЕДУЮЩИЕ ЗАДАЧИ (отзыв владельца по сборке 79) — раздел «НА ЧЁМ ОСТАНОВИЛИСЬ» в конце `CHANGES_DRAFT.md`: белые машины/вертолёт, новая расстановка (бункер без домов, мини-город у каждой локации, придорожные АЗС/магазины, меньше хуторов), озеро на дороге, fps колхоза.
 - Режим владельца: экономия токенов ВЫКЛЮЧЕНА (есть бонусные кредиты 100 $ до 5 ноября) — можно подробные проверки, скриншоты, несколько задач за раз; ответы по-прежнему короткие и по делу.
 - Список всех изменений: `CHANGES_DRAFT.md`.
 
