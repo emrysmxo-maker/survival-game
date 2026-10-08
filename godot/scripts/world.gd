@@ -44,7 +44,6 @@ const SMALL_CATS := ["grass", "flower", "fern", "nettle", "branch", "moss"]
 
 func _ready() -> void:
 	WorldGen.init()
-	_bd_task = WorkerThreadPool.add_task(_backdrop_build)              # подложка карты — в фоне, без задержки старта
 	ground_mat = ShaderMaterial.new()
 	ground_mat.shader = load("res://shaders/ground.gdshader")
 	ground_mat.set_shader_parameter("t_albedo", load("res://assets/ground2/ground_diff_array.jpg"))
@@ -248,9 +247,11 @@ func _crown_mesh(conifer: bool) -> ArrayMesh:
 
 # ---------- чанки ----------
 func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
+	if _bd_task == -1 and _bd_mesh == null:
+		_bd_task = WorkerThreadPool.add_task(_backdrop_build)           # подложка — в фоне; после расстановки построек (она дописывает дороги)
 	if _bd_task >= 0 and WorkerThreadPool.is_task_completed(_bd_task):
 		WorkerThreadPool.wait_for_task_completion(_bd_task)
-		_bd_task = -1
+		_bd_task = -2
 		_backdrop_add()
 	player_tile = tile_pos
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))
@@ -301,7 +302,7 @@ func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 
 # подложка: вся карта одним грубым мешем (шаг 4 тайла) чуть ниже настоящей земли — вдали и при быстром отдалении
 # вместо черноты видна местность (лес, поля, вода); чанки рисуются поверх
-var _bd_task := -1
+var _bd_task := -1                # -1 — не запущена, -2 — готова
 var _bd_mesh: ArrayMesh
 
 func _backdrop_build() -> void:

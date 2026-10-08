@@ -92,29 +92,48 @@ var _last := ""
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
 	_rng.seed = 20261008
-	_load()
-	_bunker()
-	_locations()
-	_railway()
-	_children_camp()
-	_hamlet("h_poselok")                  # новый посёлок — первым: ему нужно поле целиком
-	_village()
+	var tm := {"_t": Time.get_ticks_usec()}
+	var step := func(nm: String) -> void:                              # время шагов расстановки, мс (в лог «props:»)
+		var now := Time.get_ticks_usec()
+		tm[nm] = (now - int(tm["_t"])) / 1000
+		tm["_t"] = now
+	_load(); step.call("load")
+	var ck := _cache_key()
+	if _cache_read(ck):                                               # расстановка уже посчитана этой сборкой — только прочитать
+		_flush(); step.call("cache")
+		tm.erase("_t")
+		_rej = {"кэш": ck, "время, мс": tm}
+		_after_ready(t0)
+		return
+	_bunker(); step.call("bunker")
+	_locations(); step.call("locations")
+	_railway(); step.call("railway")
+	_children_camp(); step.call("lager")
+	_hamlet("h_poselok"); step.call("poselok")            # новый посёлок — первым: ему нужно поле целиком
+	_village(); step.call("village")
 	for key in HAMLETS:
 		if key != "h_poselok":
 			_hamlet(key)
-	_towns()                              # мини-города у локаций — после хуторов, по свободным дорогам
-	_gas_station()
-	_roadside()
+	step.call("hamlets")
+	_towns(); step.call("towns")                          # мини-города у локаций — после хуторов, по свободным дорогам
+	_gas_station(); step.call("gas")
+	_roadside(); step.call("roadside")
 	_quarry()
-	_hunting_towers()
+	_hunting_towers(); step.call("towers")
 	_dump_and_wreck()
 	_rings()
-	_forest_houses()
-	_quarantine()
-	_road_marks()
-	_road_stuff()
-	_fields()
-	_flush()
+	_forest_houses(); step.call("forest")
+	_quarantine(); step.call("quarantine")
+	_road_marks(); step.call("marks")
+	_road_stuff(); step.call("roadstuff")
+	_fields(); step.call("fields")
+	_flush(); step.call("flush")
+	tm.erase("_t")
+	_rej["время, мс"] = tm
+	_cache_write(ck)
+	_after_ready(t0)
+
+func _after_ready(t0: int) -> void:
 	var cf: Dictionary = WorldGen.FEATURES["camp"]
 	_fire = OmniLight3D.new()
 	_fire.light_color = Color(1.0, 0.62, 0.3)
@@ -139,6 +158,39 @@ func set_night(k: float) -> void:
 		m.emission_energy_multiplier = k * 3.0
 
 # ---------------- загрузка и вывод ----------------
+# кэш расстановки (только на телефоне): расстановка детерминирована — после первого запуска сборки читается из файла
+const CACHE := "user://props_cache.bin"
+func _cache_key() -> String:
+	if not OS.has_feature("android") and OS.get_environment("PROPS_CACHE") != "1":
+		return ""                                                     # на ПК/сервере всегда считаем заново (проверки кода)
+	var b := FileAccess.get_file_as_string("res://build.txt").strip_edges()
+	var f := FileAccess.open("res://assets/props/props.glb", FileAccess.READ)
+	return "%s|%d|v1" % [b, f.get_length() if f else 0]
+
+func _cache_read(key: String) -> bool:
+	if key == "" or not FileAccess.file_exists(CACHE):
+		return false
+	var f := FileAccess.open(CACHE, FileAccess.READ)
+	if f == null:
+		return false
+	var d = f.get_var()
+	if typeof(d) != TYPE_DICTIONARY or d.get("key", "") != key:
+		return false
+	_batch = d.batch
+	WorldGen._roads = d.roads
+	WorldGen._clr = d.clr
+	WorldGen._xt = d.xt
+	WorldGen._xt_keys = d.xt_keys
+	_n = d.n
+	return true
+
+func _cache_write(key: String) -> void:
+	if key == "":
+		return
+	var f := FileAccess.open(CACHE, FileAccess.WRITE)
+	if f:
+		f.store_var({"key": key, "batch": _batch, "roads": WorldGen._roads, "clr": WorldGen._clr, "xt": WorldGen._xt, "xt_keys": WorldGen._xt_keys, "n": _n})
+
 func _load() -> void:
 	var path := "res://assets/props/props.glb"
 	if not ResourceLoader.exists(path):
@@ -317,16 +369,7 @@ func _plot_ok(c: Vector2, th: float, w: float, d: float, own: String) -> bool:
 		if _rect_overlap(rect, q):
 			_rej["участок"] = _rej.get("участок", 0) + 1; _last = "участок " + str(q)
 			return false
-	for i in 5:
-		for j in 5:
-			var p := _loc(c, th, (i / 4.0 - 0.5) * w * 0.96, (j / 4.0 - 0.5) * d * 0.96)
-			var t := WorldGen.terrain(p.x, p.y)
-			if t[1] > 0.02 or t[2] > 0.5 or not WorldGen.in_map(p.x, p.y, 3.0):
-				_rej["вода/скалы"] = _rej.get("вода/скалы", 0) + 1; _last = "вода/скалы"
-				return false
-			if j < 4 and WorldGen.path_dist(p.x, p.y) < 2.2:         # другая дорога через участок (передняя кромка — у своей улицы)
-				_rej["дорога"] = _rej.get("дорога", 0) + 1; _last = "дорога"
-				return false
+	# дешёвые проверки — до рельефа
 	for key in WorldGen.FEATURES:
 		if key == own:
 			continue
@@ -338,6 +381,16 @@ func _plot_ok(c: Vector2, th: float, w: float, d: float, own: String) -> bool:
 		if c.distance_to(o[0]) < o[1] + minf(w, d) * 0.45:
 			_rej["постройка"] = _rej.get("постройка", 0) + 1; _last = "постройка"
 			return false
+	for i in 5:
+		for j in 5:
+			var p := _loc(c, th, (i / 4.0 - 0.5) * w * 0.96, (j / 4.0 - 0.5) * d * 0.96)
+			var t := WorldGen.terrain(p.x, p.y)
+			if t[1] > 0.02 or t[2] > 0.5 or not WorldGen.in_map(p.x, p.y, 3.0):
+				_rej["вода/скалы"] = _rej.get("вода/скалы", 0) + 1; _last = "вода/скалы"
+				return false
+			if j < 4 and t[7] < 2.2:                                 # другая дорога через участок (передняя кромка — у своей улицы)
+				_rej["дорога"] = _rej.get("дорога", 0) + 1; _last = "дорога"
+				return false
 	return true
 
 # участок: kind — old (деревенский), new (новый дом), dacha
