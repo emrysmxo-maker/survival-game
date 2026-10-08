@@ -48,6 +48,18 @@ func _ready() -> void:
 	ground_mat.shader = load("res://shaders/ground.gdshader")
 	ground_mat.set_shader_parameter("t_albedo", load("res://assets/ground2/ground_diff_array.jpg"))
 	ground_mat.set_shader_parameter("t_normal", load("res://assets/ground2/ground_nor_array.jpg"))
+	var mz := FastNoiseLite.new()           # крупный шум для земли: пятна, анти-повтор текстур, лужи
+	mz.seed = 7
+	mz.frequency = 0.012
+	mz.fractal_octaves = 4
+	var mt := NoiseTexture2D.new()
+	mt.width = 512
+	mt.height = 512
+	mt.seamless = true
+	mt.normalize = true
+	mt.generate_mipmaps = true
+	mt.noise = mz
+	ground_mat.set_shader_parameter("macro_tex", mt)
 	water_mat = ShaderMaterial.new()
 	water_mat.shader = load("res://shaders/water.gdshader")
 	for pair in [["n1", 11, 0.012], ["n2", 23, 0.03]]:     # рябь: две карты нормалей из шума (генерирует Godot)

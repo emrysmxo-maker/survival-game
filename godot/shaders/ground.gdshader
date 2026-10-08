@@ -7,6 +7,7 @@ render_mode diffuse_lambert, specular_schlick_ggx;
 uniform sampler2DArray t_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray t_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float meters_per_texture = 2.6;
+uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;   // бесшовный шум (Godot NoiseTexture2D): крупные пятна, анти-повтор, лужи
 uniform bool detail = true;          // false (Низкое/Среднее): одна выборка на слой, слабые слои пропускаются
 global uniform bool q_ground_normals;
 
@@ -37,7 +38,11 @@ void fragment() {
 	vec2 uv = tile * 0.837 / meters_per_texture;
 	float n = (sin(tile.x * 0.03 + tile.y * 0.017) + sin(tile.x * 0.017 - tile.y * 0.035) * 1.3 + sin(tile.x * 0.06 + tile.y * 0.045) * 0.5) / 2.8;
 	float eco = sin(tile.x / 12.0 * 0.3) + cos(tile.y / 12.0 * 0.3);
-	float mk = ssf(-0.3, 0.3, sin(tile.x * 0.11 + 1.3 * sin(tile.y * 0.07)) * sin(tile.y * 0.13 + 0.9 * sin(tile.x * 0.05)));
+	vec2 wm = tile * 0.837;                                  // метры
+	float m40 = texture(macro_tex, wm / 46.0).r;             // пятна ~десятки метров
+	float m11 = texture(macro_tex, wm / 11.0 + vec2(0.31, 0.67)).r;
+	float m4 = texture(macro_tex, wm / 3.7 + vec2(0.71, 0.13)).r;
+	float mk = ssf(0.38, 0.62, m11);                         // анти-повтор — по шуму, а не правильным узором
 	float path = w1.r, swamp = w1.g, riverbed = w1.b, rocky = w1.a;
 	float water = w2.x, clearing = w2.y;
 	float w[8];
@@ -61,8 +66,13 @@ void fragment() {
 			nm = i == 0 ? ni : mix(nm, ni, w[i]);
 		}
 	}
-	// лужи на болоте
-	float puddle = swamp * ssf(0.35, 0.75, sin(tile.x * 0.7 + sin(tile.y * 0.5) * 2.0) * sin(tile.y * 0.63 + 1.3 + sin(tile.x * 0.41) * 2.0)) * 0.8;
+	// крупные пятна: светлее/темнее, суше/зеленее — поле и лес не выглядят «штампом»
+	float bright = mix(0.84, 1.12, m40) * mix(0.94, 1.06, m4);
+	c *= bright;
+	c = mix(c, c * vec3(1.10, 1.03, 0.80), ssf(0.55, 0.8, m11) * (w[1] * 0.6 + clearing * 0.3));   // выгоревшая трава
+	c = mix(c, c * vec3(0.86, 1.04, 0.84), ssf(0.45, 0.2, m40) * 0.5);                             // сочная зелень в низинах
+	// лужи на болоте — неровные, по шуму
+	float puddle = swamp * ssf(0.6, 0.7, m11 * 0.7 + m4 * 0.3) * 0.8;
 	c = mix(c, c * 0.45 + vec3(0.02, 0.04, 0.04), puddle);
 	// вода
 	float ripple = sin(tile.x * 2.1 + TIME * 1.3) * sin(tile.y * 1.7 - TIME * 1.1) * 0.5 + 0.5;

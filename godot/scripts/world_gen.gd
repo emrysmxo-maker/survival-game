@@ -558,6 +558,14 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if rng.randf() < pr and t8[1] < 0.05 and t8[6] < 0.35:
 			var big: bool = t8[5] > 0.4 and rng.randf() < 0.4
 			objs.append(_obj(rng, x8, y8, "boulder1" if big else ROCK[1 + int(rng.randf() * (ROCK.size() - 1))], "rock", 0.8 + rng.randf() * 0.5))
+			if big or rng.randf() < 0.35:            # камни лежат группами: рядом 1–3 поменьше
+				for g in 1 + int(rng.randf() * 3.0):
+					var a: float = rng.randf() * TAU
+					var dd: float = 1.2 + rng.randf() * 1.6
+					var xg := x8 + cos(a) * dd
+					var yg := y8 + sin(a) * dd
+					if terrain(xg, yg)[1] < 0.05 and path_dist(xg, yg) > 1.2:
+						objs.append(_obj(rng, xg, yg, ROCK[1 + int(rng.randf() * (ROCK.size() - 1))], "rock", 0.4 + rng.randf() * 0.4))
 	# берег: камни разного размера по пляжу и на мелководье, пучки травы на краю пляжа
 	for i in 6:
 		var xs: float = sx + rng.randf() * CHUNK
