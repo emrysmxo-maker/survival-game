@@ -3,7 +3,7 @@ extends Node3D
 # столкновения с деревьями/камнями, замедление в воде/болоте/в гору.
 # Позиция бойца хранится в тайлах (tile), как в браузерной версии.
 
-const SPEED := 3.5                 # тайлов/с (×1.41 в screen_to_tiles): до упора ≈ 4.1 м/с — спринт (RunFast), середина — бег
+const SPEED := 2.3                 # тайлов/с: до упора ≈ 2,7 м/с — быстрый бег (боец 1,44 м; было 4,1 — спринт и шаги-«семенки»)
 const ACCEL := 14.0
 const BODY_TURN_RATE := 5.5        # рад/с — поворот тела при стрельбе
 # Стрельба на ходу (стиль «Корпус 90° → пятится» из браузерной версии):
@@ -13,9 +13,9 @@ const BODY_TURN_RATE := 5.5        # рад/с — поворот тела пр�
 const TWIST := 0.55                # ~30°: корпус лишь «опережает» ноги при быстрой смене прицела — большая скрутка выглядела как резина
 const ARMS := 0.2618               # 15°
 const REACH := TWIST + ARMS
-const FIRE_SPEED := 0.62           # скорость при прицеле, вперёд (×)
-const STRAFE_SPEED := 0.42         # вбок (×) ≈ 1,7 м/с — под темп записи шага вбок (при 0.55 запись шла ×1.4: частые короткие шажки)
-const BACK_SPEED := 0.38           # назад (×) ≈ 1,6 м/с
+const FIRE_SPEED := 0.45           # скорость при прицеле, вперёд (×) ≈ 1,2 м/с — под запись Swat «бег с оружием»
+const STRAFE_SPEED := 0.36         # вбок (×) ≈ 1 м/с
+const BACK_SPEED := 0.33           # назад (×) ≈ 0,9 м/с
 const MOVE_TURN := 9.0             # рад/с — разворот по ходу без прицела (180° ≈ 0,35 с)
 const TURN_SLOW := 0.3             # при развороте на 180° скорость падает до 30%
 const AIM_BODY_TURN := 4.2         # рад/с — разворот бойца к цели (~240°/с: быстрее человека, но игра мобильная)
@@ -40,6 +40,8 @@ var _running := false
 var _gait := 0
 const GAIT_NAMES := ["WalkSlow", "Walk", "WalkFast", "RunSlow", "Run", "RunFast"]   # + WalkStart/RunStart/WalkStop/RunStop в модели
 var _gait_mps := [0.66, 0.81, 1.2, 1.93, 2.3, 4.67]     # м/с при speed_scale 1 — из survivor_speeds.json (путь таза в записи × масштаб)
+var anim_lock := false               # проверки: клип ставит devtest, ходьба его не трогает
+var mocap_speed := {}               # скорость записей мокапа (ед. скелета/с), из mocap_speeds.json
 var move_dir := Vector2.ZERO       # куда хочет идти (тайлы), единичный
 var moving := false
 var yaw := 0.0                     # куда смотрит тело (Godot, вокруг Y)
@@ -120,11 +122,18 @@ func _ready() -> void:
 	model.add_child(glb)
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
+	use_mocap(anim)
 	loop_all(anim)
-	fix_strafe_pelvis(anim, skel)
+	if not anim.has_animation("SWalkLeft") or anim.get_animation("SWalkLeft").get_track_count() > 30:
+		fix_strafe_pelvis(anim, skel)          # только для старых записей Iglesias (мокап 100STYLE — живой, таз в порядке)
 	for sn in ["WalkStart", "RunStart"]:
 		if anim.has_animation(sn):
 			anim.get_animation(sn).loop_mode = Animation.LOOP_NONE    # запись «начало шага» играется один раз
+	var mf := FileAccess.open("res://assets/character/mocap_speeds.json", FileAccess.READ)
+	if mf:
+		var ms = JSON.parse_string(mf.get_as_text())
+		if ms is Dictionary:
+			mocap_speed = ms
 	var sf := FileAccess.open("res://assets/character/survivor_speeds.json", FileAccess.READ)
 	if sf:
 		var sp = JSON.parse_string(sf.get_as_text())
@@ -132,6 +141,10 @@ func _ready() -> void:
 			for gi in GAIT_NAMES.size():
 				if sp.has(GAIT_NAMES[gi]) and float(sp[GAIT_NAMES[gi]]) > 0.1:
 					_gait_mps[gi] = float(sp[GAIT_NAMES[gi]]) * CHAR_SCALE
+				if mocap_speed.has(GAIT_NAMES[gi]):
+					_gait_mps[gi] = float(mocap_speed[GAIT_NAMES[gi]]) * CHAR_SCALE
+			if not mocap_speed.is_empty() and sp.has("Run"):
+				_gait_mps[5] = float(sp["Run"]) * CHAR_SCALE      # RunFast = запись Rocketbox «Run»
 			for wk in ["rifle", "pistol"]:
 				if sp.has(wk):
 					for kk in sp[wk]:
@@ -439,12 +452,16 @@ func _leg_forward(mps: float, dt: float) -> void:
 # Шаг вбок/назад (записи Iglesias, на месте): ходьба до ~2.3 м/с, дальше бег
 func _leg_strafe(mps: float) -> void:
 	_starting = false
-	var run: bool = mps > (2.4 if _cur_anim.begins_with("SWalk") else 2.15)
-	var clip: String = ("SRun" if run else "SWalk") + str(SECTOR_NAMES[_dir_sector])
+	var sec: String = SECTOR_NAMES[_dir_sector]
+	var ws := _clip_mps("SWalk" + sec, 2.0 * CHAR_SCALE)
+	var rs := _clip_mps("SRun" + sec, 4.0 * CHAR_SCALE)
+	var mid := sqrt(ws * rs)                                  # граница шаг/бег — среднее геометрическое темпов записей
+	var run: bool = mps > (mid * 1.06 if _cur_anim.begins_with("SWalk") else mid * 0.94)
+	var clip: String = ("SRun" if run else "SWalk") + sec
 	if anim == null or not anim.has_animation(clip):
 		_play(GAIT_NAMES[1], 1.0)
 		return
-	var base := (4.0 if run else 2.0) * CHAR_SCALE            # скорость записи (м/с в мире)
+	var base := rs if run else ws                             # скорость записи (м/с в мире)
 	var k := clampf(mps / base, 0.55, 1.5)
 	_running = run
 	if clip != _cur_anim:
@@ -459,6 +476,9 @@ func _leg_strafe(mps: float) -> void:
 		else:
 			_play_at(clip, _match_phase_name(from, pos, clip))
 	anim.speed_scale = k
+
+func _clip_mps(n: String, fallback: float) -> float:
+	return float(mocap_speed[n]) * CHAR_SCALE if mocap_speed.has(n) and float(mocap_speed[n]) > 0.1 else fallback
 
 func _match_phase_name(from_n: String, pos: float, to_n: String) -> float:
 	if from_n in GAIT_NAMES or from_n == "Idle":
@@ -487,6 +507,8 @@ func _set_gait(g: int) -> void:
 		_play_at(GAIT_NAMES[g], _match_phase(from, pos, GAIT_NAMES[g]))
 
 func _play_at(n: String, pos: float) -> void:
+	if anim_lock:
+		return
 	if forced_clip != "" and n in GAIT_NAMES:
 		n = forced_clip
 	anim.play(n, 0.12)
@@ -544,7 +566,7 @@ func barrel_on_target() -> bool:
 
 var forced_clip := ""          # отладка (devtest --gait=): принудительный клип, темп 1
 func _play(n: String, speed: float) -> void:
-	if anim == null:
+	if anim == null or anim_lock:
 		return
 	if n == "Idle" and _cur_anim != "Idle" and _cur_anim != "":
 		anim.play(n, 0.3)          # остановка — мягко (0.3 с), ноги не дёргаются
@@ -732,6 +754,27 @@ static func fix_strafe_pelvis(ap: AnimationPlayer, sk: Skeleton3D) -> void:
 				a.track_remove_key(ti, 0)
 			for kv in vals[bb]:
 				a.rotation_track_insert_key(ti, kv[0], kv[1])
+
+# Мокап 100STYLE (CC BY 4.0, Ian Mason; tools/mocap → assets/character/mocap.res): клипы с теми же именами заменяют записи из модели
+static func use_mocap(ap: AnimationPlayer) -> void:
+	if ap == null or not ResourceLoader.exists("res://assets/character/mocap.res"):
+		return
+	var ml: AnimationLibrary = load("res://assets/character/mocap.res")
+	var dl: AnimationLibrary = ap.get_animation_library("")
+	# быстрый бег — запись Rocketbox «Run» из модели (в 100STYLE нет бега быстрее 2 м/с); старт/стоп Rocketbox не подходят к мокапу
+	if dl.has_animation("Run"):
+		var rb := dl.get_animation("Run")
+		if dl.has_animation("RunFast"):
+			dl.remove_animation("RunFast")
+		dl.add_animation("RunFast", rb)
+		dl.remove_animation("Run")
+	for n in ["WalkStart", "RunStart", "WalkStop", "RunStop"]:
+		if dl.has_animation(n):
+			dl.remove_animation(n)
+	for n in ml.get_animation_list():
+		if dl.has_animation(n):
+			dl.remove_animation(n)
+		dl.add_animation(n, ml.get_animation(n))
 
 static func loop_all(ap: AnimationPlayer) -> void:
 	if ap == null:

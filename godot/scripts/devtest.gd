@@ -204,6 +204,17 @@ static func run(m, dt: float) -> void:
 			if m._tt > 7.0: v = Vector2(0, 1)
 			m.stick_l.vec = v * mag
 			strafe_log(m)
+		"clip":
+			# просмотр записи на месте: --clip=<имя>
+			var cn := "Walk"
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--clip="): cn = a.substr(7)
+			m.player.anim_lock = true
+			if m.player.anim.current_animation != cn:
+				m.player.anim.play(cn, 0.0)
+				m.player.anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+			m.player.anim.speed_scale = 1.0
+			m.player.anim.advance(dt)
 		"aim":
 			m.stick_r.active = true
 			m.stick_r.vec = Vector2(1, 0.3)
