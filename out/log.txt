@@ -1,0 +1,5 @@
+### task=shot args=166:-133:12  коммит f5f1c30
+SHOT /tmp/claude-0/out/shots/shot_00_00.jpg  точка 166,-133  cam 12 yaw 45 elev 47  чанков ждали 36.6 с  деревьев рядом 81  fps 1
+SHOT done
+shot_00_00.jpg
+### изменённые файлы (не пушатся):
