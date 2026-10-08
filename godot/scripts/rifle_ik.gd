@@ -27,7 +27,6 @@ const IDLE_LEAN := 0.08           # стоя: корпус чуть вперёд
 const RUN_LEAN := 0.26            # наклон корпуса вперёд на бегу (рад, на полной скорости)
 const SWAY := 0.07                # скрутка плеч в шаге (рад)
 const BOB := 0.035                # покачивание оружия в шаге (рад)
-const AIM_CROUCH := 0.025         # прицел: таз ниже на столько (м) — колени согнуты
 const AIM_LEAN := 0.17            # прицел: корпус вперёд (рад) — «нос над носками»
 const BUTT_IN := 0.05             # торец приклада: от плечевого сустава к груди (м) — «карман» плеча
 const BUTT_FWD := 0.06            # и вперёд
@@ -173,25 +172,6 @@ func _process_modification() -> void:
 		var err_yaw := wrapf(player.aim_local - atan2(d.x, d.z), -PI, PI) * k
 		for pr in [["Spine", 0.3], ["Spine1", 0.35], ["Spine2", 0.35]]:
 			_rot_global(skel, _bone(pr[0]), up_s, err_yaw * pr[1])
-	# 4а) стойка стрелка: колени согнуты — таз ниже, стопы на месте (IK ног, колено вперёд)
-	var crouch: float = AIM_CROUCH * k * (1.0 - rl) * (0.5 if player.moving else 1.0)
-	if crouch > 0.001:
-		var hips := _bone("Hips")
-		var legs := []
-		for sd in ["Left", "Right"]:
-			legs.append([_bone(sd + "UpLeg"), _bone(sd + "Leg"), _bone(sd + "Foot")])
-		var feet := []
-		for l in legs:
-			feet.append(skel.get_bone_global_pose(l[2]))
-		var hg := skel.get_bone_global_pose(hips)
-		hg.origin -= up_s * crouch
-		skel.set_bone_global_pose(hips, hg)
-		for i in legs.size():
-			var l: Array = legs[i]
-			var ft: Transform3D = feet[i]
-			_ik(skel, l[0], l[1], l[2], ft.origin, skel.get_bone_global_pose(l[1]).origin + fwd_s)
-			var pg := skel.get_bone_global_pose(skel.get_bone_parent(l[2]))
-			skel.set_bone_pose_rotation(l[2], (pg.basis.orthonormalized().inverse() * ft.basis.orthonormalized()).get_rotation_quaternion())
 	# 4б) прицел из автомата как у стрелка: корпус наклонён вперёд («нос над носками»), приклад в «кармане» плеча,
 	#     ствол на цель, ГОЛОВА опускается к прикладу (щека на прикладе), локти вниз. Руки ставит двухзвенный IK:
 	#     правая кисть — по хвату автомата, левая — на цевье (как в записи, чуть дальше вперёд).

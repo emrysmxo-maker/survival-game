@@ -67,6 +67,15 @@ static func strafe_log(m) -> void:
 			sp = Vector2(p.x - _pf[sd].x, p.z - _pf[sd].z).length() / 0.033
 		_pf[sd] = p
 		out += " %s=%.2f/%.3f" % [sd.substr(0, 1), sp, p.y - pl.global_position.y]
+	# колено: куда смотрит (от линии бедро–стопа) относительно носка стопы, градусы; ноль — колено над носком
+	for sd in ["Left", "Right"]:
+		var hp: Vector3 = _ik.dbg[sd + "UpLeg"]; var kn: Vector3 = _ik.dbg[sd + "Leg"]; var ft: Vector3 = _ik.dbg[sd + "Foot"]; var toe: Vector3 = _ik.dbg[sd + "ToeBase"]
+		var ax := (ft - hp).normalized()
+		var kd := kn - hp; kd -= ax * kd.dot(ax)
+		var td := toe - ft; td -= ax * td.dot(ax)
+		var bend := rad_to_deg((hp - kn).angle_to(ft - kn))
+		if bend < 155.0:     # колено согнуто — направление определено
+			out += " k%s=%d" % [sd.substr(0, 1), int(rad_to_deg(kd.signed_angle_to(td, ax)))]
 	print("ST t=", snappedf(m._tt, 0.033), " anim=", pl.anim.current_animation, " k=", snappedf(pl.anim.speed_scale, 0.01), " v=", snappedf(pl.vel.length() * WorldGen.T, 0.01), " hipyaw=", snappedf(hy, 1), " yaw=", snappedf(rad_to_deg(pl.yaw), 1), out)
 
 static func run(m, dt: float) -> void:

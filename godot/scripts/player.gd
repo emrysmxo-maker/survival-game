@@ -121,6 +121,7 @@ func _ready() -> void:
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
 	loop_all(anim)
+	fix_strafe_pelvis(anim, skel)
 	for sn in ["WalkStart", "RunStart"]:
 		if anim.has_animation(sn):
 			anim.get_animation(sn).loop_mode = Animation.LOOP_NONE    # запись «начало шага» играется один раз
@@ -659,6 +660,79 @@ func _xr_set(n: Node, on: bool) -> void:
 # Клипы из .glb импортируются без повтора: бег играл один раз (0.7 с — «пара шагов»)
 # и замирал в позе полёта. Включаем зацикливание у всех.
 # Клипы бойца (tools/character/build_swat.py): ходьба/бег — мокап Rocketbox, прицел/выстрел/шаг вбок — Iglesias, плавание — Quaternius UAL (CC0).
+# Записи шага вбок (Iglesias SWalk*/SRun*): при сборке модели таз из них не переносился (в swat_common.py у Hips нет
+# кости Iglesias) — таз смотрел вперёд, а бёдра шли по записи, т.е. ноги были вывернуты от таза на 90° (вбок) и 45°
+# (диагонали): «сосиска». Здесь таз доворачивается к ногам на долю PELVIS_FOLLOW, бёдра и корпус сохраняют поворот в мире.
+const PELVIS_FOLLOW := 0.55
+static func _rest_g(sk: Skeleton3D, bi: int) -> Transform3D:
+	var g := Transform3D.IDENTITY
+	while bi >= 0:
+		g = sk.get_bone_rest(bi) * g
+		bi = sk.get_bone_parent(bi)
+	return g
+
+static func fix_strafe_pelvis(ap: AnimationPlayer, sk: Skeleton3D) -> void:
+	if ap == null or sk == null:
+		return
+	var hb := sk.find_bone("mixamorig_Hips")
+	var lt := sk.find_bone("mixamorig_LeftUpLeg")
+	var rt := sk.find_bone("mixamorig_RightUpLeg")
+	var sb := sk.find_bone("mixamorig_Spine")
+	var s1 := sk.find_bone("mixamorig_Spine1")
+	var s2 := sk.find_bone("mixamorig_Spine2")
+	if hb < 0 or lt < 0 or rt < 0 or sb < 0 or s1 < 0 or s2 < 0:
+		return
+	var up: Vector3 = (_rest_g(sk, sb).origin - _rest_g(sk, hb).origin).normalized()
+	var fwd: Vector3 = up.cross(_rest_g(sk, rt).origin - _rest_g(sk, lt).origin).normalized()
+	var par: Basis = _rest_g(sk, sk.get_bone_parent(hb)).basis.orthonormalized() if sk.get_bone_parent(hb) >= 0 else Basis()
+	var knee_ax := {}
+	for b in [lt, rt]:
+		knee_ax[b] = _rest_g(sk, b).basis.orthonormalized().inverse() * fwd      # «колено вперёд» в осях бедра
+	for an in ap.get_animation_list():
+		if not (an.begins_with("SWalk") or an.begins_with("SRun")):
+			continue
+		var a := ap.get_animation(an)
+		var tr := {}
+		for ti in a.get_track_count():
+			if a.track_get_type(ti) == Animation.TYPE_ROTATION_3D:
+				tr[sk.find_bone(str(a.track_get_path(ti)).get_slice(":", 1))] = ti
+		if not (tr.has(hb) and tr.has(lt) and tr.has(rt) and tr.has(sb) and tr.has(s1) and tr.has(s2)):
+			continue
+		var n := int(ceil(a.length * 30.0)) + 1
+		var vals := {hb: [], lt: [], rt: [], sb: [], s1: [], s2: []}
+		for i in n:
+			var t := minf(a.length, i / 30.0)
+			var gh := par * Basis(a.rotation_track_interpolate(tr[hb], t))
+			# куда смотрят колени (в среднем по двум ногам) — угол от «вперёд» вокруг вертикали
+			var sum := Vector2.ZERO
+			for bb in [lt, rt]:
+				var kw: Vector3 = gh * Basis(a.rotation_track_interpolate(tr[bb], t)) * (knee_ax[bb] as Vector3)
+				kw -= up * kw.dot(up)
+				var ang := fwd.signed_angle_to(kw, up)
+				sum += Vector2(cos(ang), sin(ang))
+			var phi := atan2(sum.y, sum.x)
+			var th := phi * PELVIS_FOLLOW
+			# мир: таз +th, позвонки — плавно назад к записи (Spine 2/3, Spine1 1/3, Spine2 как было); бёдра — как были
+			var gs := gh * Basis(a.rotation_track_interpolate(tr[sb], t))
+			var g1 := gs * Basis(a.rotation_track_interpolate(tr[s1], t))
+			var g2 := g1 * Basis(a.rotation_track_interpolate(tr[s2], t))
+			var gh2 := Basis(up, th) * gh
+			var gs2 := Basis(up, th * 0.66) * gs
+			var g12 := Basis(up, th * 0.33) * g1
+			vals[hb].append([t, (par.inverse() * gh2).get_rotation_quaternion()])
+			vals[sb].append([t, (gh2.inverse() * gs2).get_rotation_quaternion()])
+			vals[s1].append([t, (gs2.inverse() * g12).get_rotation_quaternion()])
+			vals[s2].append([t, (g12.inverse() * g2).get_rotation_quaternion()])
+			for bb in [lt, rt]:
+				var gt := gh * Basis(a.rotation_track_interpolate(tr[bb], t))
+				vals[bb].append([t, (gh2.inverse() * gt).get_rotation_quaternion()])
+		for bb in vals:
+			var ti: int = tr[bb]
+			while a.track_get_key_count(ti) > 0:
+				a.track_remove_key(ti, 0)
+			for kv in vals[bb]:
+				a.rotation_track_insert_key(ti, kv[0], kv[1])
+
 static func loop_all(ap: AnimationPlayer) -> void:
 	if ap == null:
 		return
