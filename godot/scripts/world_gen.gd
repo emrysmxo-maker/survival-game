@@ -18,7 +18,7 @@ const FEATURES := {
 	"sawmill": {"x": 105.0, "y": -125.0, "r": 16.0, "name": "Лесопилка"},
 	"lakebase": {"x": 118.0, "y": 52.0, "r": 13.0, "name": "Рыбацкая база"},
 	"farm": {"x": 25.0, "y": 150.0, "r": 22.0, "name": "Колхоз «Рассвет»"},
-	"bunker": {"x": -150.0, "y": 125.0, "r": 13.0, "name": "Военный бункер"},
+	"bunker": {"x": -150.0, "y": 125.0, "r": 22.0, "name": "Военный бункер"},
 	"tower": {"x": -35.0, "y": -178.0, "r": 12.0, "name": "Радиовышка"},
 }
 const LANDMARKS := ["camp", "village", "sawmill", "lakebase", "farm", "bunker", "tower"]
@@ -36,9 +36,11 @@ const HAMLETS := {
 	"h_sosn": {"x": 95.0, "y": -65.0, "r": 9.0, "name": "Хутор Сосновый"},
 	"h_cem": {"x": -140.0, "y": -62.0, "r": 8.0, "name": "Старое кладбище"},
 	"h_yuzhny": {"x": 75.0, "y": 175.0, "r": 10.0, "name": "Хутор Южный"},
+	"h_poselok": {"x": -54.0, "y": -105.0, "r": 12.0, "name": "Посёлок Луговой"},
 }
 const TRACKS := [["h_stone", "tower"], ["h_pond", "village"], ["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"], ["h_novo", "farm"],
-	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_sosn", "sawmill"], ["h_cem", "village"], ["h_yuzhny", "farm"]]
+	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_sosn", "sawmill"], ["h_cem", "village"], ["h_yuzhny", "farm"],
+	["h_poselok", "village"], ["h_poselok", "h_ranger"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
 # озёра: центр, радиус (берег неровный), глубина
@@ -124,6 +126,34 @@ static var _lk := PackedFloat32Array()   # озёра: x, y, r, глубина, 
 static var _ft := PackedFloat32Array()   # локации: x, y, r, высота поляны
 static var _zn := PackedFloat32Array()   # центры зон: x, y
 static var _zb := PackedFloat32Array()   # лесистость зон (0..1)
+# ---------- участки и постройки (заполняет props.gd до генерации чанков): там не растут деревья и кусты ----------
+static var _clr := PackedFloat32Array()   # прямоугольники: cx, cy, полуширина, полуглубина, угол (рад, как у дворов в props.gd)
+static var _xt := PackedFloat32Array()    # отдельные деревья (сады во дворах): x, y, индекс вида
+static var _xt_keys := PackedStringArray()
+static func add_clear(cx: float, cy: float, hw: float, hd: float, ang: float) -> void:
+	_clr.append_array([cx, cy, hw, hd, ang])
+static func add_tree(x: float, y: float, key: String) -> void:
+	var i := _xt_keys.find(key)
+	if i < 0:
+		_xt_keys.append(key)
+		i = _xt_keys.size() - 1
+	_xt.append_array([x, y, float(i)])
+# точка внутри участка/постройки (pad — запас, тайлы: крона дерева не должна нависать над домом)
+static func cleared(wx: float, wy: float, pad := 0.0) -> bool:
+	for i in _clr.size() / 5:
+		var dx: float = wx - _clr[i * 5]
+		var dy: float = wy - _clr[i * 5 + 1]
+		var hw: float = _clr[i * 5 + 2] + pad
+		var hd: float = _clr[i * 5 + 3] + pad
+		if absf(dx) > hw + hd or absf(dy) > hw + hd:
+			continue
+		var a: float = _clr[i * 5 + 4]
+		var lx := dx * cos(a) - dy * sin(a)
+		var ly := dx * sin(a) + dy * cos(a)
+		if absf(lx) < hw and absf(ly) < hd:
+			return true
+	return false
+
 static func site(key: String) -> Dictionary:
 	return FEATURES[key] if FEATURES.has(key) else HAMLETS[key]
 static func init() -> void:
@@ -461,7 +491,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if not ok:
 			continue
 		var spot := tree_spot(x, y, r0)
-		if spot.is_empty():
+		if spot.is_empty() or cleared(x, y, 3.0):
 			continue
 		var dead: bool = rng.randf() < (eco.dead + (0.2 if spot[3] > 0.5 else 0.0))
 		var set: Array = DEAD if dead else _pick_weighted(eco.canopy, rng.randf())
@@ -471,6 +501,14 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var o: Dictionary = _obj(rng, x, y, key, "dead" if dead else "tree", 0.88 + rng.randf() * 0.24)
 		objs.append(o)
 		trees.append(o)
+	# 1б) сады во дворах (яблони) — из props.gd
+	for i in _xt.size() / 3:
+		var xa: float = _xt[i * 3]
+		var ya: float = _xt[i * 3 + 1]
+		if xa >= sx and xa < sx + CHUNK and ya >= sy and ya < sy + CHUNK:
+			var oa: Dictionary = _obj(rng, xa, ya, _xt_keys[int(_xt[i * 3 + 2])], "tree", 0.85 + rng.randf() * 0.3)
+			objs.append(oa)
+			trees.append(oa)
 	# 2) подрост и кусты: под пологом и по опушкам; на лугах — куртинами
 	for i in 7:
 		var x2: float = sx + rng.randf() * CHUNK
@@ -481,7 +519,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if t2[1] > 0.02 or t2[6] > 0.3 or t2[4] > 0.5 or in_feature(x2, y2):
 			continue
 		var td2 := tree_density(x2, y2)
-		if ra > 0.12 + 0.75 * td2:
+		if ra > 0.12 + 0.75 * td2 or cleared(x2, y2, 1.0):
 			continue
 		if r2 < 0.5:
 			objs.append(_obj(rng, x2, y2, SAP_SMALL[int(rng.randf() * SAP_SMALL.size())], "sap", 0.8 + rng.randf() * 0.4))
@@ -496,6 +534,8 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		if t3[1] > 0.02 or path_dist(x3, y3) < 1.5 or t3[3] > 0.6 or in_feature(x3, y3):
 			continue
 		var td3 := tree_density(x3, y3)
+		if cleared(x3, y3, 0.5):
+			continue
 		var edge := 4.0 * td3 * (1.0 - td3)                        # опушка
 		var clump := ss(0.62, 0.78, vnoise(x3, y3, 5.0, 31))      # куртина
 		if rs > 0.08 + 0.55 * edge + 0.7 * clump + 0.25 * td3:
@@ -537,12 +577,12 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 	if rng.randf() < 0.45:
 		var x5: float = sx + 1.0 + rng.randf() * (CHUNK - 2)
 		var y5: float = sy + 1.0 + rng.randf() * (CHUNK - 2)
-		if not tree_spot(x5, y5, 0.0).is_empty():
+		if not tree_spot(x5, y5, 0.0).is_empty() and not cleared(x5, y5):
 			objs.append(_obj(rng, x5, y5, STUMP[int(rng.randf() * STUMP.size())], "stump", 0.85 + rng.randf() * 0.3))
 	if rng.randf() < 0.3:
 		var x6: float = sx + 2.0 + rng.randf() * (CHUNK - 4)
 		var y6: float = sy + 2.0 + rng.randf() * (CHUNK - 4)
-		if not tree_spot(x6, y6, 0.0).is_empty():
+		if not tree_spot(x6, y6, 0.0).is_empty() and not cleared(x6, y6):
 			objs.append(_obj(rng, x6, y6, LOG[int(rng.randf() * LOG.size())], "log", 0.85 + rng.randf() * 0.3))
 	for i in 2:
 		var x7: float = sx + rng.randf() * CHUNK
@@ -555,7 +595,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var y8: float = sy + 1.0 + rng.randf() * (CHUNK - 2)
 		var t8 := terrain(x8, y8)
 		var pr: float = 0.08 + t8[5] * 0.8
-		if rng.randf() < pr and t8[1] < 0.05 and t8[6] < 0.35:
+		if rng.randf() < pr and t8[1] < 0.05 and t8[6] < 0.35 and not cleared(x8, y8):
 			var big: bool = t8[5] > 0.4 and rng.randf() < 0.4
 			objs.append(_obj(rng, x8, y8, "boulder1" if big else ROCK[1 + int(rng.randf() * (ROCK.size() - 1))], "rock", 0.8 + rng.randf() * 0.5))
 			if big or rng.randf() < 0.35:            # камни лежат группами: рядом 1–3 поменьше
