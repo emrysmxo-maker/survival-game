@@ -40,7 +40,7 @@ var player_tile := Vector2.ZERO
 var view_r := 30.0          # радиус видимой земли, тайлы (задаёт main.gd по камере)
 var _view_c := Vector2(1e9, 1e9)
 var _view_rr := 0.0
-const SMALL_CATS := ["grass", "flower", "fern", "nettle", "branch", "moss"]
+const SMALL_CATS := ["grass", "flower", "fern", "nettle", "branch", "moss", "mushroom"]
 
 func _ready() -> void:
 	WorldGen.init()
@@ -147,7 +147,7 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 		bs *= TREE_K                  # деревья уменьшены (были слишком большими рядом с бойцом)
 	var flat: bool = cat in WorldGen.FLAT_CATS
 	var pre := Transform3D((ref[1] as Transform3D).basis, Vector3(0.0, (ref[1] as Transform3D).origin.y, 0.0))
-	var shadow: bool = not flat and not (cat in ["grass", "flower", "moss"])
+	var shadow: bool = not flat and not (cat in ["grass", "flower", "moss", "mushroom"])
 	var lv: Array = [_make_mmis(wood, leaf, cat, top * bs, shadow)]
 	for ln in kd.get("lods", []):          # упрощённые версии дерева (уровни детализации): те же экземпляры
 		var lw := _find_mesh(kd.m, "wood", ln)

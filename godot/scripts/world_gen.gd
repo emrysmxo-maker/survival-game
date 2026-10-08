@@ -89,6 +89,7 @@ const NETTLE := ["nettle_medium_a", "nettle_medium_b", "nettle_small_a", "nettle
 const GRASS := ["grass1_small_a", "grass1_mid_b", "grass1_tall_a", "grass1_tall_b", "grass1_large_b", "grass1_small_b", "grass2_a", "grass2_b", "grass2_c", "grass2_d", "grass2_e"]
 const FLOWERS := ["celandine_a", "celandine_b", "celandine_c", "celandine_d", "celandine_e", "dandelion_a", "dandelion_b", "dandelion_c", "dandelion_d", "dandelion_e"]
 const STUMP := ["stump1", "stump2"]
+const MUSH := ["mush_a", "mush_b", "mush_b", "mush_c", "mush_c", "mush_d"]   # грибы: под деревьями, у пней
 const LOG := ["log1", "log1b", "log2", "log2b"]
 const BRANCH := ["branches_a", "branches_b", "branches_c"]
 const ROCK := ["boulder1", "mrock1", "mrock2", "mrock3", "mrock4", "mrock5", "mrock6", "mrock7", "mrock8", "mrock9", "mrock10", "mrock11", "mrock12", "mrock13", "rock7", "stone1"]
@@ -692,6 +693,12 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var y7: float = sy + rng.randf() * CHUNK
 		if rng.randf() < 0.6 and terrain(x7, y7)[1] < 0.02 and path_dist(x7, y7) > 1.2:
 			objs.append(_obj(rng, x7, y7, BRANCH[int(rng.randf() * BRANCH.size())], "branch", 0.8 + rng.randf() * 0.4))
+	# грибы: под деревьями (в лесу чаще), иногда у пня
+	for i in 3:
+		var xm: float = sx + rng.randf() * CHUNK
+		var ym: float = sy + rng.randf() * CHUNK
+		if rng.randf() < 0.55 * forest_mask(xm, ym) and terrain(xm, ym)[1] < 0.02 and path_dist(xm, ym) > 1.5 and not cleared(xm, ym):
+			objs.append(_obj(rng, xm, ym, MUSH[int(rng.randf() * MUSH.size())], "mushroom", 0.9 + rng.randf() * 0.4))
 	# 5) камни: на каменистых местах — валуны, везде — редкие камешки
 	for i in 3:
 		var x8: float = sx + 1.0 + rng.randf() * (CHUNK - 2)

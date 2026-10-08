@@ -62,7 +62,7 @@ func _run() -> void:
 					if tri > 0:
 						tl.append([tri, key, cnt, kd.cat])
 				tl.sort_custom(func(a, b): return a[0] > b[0])
-				for e in tl.slice(0, 14):
+				for e in tl.slice(0, 14) + tl.filter(func(x): return str(x[1]).begins_with("mush")):
 					print("KIND %-22s %-7s шт %5d  треуг %8d" % [e[1], e[3], e[2], e[0]])
 			var rs := RenderingServer
 			print("DRAW вызовов %d  треугольников %d  объектов %d" % [rs.get_rendering_info(rs.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
