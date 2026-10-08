@@ -19,7 +19,7 @@ os.makedirs(OUT, exist_ok=True)
 BUDGET = {
     'fir_tree_01': (40000, 9000), 'pine_tree_01': (40000, 9000),
     'island_tree_01': (25000, 8000), 'island_tree_02': (25000, 8000), 'island_tree_03': (25000, 8000),
-    'tree_small_02': (20000, 6000), 'jacaranda_tree': (25000, 8000),
+    'tree_small_02': (20000, 6000),
     'fir_sapling': (8000, 1500), 'fir_sapling_medium': (14000, 3000),
     'pine_sapling_small': (8000, 1500), 'pine_sapling_medium': (14000, 3000),
     'shrub_01': (9000, 1000), 'shrub_02': (9000, 1000), 'shrub_03': (8000, 1000), 'shrub_04': (9000, 1000),

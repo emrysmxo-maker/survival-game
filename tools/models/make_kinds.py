@@ -3,7 +3,7 @@
 import json, sys, os
 meta = json.load(open(sys.argv[1]))
 SUB = {   # у EZ-Tree нет настоящей геометрии — подставляем модели Poly Haven
-    'birch': ('jacaranda_tree', None, 7.0, False), 'aspen': ('tree_small_02', None, 8.0, False),
+    'aspen': ('tree_small_02', None, 8.0, False),
     'oak': ('island_tree_03', None, 7.0, False),
     'dead0': ('fir_tree_01', 'fir_tree_01_a_LOD0', 7.5, True), 'dead1': ('pine_tree_01', 'pine_tree_01_b_LOD0', 7.5, True),
     'dead2': ('fir_tree_01', 'fir_tree_01_c_LOD0', 6.5, True)}
