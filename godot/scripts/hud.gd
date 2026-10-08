@@ -1,6 +1,6 @@
 extends CanvasLayer
 # Интерфейс: экосистема/координаты/деревья, версия и fps, мини-карта (тап — большая
-# карта с 5 локациями), телепорт 📍, «ЗОМБИ +», «АВТО ОГОНЬ», время суток с паузой.
+# карта с локациями), перелёт камеры 📍 к локации, время суток с паузой.
 
 const VERSION := "G0.14"
 var main
@@ -12,19 +12,10 @@ var big_tex: TextureRect
 var time_lbl: Label
 var slider: HSlider
 var pause_btn: Button
-var auto_btn: Button
-var zombie_btn: Button
 var tp_btn: Button
 var gear_btn: Button
-var weapon_btn: Button
-var reload_btn: Button
-var hp_bar: ColorRect
-var armor_bar: ColorRect
-var stat_lbl: Label
-var stat_box: Control
 var toast_lbl: Label
 var _toast_t := 0.0
-var hurt: ColorRect
 var q_panel: VBoxContainer
 var q_btns: Array = []
 var tp_panel: VBoxContainer
@@ -90,7 +81,7 @@ func _ready() -> void:
 		var b := _button(f.name, Vector2.ZERO, Vector2(190, 38), Color(0.06, 0.09, 0.06, 0.9))
 		b.reparent(tp_panel)
 		b.pressed.connect(func():
-			main.teleport(Vector2(f.x + 4.0, f.y + 4.0))
+			main.teleport(Vector2(f.x, f.y))
 			tp_panel.visible = false)
 
 	mini = TextureRect.new()
@@ -131,12 +122,6 @@ func _ready() -> void:
 	big.draw.connect(_draw_big_marks)
 	add_child(big)
 
-	zombie_btn = _button("ЗОМБИ +", Vector2.ZERO, Vector2(120, 46), Color(0.7, 0.15, 0.12, 0.92))
-	zombie_btn.pressed.connect(func(): main.zombies.spawn())
-	auto_btn = _button("АВТО\nОГОНЬ", Vector2.ZERO, Vector2(96, 96), Color(0.18, 0.24, 0.18, 0.85))
-	auto_btn.pressed.connect(func():
-		main.weapon.auto = not main.weapon.auto
-		_style(auto_btn, Color(0.75, 0.45, 0.1, 0.92) if main.weapon.auto else Color(0.18, 0.24, 0.18, 0.85)))
 	var tbox := PanelContainer.new()
 	tbox.add_theme_stylebox_override("panel", _box(Color(0.06, 0.09, 0.06, 0.8)))
 	tbox.name = "TimeBox"
@@ -161,42 +146,6 @@ func _ready() -> void:
 	pause_btn.pressed.connect(func():
 		main.daynight.auto = not main.daynight.auto
 		pause_btn.text = "II" if main.daynight.auto else "▶")
-	# оружие: кнопка смены (автомат ↔ пистолет) с патронами и кнопка перезарядки
-	weapon_btn = _button("АВТОМАТ", Vector2.ZERO, Vector2(124, 56), Color(0.12, 0.16, 0.12, 0.88))
-	weapon_btn.add_theme_font_size_override("font_size", 15)
-	weapon_btn.pressed.connect(func():
-		var p = main.player
-		if p.has_pistol:
-			p.set_weapon("pistol" if p.weapon_kind == "rifle" else "rifle")
-		else:
-			toast("Пистолета нет — найди на земле (светлые кольца)")
-		_refresh_weapon())
-	reload_btn = _button("⟳", Vector2.ZERO, Vector2(52, 56), Color(0.12, 0.16, 0.12, 0.88))
-	reload_btn.add_theme_font_size_override("font_size", 24)
-	reload_btn.pressed.connect(func(): main.player.start_reload())
-	# здоровье и броня
-	stat_box = Control.new()
-	add_child(stat_box)
-	var bg := ColorRect.new()
-	bg.color = Color(0.05, 0.07, 0.05, 0.75)
-	bg.size = Vector2(212, 46)
-	stat_box.add_child(bg)
-	hp_bar = ColorRect.new()
-	hp_bar.color = Color(0.78, 0.16, 0.14)
-	hp_bar.position = Vector2(6, 6)
-	hp_bar.size = Vector2(200, 14)
-	stat_box.add_child(hp_bar)
-	armor_bar = ColorRect.new()
-	armor_bar.color = Color(0.35, 0.55, 0.8)
-	armor_bar.position = Vector2(6, 24)
-	armor_bar.size = Vector2(0, 8)
-	stat_box.add_child(armor_bar)
-	stat_lbl = Label.new()
-	stat_lbl.position = Vector2(8, 30)
-	stat_lbl.add_theme_font_size_override("font_size", 11)
-	stat_box.add_child(stat_lbl)
-	for c in [bg, hp_bar, armor_bar, stat_lbl]:
-		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toast_lbl = Label.new()
 	toast_lbl.add_theme_font_size_override("font_size", 20)
 	toast_lbl.add_theme_color_override("font_color", Color(1.0, 0.93, 0.7))
@@ -205,10 +154,6 @@ func _ready() -> void:
 	toast_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(toast_lbl)
-	hurt = ColorRect.new()
-	hurt.color = Color(0.7, 0.0, 0.0, 0.0)
-	hurt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(hurt)
 	get_viewport().size_changed.connect(_layout)
 	_layout()
 
@@ -216,26 +161,9 @@ func toast(t: String) -> void:
 	toast_lbl.text = t
 	_toast_t = 2.8
 
-func _refresh_weapon() -> void:
-	var p = main.player
-	if p == null:
-		return
-	var w: String = p.weapon_kind
-	var nm := "АВТОМАТ" if w == "rifle" else "ПИСТОЛЕТ"
-	var am := "перезарядка…" if p.reload_t > 0.0 else "%d / %d" % [p.ammo[w], p.reserve[w]]
-	weapon_btn.text = "%s\n%s" % [nm, am]
-
 func _process(dt: float) -> void:
-	if main == null or main.player == null:
-		return
-	var p = main.player
 	_toast_t -= dt
 	toast_lbl.modulate.a = clampf(_toast_t / 0.6, 0.0, 1.0)
-	hurt.color.a = clampf(p.hurt_t, 0.0, 0.35) * 0.9
-	hp_bar.size.x = 200.0 * clampf(p.hp / 100.0, 0.0, 1.0)
-	armor_bar.size.x = 200.0 * clampf(p.armor / 100.0, 0.0, 1.0)
-	stat_lbl.text = "Здоровье %d   Броня %d" % [maxi(0, roundi(p.hp)), roundi(p.armor)]
-	_refresh_weapon()
 
 func _refresh_q() -> void:
 	for i in q_btns.size():
@@ -269,25 +197,18 @@ func _button(text: String, pos: Vector2, sz: Vector2, c: Color) -> Button:
 func _layout() -> void:
 	var vs := get_viewport().get_visible_rect().size
 	mini.position = Vector2(vs.x - 160, 8)
-	zombie_btn.position = Vector2(12, vs.y - 58)
-	auto_btn.position = Vector2(vs.x - 112, vs.y - 112)
-	auto_btn.size = Vector2(96, 96)
-	weapon_btn.position = Vector2(vs.x - 136, 290)
-	reload_btn.position = Vector2(vs.x - 196, 290)
-	stat_box.position = Vector2(12, vs.y - 112)
 	toast_lbl.position = Vector2(vs.x / 2.0 - 300, 64)
 	toast_lbl.size = Vector2(600, 30)
-	hurt.size = vs
 	var tb: Control = get_node("TimeBox")
 	tb.position = Vector2(vs.x / 2.0 - 170, vs.y - 50)
 	var s := minf(vs.y - 40, vs.x - 40)
 	big_tex.size = Vector2(s, s)
 	big_tex.position = (vs - big_tex.size) / 2.0
 
-# кнопки, на которых стики не начинаются
+# кнопки и панели, на которых палец не двигает камеру
 func ui_rects() -> Array:
 	var out := []
-	for c in [mini, zombie_btn, auto_btn, tp_btn, gear_btn, get_node("TimeBox"), weapon_btn, reload_btn]:
+	for c in [mini, tp_btn, gear_btn, get_node("TimeBox")]:
 		out.append(func(): return c.get_global_rect() if c.visible else Rect2())
 	out.append(func(): return tp_panel.get_global_rect() if tp_panel.visible else Rect2())
 	out.append(func(): return q_panel.get_global_rect() if q_panel.visible else Rect2())
@@ -315,7 +236,7 @@ func update_hud(dt: float, tile: Vector2, eco: String, trees: int) -> void:
 		WorkerThreadPool.wait_for_task_completion(_mini_task)
 		_mini_task = -1
 		_mini_tex.update(_mini_img)
-	# пересчёт миникарты — только когда боец ушёл на 3+ тайла (или раз в 5 с), а не каждую секунду
+	# пересчёт миникарты — только когда камера ушла на 3+ тайла (или раз в 5 с), а не каждую секунду
 	if _mini_t <= 0.0 and _mini_task < 0 and (tile.distance_to(_mini_at) > 3.0 or _mini_t < -4.0 or _mini_tex == null):
 		_mini_t = 0.5
 		_mini_at = tile
@@ -384,24 +305,18 @@ func _draw_big_marks() -> void:
 		var p := r.position + Vector2((f.x / R + 1.0) / 2.0, (f.y / R + 1.0) / 2.0) * r.size
 		big.draw_circle(p, 6, Color(0.95, 0.77, 0.06))
 		big.draw_string(font, p + Vector2(-110, -10), f.name, HORIZONTAL_ALIGNMENT_CENTER, 220, 15, Color.WHITE)
-	var pt: Vector2 = main.player.tile
+	var pt: Vector2 = main.focus
 	var pp := r.position + Vector2((pt.x / R + 1.0) / 2.0, (pt.y / R + 1.0) / 2.0) * r.size
 	big.draw_circle(pp, 7, Color(1, 0.2, 0.2))
 
 func _draw_mini() -> void:
 	var c := mini.size / 2.0
 	var k := (mini.size.x / 2.0) / MINI_R
-	var off: Vector2 = main.player.tile - _mini_at        # карта считается раз в секунду — сдвиг до бойца
+	var off: Vector2 = main.focus - _mini_at        # карта считается не каждый кадр — сдвиг до точки обзора
 	var to_px := func(d: Vector2) -> Vector2: return c + Vector2(d.x - d.y, d.x + d.y) / 1.414 * k
-	if main.zombies:
-		for z in main.zombies.list:
-			if not z.dead:
-				var p: Vector2 = to_px.call(z.tile - _mini_at)
-				if p.distance_to(c) < c.x - 4:
-					mini.draw_circle(p, 3.5, Color(0.9, 0.2, 0.15))
 	var pp: Vector2 = to_px.call(off)
-	var a: float = main.player.yaw
-	# yaw (Godot) -> направление на экране
+	# куда смотрит камера (вперёд по земле): yaw камеры + 180° в осях «yaw бойца»
+	var a: float = deg_to_rad(main.cam_yaw) + PI
 	var d3 := Vector2(sin(a), cos(a))
 	var dir: Vector2 = Vector2(d3.x - d3.y, d3.x + d3.y).normalized()
 	var n := Vector2(-dir.y, dir.x)

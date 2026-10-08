@@ -1,21 +1,17 @@
 extends Control
-# Вся правая половина экрана — свободный обзор: свайп пальцем вращает камеру (вправо/влево — на 360°,
-# вверх/вниз — наклон), короткий тап — вернуть вид. Кнопки «−»/«+» (приближение) и «ОГОНЬ»:
-# держать — стрелять, тянуть в сторону — целиться в эту сторону (как стик).
+# Свободная камера пальцами: один палец — тащить карту; два пальца — сводить/разводить (приближение),
+# крутить (поворот вокруг вертикали), вместе вверх/вниз (наклон). Кнопки «−»/«+» — приближение.
+# На ПК: левая кнопка мыши — тащить, колесо — приближение, правая кнопка — поворот/наклон.
 var zoom := 0.0            # -1 приближение / +1 отдаление (кнопки)
-var fire_held := false
-var fire_vec := Vector2.ZERO   # куда оттянута кнопка огня (экранные оси, длина 0..1)
-var _fpos := Vector2.ZERO
-const FIRE_R := 80.0
 var blocked_rects: Array = []
-var _cam_finger := -1
+var _touch := {}           # палец -> позиция
 var _zfinger := -1
-var _ffinger := -1
-var _t0 := 0.0
-var _moved := 0.0
-const SPLIT := 0.5         # на этой высоте — кнопки приближения
-signal reset_view
-signal swiped(delta: Vector2)
+var _mouse_l := false
+var _mouse_r := false
+signal panned(delta: Vector2)
+signal pinched(k: float)
+signal twisted(angle: float)
+signal tilted(dy: float)
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -27,21 +23,15 @@ func _vs() -> Vector2:
 
 func zoom_rect(dir: int) -> Rect2:
 	var vs := _vs()
-	return Rect2(Vector2(vs.x - 128.0 + (dir + 1) * 32.0, vs.y * SPLIT - 70.0), Vector2(56, 56))
+	return Rect2(Vector2(vs.x - 128.0 + (dir + 1) * 32.0, vs.y * 0.5 - 70.0), Vector2(56, 56))
 
-func fire_rect() -> Rect2:
-	var vs := _vs()
-	return Rect2(Vector2(vs.x - 290.0, vs.y - 170.0), Vector2(120, 120))
-
-func rect() -> Rect2:
-	return zoom_rect(-1).merge(zoom_rect(1)).merge(fire_rect())
-
-func _cam_zone(p: Vector2) -> bool:
-	var vs := _vs()
-	return p.x >= vs.x * 0.5
+func _blocked(p: Vector2) -> bool:
+	for r in blocked_rects:
+		if r.call().has_point(p):
+			return true
+	return false
 
 func _input(e: InputEvent) -> void:
-	var vs := _vs()
 	if e is InputEventScreenTouch:
 		if e.pressed:
 			if _zfinger == -1:
@@ -52,46 +42,54 @@ func _input(e: InputEvent) -> void:
 						queue_redraw()
 						get_viewport().set_input_as_handled()
 						return
-			if _ffinger == -1 and fire_rect().grow(8).has_point(e.position):
-				_ffinger = e.index
-				fire_held = true
-				_fpos = e.position
-				fire_vec = Vector2.ZERO
-				queue_redraw()
-				get_viewport().set_input_as_handled()
+			if _blocked(e.position):
 				return
-			if _cam_finger == -1 and _cam_zone(e.position):
-				for r in blocked_rects:
-					if r.call().has_point(e.position):
-						return
-				_cam_finger = e.index
-				_t0 = Time.get_ticks_msec() / 1000.0
-				_moved = 0.0
-				get_viewport().set_input_as_handled()
+			_touch[e.index] = e.position
+			get_viewport().set_input_as_handled()
 		else:
 			if e.index == _zfinger:
 				_zfinger = -1
 				zoom = 0.0
 				queue_redraw()
-			elif e.index == _ffinger:
-				_ffinger = -1
-				fire_held = false
-				fire_vec = Vector2.ZERO
-				queue_redraw()
-			elif e.index == _cam_finger:
-				if _moved < 12.0 and Time.get_ticks_msec() / 1000.0 - _t0 < 0.25:
-					reset_view.emit()
-				_cam_finger = -1
-	elif e is InputEventScreenDrag and e.index == _ffinger:
-		var d: Vector2 = e.position - fire_rect().get_center()
-		fire_vec = (d / FIRE_R).limit_length(1.0) if d.length() > 14.0 else Vector2.ZERO
-		queue_redraw()
-	elif e is InputEventScreenDrag and e.index == _cam_finger:
-		_moved += e.relative.length()
-		swiped.emit(e.relative)
+			_touch.erase(e.index)
+	elif e is InputEventScreenDrag and _touch.has(e.index):
+		if _touch.size() == 1:
+			panned.emit(e.relative)
+		else:
+			# два пальца: этот и другой (первый попавшийся)
+			var other := -1
+			for k in _touch:
+				if k != e.index:
+					other = k
+					break
+			var o: Vector2 = _touch[other]
+			var a0: Vector2 = _touch[e.index]
+			var a1: Vector2 = e.position
+			var d0 := a0 - o
+			var d1 := a1 - o
+			if d0.length() > 20.0 and d1.length() > 20.0:
+				pinched.emit(d1.length() / d0.length())
+				twisted.emit(d0.angle_to(d1))
+			tilted.emit(e.relative.y * 0.5)
+		_touch[e.index] = e.position
+		get_viewport().set_input_as_handled()
+	elif e is InputEventMouseButton:
+		if e.button_index == MOUSE_BUTTON_LEFT:
+			_mouse_l = e.pressed and not _blocked(e.position)
+		elif e.button_index == MOUSE_BUTTON_RIGHT:
+			_mouse_r = e.pressed
+		elif e.pressed and e.button_index == MOUSE_BUTTON_WHEEL_UP:
+			pinched.emit(1.1)
+		elif e.pressed and e.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			pinched.emit(1.0 / 1.1)
+	elif e is InputEventMouseMotion:
+		if _mouse_l:
+			panned.emit(e.relative)
+		elif _mouse_r:
+			twisted.emit(-e.relative.x * 0.005)
+			tilted.emit(e.relative.y)
 
 func _draw() -> void:
-	var vs := _vs()
 	for dir in [-1, 1]:
 		var r := zoom_rect(dir)
 		draw_rect(r, Color(0, 0, 0, 0.4 if zoom != 0.0 and (zoom < 0.0) == (dir > 0) else 0.3), true)
@@ -100,15 +98,3 @@ func _draw() -> void:
 		draw_line(cc - Vector2(11, 0), cc + Vector2(11, 0), Color(1, 1, 1, 0.85), 3.0)
 		if dir > 0:
 			draw_line(cc - Vector2(0, 11), cc + Vector2(0, 11), Color(1, 1, 1, 0.85), 3.0)
-	var fr := fire_rect()
-	var c := fr.get_center()
-	draw_circle(c, 58.0, Color(0.75, 0.15, 0.1, 0.6 if fire_held else 0.35))
-	draw_arc(c, 58.0, 0, TAU, 40, Color(1, 1, 1, 0.55), 3.0)
-	if fire_held:
-		draw_arc(c, FIRE_R, 0, TAU, 48, Color(1, 0.55, 0.35, 0.4), 3.0)
-		draw_circle(c + fire_vec * FIRE_R, 26.0, Color(1, 1, 1, 0.5))
-	draw_circle(c, 9.0, Color(1, 1, 1, 0.8))
-	draw_arc(c, 24.0, 0, TAU, 28, Color(1, 1, 1, 0.7), 2.5)
-	for a in 4:
-		var d := Vector2.from_angle(a * PI / 2.0)
-		draw_line(c + d * 24.0, c + d * 38.0, Color(1, 1, 1, 0.7), 2.5)

@@ -123,9 +123,6 @@ func _start_preload() -> void:
 			var p := "res://assets/models/%s_%s.glb" % [kinds[k].m, part]
 			if not seen.has(p) and ResourceLoader.exists(p):
 				seen[p] = true
-	for p in ["res://assets/character/Survivor.glb", "res://assets/character/Zombie.glb"]:
-		if ResourceLoader.exists(p):
-			seen[p] = true
 	for p in seen:
 		if ResourceLoader.load_threaded_request(p, "", true) == OK:
 			_preload.append(p)
