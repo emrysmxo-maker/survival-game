@@ -87,6 +87,8 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/pub/out && cp -r "$OUT"/. /tmp/pub/out/ 2>/dev/null || true
+          # картинки → JPG до 1 МБ: коннекторы GitHub у ИИ не отдают файлы больше
+          $TOOLS/blender/v/bin/python -I tools/ci/shrink_out.py /tmp/pub/out || true
           find /tmp/pub/out -type f -size +45M -delete
           cd /tmp/pub
           printf 'Запуск %s: task=%s args=%s, ветка %s, коммит %s\nЛог: out/log.txt\n%s\n' \

@@ -3,7 +3,7 @@ extends Node
 #   --views=x:y[:cam[:yaw[:elev[:time]]]]/x:y...   — точки съёмки (тайлы), по снимку на каждую
 #   --shots=N --every=сек                          — серия кадров с каждой точки («видео» картинками)
 #   --wait=сек                                     — пауза после загрузки чанков перед снимком (по умолчанию 1.5)
-# Файлы: <папка>/shot_<точка>_<кадр>.png; в лог — строка SHOT с местом, загрузкой и деревьями.
+# Файлы: <папка>/shot_<точка>_<кадр>.jpg; в лог — строка SHOT с местом, загрузкой и деревьями.
 var main
 var out := ""
 var views: Array = []
@@ -43,8 +43,8 @@ func _run() -> void:
 		await _sleep(wait)
 		for k in shots:
 			await RenderingServer.frame_post_draw
-			var path := "%s/shot_%02d_%02d.png" % [out, i, k]
-			get_viewport().get_texture().get_image().save_png(path)
+			var path := "%s/shot_%02d_%02d.jpg" % [out, i, k]                # JPG ~0,3–0,5 МБ: коннекторы ИИ не берут файлы > 1 МБ
+			get_viewport().get_texture().get_image().save_jpg(path, 0.82)
 			print("SHOT %s  точка %s,%s  cam %.0f yaw %.0f elev %.0f  чанков ждали %.1f с  деревьев рядом %d  fps %d" % [path, v[0], v[1],
 				main.cam_size, main.cam_yaw, main.cam_elev, (Time.get_ticks_msec() - t0) / 1000.0, main.world.count_trees(), Engine.get_frames_per_second()])
 			if k < shots - 1: await _sleep(every)
