@@ -77,4 +77,4 @@ Push в `main` → GitHub Actions собирает APK → Release `godot-latest
 
 ## Blender (для своих моделей)
 - Стоит как Python-модуль: `/tmp/claude-0/blender/v/bin/python -I скрипт.py` (внутри `import bpy`, экспорт `bpy.ops.export_scene.gltf`). Работает без экрана. Ворнинг про Draco игнорировать.
-- Если контейнер новый: `pip download bpy==4.2.0 --no-deps -d w`, `python3 -m venv v`, `v/bin/pip install w/bpy-*.whl`.
+- Если контейнер новый: `cd /tmp/claude-0/blender && python3 -m venv v && v/bin/pip install bpy==5.2.2` (Python 3.13 — bpy 4.2 не ставится; 5.2.2 LTS проверен: импорт/экспорт glb работают).
