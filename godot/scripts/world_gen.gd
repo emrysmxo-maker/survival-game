@@ -331,9 +331,16 @@ static func forest_patch(wx: float, wy: float, dens: int) -> float:
 static func in_map(x: float, y: float, m: float) -> bool:
 	return absf(x) < MAP_RADIUS - m and absf(y) < MAP_RADIUS - m
 
+# внутри поляны локации (там стоят постройки: деревья, подрост и кусты не растут)
+static func in_feature(wx: float, wy: float, k: float = 0.98) -> bool:
+	for i in _ft.size() / 4:
+		if Vector2(wx - _ft[i * 4], wy - _ft[i * 4 + 1]).length() < _ft[i * 4 + 2] * k:
+			return true
+	return false
+
 static func tree_spot(wx: float, wy: float, r: float) -> PackedFloat32Array:
 	var t := terrain(wx, wy)
-	if t[1] > 0.05 or t[2] > 0.8 or t[6] > 0.35 or t[4] > 0.35:
+	if t[1] > 0.05 or t[2] > 0.8 or t[6] > 0.35 or t[4] > 0.35 or in_feature(wx, wy):
 		return PackedFloat32Array()
 	if t[3] > 0.5 and r > 0.45:
 		return PackedFloat32Array()
@@ -389,7 +396,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var x2: float = sx + rng.randf() * CHUNK
 		var y2: float = sy + rng.randf() * CHUNK
 		var t2 := terrain(x2, y2)
-		if t2[1] > 0.02 or t2[6] > 0.3 or t2[4] > 0.5:
+		if t2[1] > 0.02 or t2[6] > 0.3 or t2[4] > 0.5 or in_feature(x2, y2):
 			continue
 		var r2: float = rng.randf()
 		if r2 < 0.45:
@@ -401,7 +408,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var x3: float = sx + rng.randf() * CHUNK
 		var y3: float = sy + rng.randf() * CHUNK
 		var t3 := terrain(x3, y3)
-		if t3[1] > 0.02 or path_dist(x3, y3) < 1.5 or t3[3] > 0.6:
+		if t3[1] > 0.02 or path_dist(x3, y3) < 1.5 or t3[3] > 0.6 or in_feature(x3, y3):
 			continue
 		objs.append(_obj(rng, x3, y3, SHRUB[int(rng.randf() * SHRUB.size())], "shrub", 0.8 + rng.randf() * 0.4))
 	# 3) травяной ярус по месту: тень леса — папоротник и мох, поляны — трава и цветы, у воды — крапива

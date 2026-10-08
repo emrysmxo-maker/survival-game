@@ -1,0 +1,39 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://bb6o2hpvc4772"
+path.s3tc="res://.godot/imported/house_brick_concrete.jpg-8707e8ccfa9f84b2ba91440cccf4c8aa.s3tc.ctex"
+path.etc2="res://.godot/imported/house_brick_concrete.jpg-8707e8ccfa9f84b2ba91440cccf4c8aa.etc2.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "1964cde8212035767c515f940ee0f58e"
+}
+
+[deps]
+
+source_file="res://assets/props/house_brick_concrete.jpg"
+dest_files=["res://.godot/imported/house_brick_concrete.jpg-8707e8ccfa9f84b2ba91440cccf4c8aa.s3tc.ctex", "res://.godot/imported/house_brick_concrete.jpg-8707e8ccfa9f84b2ba91440cccf4c8aa.etc2.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=1

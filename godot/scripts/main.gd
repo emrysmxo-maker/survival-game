@@ -30,6 +30,7 @@ func _ready() -> void:
 	daynight.setup(self)
 	world = load("res://scripts/world.gd").new()
 	add_child(world)
+	add_child(load("res://scripts/props.gd").new())        # заброшенные дома и машины
 
 	cam = Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -80,7 +81,7 @@ func teleport(t: Vector2) -> void:
 	var lim := WorldGen.MAP_RADIUS - 5.0
 	focus = t.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 	world.ensure_now(focus, 2)
-	cam_h = WorldGen.height(focus.x, focus.y)
+	cam_h = WorldGen.height_m(focus.x, focus.y)
 	_place_camera(1.0)
 
 # сдвиг пальцем (пиксели экрана): карта едет за пальцем
@@ -96,7 +97,7 @@ func _pan(d: Vector2) -> void:
 	focus = (focus + Vector2(m.x, m.z) / WorldGen.T).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 func _place_camera(k: float) -> void:
-	cam_h = lerpf(cam_h, WorldGen.height(focus.x, focus.y), k)
+	cam_h = lerpf(cam_h, WorldGen.height_m(focus.x, focus.y), k)
 	var target := Vector3(focus.x * WorldGen.T, cam_h, focus.y * WorldGen.T)
 	cam.global_position = target + cam.global_transform.basis.z * 150.0
 
