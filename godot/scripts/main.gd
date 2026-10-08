@@ -14,6 +14,7 @@ const LOD1_SIZE := 24.0             # до этого приближения д�
 const LOD2_SIZE := 40.0             # дальше — силуэты
 
 var world
+var props
 var daynight
 var settings
 var hud
@@ -32,7 +33,8 @@ func _ready() -> void:
 	daynight.setup(self)
 	world = load("res://scripts/world.gd").new()
 	add_child(world)
-	add_child(load("res://scripts/props.gd").new())        # заброшенные дома и машины
+	props = load("res://scripts/props.gd").new()
+	add_child(props)                                        # дома, машины, заборы, следы карантина
 
 	cam = Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -131,6 +133,7 @@ func _process(dt_raw: float) -> void:
 	_update_camera(dt)
 	world.update_world(focus, cam)
 	RenderingServer.global_shader_parameter_set("sun_dir", daynight.sun.global_transform.basis.z)
+	props.set_night(daynight.night)
 	_place_camera(minf(1.0, 6.0 * dt))
 	if hud.due(dt):
 		hud.update_hud(0.25, focus, world.ecosystem_at(focus), world.count_trees())

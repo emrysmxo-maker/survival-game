@@ -60,6 +60,10 @@ func _ready() -> void:
 	mt.generate_mipmaps = true
 	mt.noise = mz
 	ground_mat.set_shader_parameter("macro_tex", mt)
+	var mc := []
+	for m in WorldGen.MOROK:
+		mc.append(Vector4(m[0] * WorldGen.T, m[1] * WorldGen.T, m[2] * WorldGen.T, 0.0))
+	ground_mat.set_shader_parameter("morok_c", mc)
 	water_mat = ShaderMaterial.new()
 	water_mat.shader = load("res://shaders/water.gdshader")
 	for pair in [["n1", 11, 0.012], ["n2", 23, 0.03]]:     # рябь: две карты нормалей из шума (генерирует Godot)

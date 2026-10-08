@@ -154,6 +154,16 @@ static func cleared(wx: float, wy: float, pad := 0.0) -> bool:
 			return true
 	return false
 
+# ---------- морок: места, где «что-то не так» — мёртвый лес, серая земля (центр x, y и радиус, тайлы) ----------
+const MOROK := [[-150.0, 132.0, 40.0], [92.0, -62.0, 24.0], [-62.0, -190.0, 28.0]]
+static func morok(wx: float, wy: float) -> float:
+	var k := 0.0
+	for m in MOROK:
+		var d := Vector2(wx - m[0], wy - m[1]).length()
+		if d < m[2]:
+			k = maxf(k, ss(m[2], m[2] * 0.45, d + (vnoise(wx, wy, 7.0, 77) - 0.5) * 9.0))
+	return k
+
 static func site(key: String) -> Dictionary:
 	return FEATURES[key] if FEATURES.has(key) else HAMLETS[key]
 static func init() -> void:
@@ -513,7 +523,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var spot := tree_spot(x, y, r0)
 		if spot.is_empty() or cleared(x, y, 3.0):
 			continue
-		var dead: bool = rng.randf() < (eco.dead + (0.2 if spot[3] > 0.5 else 0.0))
+		var dead: bool = rng.randf() < (eco.dead + (0.2 if spot[3] > 0.5 else 0.0) + morok(x, y) * 0.7)
 		var set: Array = DEAD if dead else _pick_weighted(eco.canopy, rng.randf())
 		if not dead and spot[3] > 0.25 and rng.randf() < 0.75:
 			set = WET                                  # у воды и в сырых низинах — ольха и ива
@@ -562,7 +572,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 			continue
 		objs.append(_obj(rng, x3, y3, SHRUB[int(rng.randf() * SHRUB.size())], "shrub", 0.8 + rng.randf() * 0.4))
 	# 3) травяной ярус по месту: тень леса — папоротник и мох, поляны — трава и цветы, у воды — крапива
-	var ncover := int(50.0 * density)
+	var ncover := int(50.0 * density * (1.0 - 0.6 * morok(sx + CHUNK * 0.5, sy + CHUNK * 0.5)))   # в мороке трава редеет
 	for i in ncover:
 		var x4: float = sx + rng.randf() * CHUNK
 		var y4: float = sy + rng.randf() * CHUNK

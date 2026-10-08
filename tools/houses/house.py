@@ -43,6 +43,8 @@ FLAT = {   # без текстуры: (цвет sRGB, шероховатость
 	"stove": ((0.86, 0.85, 0.80), 0.95, 0.0), "wood_raw": ((0.50, 0.40, 0.29), 0.85, 0.0),
 	"rubber": ((0.08, 0.08, 0.08), 0.9, 0.0),
 	"headlight": ((0.80, 0.82, 0.84), 0.05, 0.6), "frame": ((0.08, 0.08, 0.08), 0.6, 0.4),
+	"spray": ((1.0, 1.0, 1.0), 0.95, 0.0), "glass_lit": ((0.55, 0.42, 0.22), 0.3, 0.0),
+	"canvas_white": ((0.82, 0.82, 0.78), 0.95, 0.0), "fabric": ((1.0, 1.0, 1.0), 0.95, 0.0),
 }
 _MATS = {}
 
@@ -256,7 +258,8 @@ def window(hb, S, p, axis, outward, w, h, rnd, kind):
 		piece(0, 0, ft * 0.8, h); piece(-w / 4, h * 0.2, w / 2, ft * 0.7)   # переплёт «крестом»
 	glass = st == "ok" or (st == "broken" and rnd.random() < 0.45)
 	if glass:
-		piece(0, 0, w - ft, h - ft, 0.012, mat("glass"))              # иначе стекла нет — через проём видна комната
+		lit = rnd.random() < S.get("lit", 0.0)
+		piece(0, 0, w - ft, h - ft, 0.012, mat("glass_lit" if lit else "glass"))   # иначе стекла нет — через проём видна комната
 	# отлив/подоконник снаружи
 	so = Vector(p) + nrm * 0.06 + UP * (-h / 2 - 0.03)
 	hb.box(mat("metal_paint") if S.get("pvc") else fm, tuple(so), (w + 0.1, 0.16, 0.03) if axis == "x" else (0.16, w + 0.1, 0.03))
@@ -366,7 +369,7 @@ def house(name, spec, seed):
 	x0, x1, y0, y1 = -L / 2, L / 2, -D / 2, D / 2
 	# фундамент/цоколь
 	hb.box(mat(S.get("plinth_mat", "concrete")), (0, 0, zp / 2 - 0.15), (L + 0.12, D + 0.12, zp + 0.3), S.get("pcol", (0.9, 0.9, 0.9)))
-	style = {"frame": mat(S.get("frame", "frame_wood")), "pvc": S.get("pvc", False), "platband": S.get("platband", False),
+	style = {"lit": S.get("lit", 0.12), "frame": mat(S.get("frame", "frame_wood")), "pvc": S.get("pvc", False), "platband": S.get("platband", False),
 		"platcol": S.get("platcol", (0.9, 0.9, 0.88)), "state": S.get("state", "ok"), "shutters": S.get("shutters", False), "shutcol": S.get("shutcol", (1, 1, 1))}
 	wh, ww = S.get("win_h", 1.4), S.get("win_w", 1.2)
 	sill = S.get("sill", 0.85)
@@ -662,7 +665,118 @@ def wire_unit(name):
 	hb.box(mat("frame"), (0.5, 0, 0), (1.0, 0.018, 0.018), (0.2, 0.2, 0.2))
 	return hb.build(name, ao=False), None
 
+# ---------------- атмосфера: надписи, карантин, вещи ----------------
+def text_mesh(hb, m, text, size, pos, col, depth=0.006, face="-Y"):
+	"""Текст (кириллица) плоским мешем: лицом в -Y (на стену) или +Z (лёжа)."""
+	cu = bpy.data.curves.new("txt", "FONT")
+	cu.body = text
+	cu.size = size
+	cu.extrude = 0.0
+	cu.resolution_u = 2                                                # проще кривые букв — меньше треугольников
+	cu.align_x = "CENTER"
+	cu.align_y = "CENTER"
+	ob = bpy.data.objects.new("txt", cu)
+	bpy.context.scene.collection.objects.link(ob)
+	dg = bpy.context.evaluated_depsgraph_get()
+	me = ob.evaluated_get(dg).to_mesh()
+	bm = hb._bm(mat(m))
+	vs = []
+	for v in me.vertices:
+		x, y, z = v.co
+		if face == "-Y":
+			x, y, z = x, -z, y                                         # текст встаёт на стену, лицом в -Y
+		vs.append(bm.verts.new((x + pos[0], y + pos[1], z + pos[2])))
+	fs = []
+	for p in me.polygons:
+		try:
+			fs.append(bm.faces.new([vs[i] for i in p.vertices]))
+		except ValueError:
+			pass
+	hb._paint(bm, fs, col)
+	ob.evaluated_get(dg).to_mesh_clear()
+	bpy.data.objects.remove(ob)
+
+def graffiti(name, text, col, size=0.38):
+	hb = HB()
+	text_mesh(hb, "spray", text, size, (0, -0.01, 1.85), col)
+	return hb.build(name, ao=False), None
+
+def sign_quarantine(name):
+	hb = HB()
+	for x in (-0.9, 0.9):
+		hb.box(mat("metal_paint"), (x, 0, 1.0), (0.07, 0.07, 2.0), (0.55, 0.55, 0.55))
+	hb.box(mat("frame_white"), (0, -0.04, 1.75), (2.1, 0.03, 0.95), (0.95, 0.78, 0.12))
+	hb.box(mat("frame_white"), (0, -0.05, 1.75), (1.95, 0.02, 0.8), (0.95, 0.95, 0.9))
+	text_mesh(hb, "spray", "КАРАНТИН", 0.32, (0, -0.07, 1.86), (0.65, 0.05, 0.04))
+	text_mesh(hb, "spray", "ПРОЕЗД ЗАПРЕЩЁН", 0.14, (0, -0.07, 1.52), (0.05, 0.05, 0.05))
+	return hb.build(name), None
+
+def barbed_coil(name):
+	hb = HB()
+	for i in range(12):                                                 # кольца спирали из проволоки
+		x = -1.5 + (i + 0.5) * 3.0 / 12
+		pts = [(x + 0.06 * math.sin(k), 0.45 * math.cos(2 * math.pi * k / 10), 0.45 + 0.45 * math.sin(2 * math.pi * k / 10)) for k in range(11)]
+		for a_, b_ in zip(pts, pts[1:]):
+			hb.beam(mat("metal"), a_, b_, 0.014, col=(0.55, 0.5, 0.45))
+	for k in range(3):
+		hb.beam(mat("metal"), (-1.5, -0.35 + k * 0.35, 0.1 + k * 0.35), (1.5, -0.35 + k * 0.35, 0.1 + k * 0.35), 0.012)
+	return hb.build(name, ao=False), None
+
+def tent_med(name):
+	"""Армейская медицинская палатка: белый тент, красный крест."""
+	hb = HB()
+	L, D, h, rh = 6.0, 4.5, 1.8, 1.2
+	hb.box(mat("canvas_white"), (0, 0, h / 2), (L, D, h), (1, 1, 1))
+	hb.poly(mat("canvas_white"), [(-L / 2, -D / 2 - 0.15, h), (-L / 2, D / 2 + 0.15, h), (-L / 2, 0, h + rh)], (L, 0, 0), (1, 1, 1))
+	for sx in (-1, 1):
+		hb.box(mat("canvas_white"), (sx * (L / 2 + 0.01), 0, 1.0), (0.01, 0.5, 0.15), (0.8, 0.1, 0.08))
+		hb.box(mat("canvas_white"), (sx * (L / 2 + 0.01), 0, 1.0), (0.01, 0.15, 0.5), (0.8, 0.1, 0.08))
+	hb.box(mat("dark"), (L / 2 + 0.02, 0, 0.8), (0.02, 1.0, 1.6))                     # вход
+	return hb.build(name), None
+
+def belongings(name, kind, seed):
+	rnd = random.Random(seed)
+	hb = HB()
+	if kind == "suitcase":
+		for i in range(3):
+			c = (rnd.choice([(0.30, 0.30, 0.34), (0.62, 0.22, 0.18), (0.28, 0.42, 0.62), (0.55, 0.45, 0.30)]))
+			x, y = rnd.uniform(-0.8, 0.8), rnd.uniform(-0.6, 0.6)
+			lying = rnd.random() < 0.6
+			hb.box(mat("fabric"), (x, y, 0.13 if lying else 0.33), (0.7, 0.45, 0.25) if lying else (0.45, 0.25, 0.65), c, rot=(0, 0, rnd.uniform(0, 3.1)))
+	elif kind == "stroller":
+		hb.box(mat("fabric"), (0, 0, 0.75), (0.8, 0.5, 0.35), (0.40, 0.48, 0.60))
+		hb.box(mat("fabric"), (-0.25, 0, 1.0), (0.3, 0.5, 0.25), (0.40, 0.48, 0.60), rot=(0, -0.4, 0))
+		hb.beam(mat("metal_paint"), (0.3, 0, 0.55), (0.55, 0, 1.15), 0.025)
+		hb.beam(mat("metal_paint"), (0.55, -0.25, 1.15), (0.55, 0.25, 1.15), 0.025)
+		for x in (-0.3, 0.3):
+			for y in (-0.25, 0.25):
+				hb.cyl(mat("rubber"), (x, y, 0.13), 0.13, 0.04, "Y", 12)
+	else:   # сумки, баулы
+		for i in range(5):
+			c = rnd.choice([(0.45, 0.40, 0.32), (0.28, 0.28, 0.32), (0.52, 0.45, 0.30), (0.60, 0.25, 0.20), (0.30, 0.38, 0.28)])
+			hb.box(mat("fabric"), (rnd.uniform(-0.8, 0.8), rnd.uniform(-0.8, 0.8), 0.15), (rnd.uniform(0.4, 0.7), rnd.uniform(0.3, 0.45), 0.3), c, rot=(rnd.uniform(-0.2, 0.2), 0, rnd.uniform(0, 3.1)))
+	return hb.build(name), None
+
+def block_fbs(name):
+	hb = HB()
+	hb.box(mat("concrete"), (0, 0, 0.3), (2.4, 0.6, 0.6), (0.8, 0.8, 0.78))
+	hb.box(mat("frame_white"), (0, -0.31, 0.3), (0.5, 0.01, 0.6), (0.85, 0.15, 0.1))
+	return hb.build(name), None
+
 EXTRA = {
+	"graffiti_ne_vhodit": lambda: graffiti("graffiti_ne_vhodit", "НЕ ВХОДИТЬ", (0.6, 0.05, 0.04)),
+	"graffiti_chisto": lambda: graffiti("graffiti_chisto", "ЧИСТО", (0.05, 0.05, 0.05), 0.5),
+	"graffiti_lager": lambda: graffiti("graffiti_lager", "УШЛИ В ЛАГЕРЬ", (0.05, 0.05, 0.05), 0.3),
+	"graffiti_zarazheno": lambda: graffiti("graffiti_zarazheno", "ЗАРАЖЕНО", (0.6, 0.05, 0.04), 0.42),
+	"graffiti_pomogite": lambda: graffiti("graffiti_pomogite", "ПОМОГИТЕ", (0.85, 0.85, 0.82), 0.42),
+	"graffiti_ludi": lambda: graffiti("graffiti_ludi", "ЗДЕСЬ ЛЮДИ", (0.1, 0.3, 0.6), 0.34),
+	"sign_quarantine": lambda: sign_quarantine("sign_quarantine"),
+	"barbed_coil": lambda: barbed_coil("barbed_coil"),
+	"tent_med": lambda: tent_med("tent_med"),
+	"suitcases": lambda: belongings("suitcases", "suitcase", 1),
+	"stroller": lambda: belongings("stroller", "stroller", 2),
+	"bags": lambda: belongings("bags", "bags", 3),
+	"block_fbs": lambda: block_fbs("block_fbs"),
 	"road_dash": lambda: road_dash("road_dash"),
 	"bridge": lambda: bridge("bridge"),
 	"sign_town": lambda: sign("sign_town", "town"),

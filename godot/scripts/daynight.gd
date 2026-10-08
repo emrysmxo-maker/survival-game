@@ -9,6 +9,7 @@ var auto := true
 var sun: DirectionalLight3D
 var moon: DirectionalLight3D
 var env: Environment
+var night := 0.0       # 0 день .. 1 ночь (окна, костёр)
 
 const C_DAY := Color(1.0, 0.98, 0.94)
 const C_GOLD := Color(1.0, 0.77, 0.55)
@@ -60,6 +61,7 @@ func apply() -> void:
 	if to_sun.length() > 0.01:
 		sun.look_at_from_position(Vector3.ZERO, -to_sun, Vector3.UP if absf(to_sun.y) < 0.99 else Vector3.FORWARD)
 	var day := clampf(e / 0.15 + 0.2, 0.0, 1.0)          # 0 ночь .. 1 день
+	night = 1.0 - day
 	var gold := clampf(1.0 - e / 0.35, 0.0, 1.0) * day
 	var col := C_DAY.lerp(C_GOLD, gold * 0.85)
 	sun.light_color = col

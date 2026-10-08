@@ -72,6 +72,9 @@ const RINGS := [["tower", 9.5, "fence_chain", 0, 360, 7], ["lakebase", 12.0, "fe
 const FENCE_LEN := {"fence_picket": 2.6, "fence_rails": 2.7, "fence_board": 2.65, "fence_chain": 3.4, "fence_prof": 2.5, "fence_mil": 3.0}   # длина секции, м
 
 var _meshes := {}
+var _lit: Array = []                  # материалы окон, где по ночам горит свет
+var _fire: OmniLight3D                # костёр в лагере
+var _night := -1.0
 var _batch := {}
 var _rng := RandomNumberGenerator.new()
 var _n := 0
@@ -92,11 +95,33 @@ func _ready() -> void:
 			_hamlet(key)
 	_rings()
 	_forest_houses()
+	_quarantine()
 	_road_marks()
 	_road_stuff()
 	_fields()
 	_flush()
+	var cf: Dictionary = WorldGen.FEATURES["camp"]
+	_fire = OmniLight3D.new()
+	_fire.light_color = Color(1.0, 0.62, 0.3)
+	_fire.omni_range = 9.0
+	_fire.shadow_enabled = false
+	_fire.position = Vector3(cf.x * T, _h(cf.x, cf.y) + 0.8, cf.y * T)
+	_fire.visible = false
+	add_child(_fire)
 	print("props: ", _n, " партий ", _batch.size(), " участков ", _plots.size(), " за ", Time.get_ticks_msec() - t0, " мс; отказы участков: ", _rej)
+
+# ночь: в некоторых окнах свет, костёр горит (вызывает main.gd каждый кадр)
+func set_night(k: float) -> void:
+	if _fire:
+		_fire.light_energy = k * (1.6 + 0.35 * sin(Time.get_ticks_msec() * 0.011) + 0.2 * sin(Time.get_ticks_msec() * 0.027))
+		_fire.visible = k > 0.05
+	if absf(k - _night) < 0.02:
+		return
+	_night = k
+	for m in _lit:
+		m.emission_enabled = k > 0.05
+		m.emission = Color(1.0, 0.68, 0.32)
+		m.emission_energy_multiplier = k * 3.0
 
 # ---------------- загрузка и вывод ----------------
 func _load() -> void:
@@ -116,6 +141,9 @@ func _collect(n: Node) -> void:
 				mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 				mat.alpha_scissor_threshold = 0.5
 				mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			elif mat is BaseMaterial3D and str(mat.resource_name) == "glass_lit":
+				if not _lit.has(mat):
+					_lit.append(mat)
 			elif mat is BaseMaterial3D and str(mat.resource_name) == "glass":
 				mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED          # стекло — тёмное зеркальное, без сортировки прозрачности
 		_meshes[str(n.name)] = m
@@ -301,6 +329,11 @@ func _plot(c: Vector2, yaw: float, w: float, d: float, house: String, kind: Stri
 	var hp := _loc(c, th, hx, hy)
 	put(house, hp.x, hp.y, yaw, "", false)
 	_occ.append([hp, maxf(hl, hdp) * 0.5])
+	if _rng.randf() < 0.3:                                            # надпись краской на фасаде
+		var F := Vector2(sin(th), cos(th))
+		var gp0 := hp + F * (hdp / 2.0 + 0.03 * M) + Vector2(cos(th), -sin(th)) * _rng.randf_range(-hl * 0.2, hl * 0.2)
+		var gfx: String = (["graffiti_chisto", "graffiti_ne_vhodit", "graffiti_lager", "graffiti_zarazheno", "graffiti_pomogite", "graffiti_ludi"] if kind != "new" else ["graffiti_chisto", "graffiti_ne_vhodit", "graffiti_zarazheno", "graffiti_pomogite"])[_rng.randi() % (6 if kind != "new" else 4)]
+		put(gfx, gp0.x, gp0.y, yaw, "pt", false)
 	# забор: спереди — ворота у подъезда (с другой стороны от дома)
 	var style: String = "fence_prof" if kind == "new" else ("fence_picket" if kind == "dacha" else ["fence_picket", "fence_rails", "fence_board"][_rng.randi() % 3])
 	var broken := 0.15 if kind == "new" else 0.5
@@ -774,6 +807,74 @@ func _road_marks() -> void:
 					acc = 7.2
 				d += 1.2
 				acc -= 1.2
+
+# ---------------- следы карантина: блокпосты на дорогах, брошенная колонна, вещи ----------------
+func _road_of(a: String, b: String) -> PackedVector2Array:
+	for i in WorldGen.ROADS.size():
+		var r: Array = WorldGen.ROADS[i]
+		if (r[0] == a and r[1] == b) or (r[0] == b and r[1] == a):
+			return WorldGen._roads[i].pts
+	return PackedVector2Array()
+
+func _road_len(pts: PackedVector2Array) -> float:
+	var t := 0.0
+	for i in pts.size() - 1:
+		t += pts[i].distance_to(pts[i + 1])
+	return t
+
+func _quarantine() -> void:
+	for ps in [["camp", "sawmill", 0.5], ["farm", "bunker", 0.5], ["village", "tower", 0.55]]:
+		var pts := _road_of(ps[0], ps[1])
+		if pts.is_empty():
+			continue
+		var at := _at(pts, _road_len(pts) * float(ps[2]))
+		var c: Vector2 = at[0]
+		var dir: Vector2 = at[1]
+		var nrm := Vector2(-dir.y, dir.x)
+		var along := rad_to_deg(atan2(-dir.y, dir.x))
+		var across := rad_to_deg(atan2(-nrm.y, nrm.x))
+		WorldGen.add_clear(c.x, c.y, 14.0, 12.0, deg_to_rad(along))
+		_rej["блокпост"] = str(_rej.get("блокпост", "")) + "%d:%d " % [roundi(c.x), roundi(c.y)]
+		for k: float in [-2.6, -1.6, 1.6, 2.6]:                           # бетонные блоки поперёк, проезд в середине
+			var bp := c + nrm * k * 2.6 + dir * (0.6 if k > 0 else -0.6)
+			put("block_fbs", bp.x, bp.y, across + _rng.randf_range(-8, 8), "pt", false)
+		for sd: float in [-1.0, 1.0]:
+			for k in 3:                                                # колючая спираль вдоль поля в стороны
+				var cp := c + nrm * sd * (9.0 + k * 3.6)
+				put("barbed_coil", cp.x, cp.y, across, "pt", false)
+			var sp := c - dir * sd * 7.0 + nrm * sd * 4.0
+			put("sign_quarantine", sp.x, sp.y, along + 90.0 * sd, "pt", false)
+		var tp := c + nrm * 9.0 + dir * 5.0
+		put("tent_med", tp.x, tp.y, along)
+		var tr := c - nrm * 8.5 - dir * 4.0
+		put("car_truck_green", tr.x, tr.y, along + 180.0)
+		var wt := c - nrm * 7.5 + dir * 6.0
+		put("mil_tower", wt.x, wt.y, along)
+		var sb := c + nrm * 5.0 - dir * 2.5
+		put("sandbags", sb.x, sb.y, across)
+		var bg := c + nrm * 6.0 + dir * 10.0
+		put("bags", bg.x, bg.y, _rng.randf() * 360.0, "pt", false)
+	# брошенная колонна: машины одна за другой в сторону лагеря (эвакуация), вещи на обочине
+	var cp := _road_of("camp", "village")
+	if not cp.is_empty():
+		var L := _road_len(cp)
+		var s0 := L * 0.35
+		var c0: Vector2 = _at(cp, s0 + 25.0)[0]
+		_rej["колонна"] = "%d:%d" % [roundi(c0.x), roundi(c0.y)]
+		for i in 9:
+			var at2 := _at(cp, s0 + i * 6.2 * M)
+			var p: Vector2 = at2[0]
+			var d2: Vector2 = at2[1]
+			var n2 := Vector2(-d2.y, d2.x)
+			var q := p + n2 * 1.25
+			var m: String = (["car_crossover_white", "car_solaris_silver", "car_van_white", "car_wagon_beige", "car_hatch_red", "car_niva_white", "car_granta_graphite", "car_bus_blue", "car_duster_brown"])[i]
+			put(m, q.x, q.y, rad_to_deg(atan2(d2.y, -d2.x)) + _rng.randf_range(-7, 7), "", false)   # носом к лагерю
+			if i % 2 == 0:
+				var vp := p + n2 * (4.2 + _rng.randf() * 1.5)
+				put(["suitcases", "bags", "stroller", "suitcases"][(i / 2) % 4], vp.x, vp.y, _rng.randf() * 360.0, "pt", false)
+		var sp2 := _at(cp, s0 - 8.0)
+		var spp: Vector2 = sp2[0] + Vector2(-sp2[1].y, sp2[1].x) * 4.0
+		put("sign_quarantine", spp.x, spp.y, rad_to_deg(atan2(-sp2[1].y, sp2[1].x)) + 90.0, "pt", false)
 
 # ---------------- поля: стога, тюки, брошенная техника ----------------
 func _fields() -> void:

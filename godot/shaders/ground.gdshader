@@ -7,7 +7,8 @@ render_mode diffuse_lambert, specular_schlick_ggx;
 uniform sampler2DArray t_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray t_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float meters_per_texture = 2.6;
-uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;   // бесшовный шум (Godot NoiseTexture2D): крупные пятна, анти-повтор, лужи
+uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;
+uniform vec4 morok_c[3];                 // морок: центр x, z (м), радиус (м) — серая, выцветшая земля   // бесшовный шум (Godot NoiseTexture2D): крупные пятна, анти-повтор, лужи
 uniform bool detail = true;          // false (Низкое/Среднее): одна выборка на слой, слабые слои пропускаются
 global uniform bool q_ground_normals;
 
@@ -82,6 +83,16 @@ void fragment() {
 		ac = mix(ac, vec3(0.05, 0.05, 0.05), crack * 0.55 * ssf(0.4, 0.6, m11));              // трещины
 		ac = mix(ac, c * 0.8, ssf(0.72, 0.8, m40) * 0.6);                                     // земля и трава в выбоинах
 		c = mix(c, ac, asph);
+	}
+	// морок: земля выцветает и сереет, с рваным краем
+	float mk2 = 0.0;
+	for (int i = 0; i < 3; i++) {
+		float dm = length(wm - morok_c[i].xy) + (m11 - 0.5) * 9.0;
+		mk2 = max(mk2, ssf(morok_c[i].z, morok_c[i].z * 0.45, dm));
+	}
+	if (mk2 > 0.0) {
+		float lum = dot(c, vec3(0.3, 0.59, 0.11));
+		c = mix(c, vec3(lum) * vec3(0.66, 0.62, 0.70), mk2 * 0.8);
 	}
 	// лужи на болоте — неровные, по шуму
 	float puddle = swamp * ssf(0.6, 0.7, m11 * 0.7 + m4 * 0.3) * 0.8;
