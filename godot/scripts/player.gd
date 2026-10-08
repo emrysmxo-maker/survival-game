@@ -74,7 +74,7 @@ var glb: Node3D
 
 func _ready() -> void:
 	var scn: PackedScene = load("res://assets/character/Survivor.glb")
-	# модель (Rocketbox Male_Adult_07, MIT) в файле смотрит в -Z: кладём её в «опору», развёрнутую на 180°,
+	# модель (Swat, Mixamo) в файле смотрит в -Z: кладём её в «опору», развёрнутую на 180°,
 	# у опоры +Z — лицо бойца (на опору опираются автомат и прицел)
 	model = Node3D.new()
 	model.scale = Vector3.ONE * CHAR_SCALE
@@ -84,12 +84,6 @@ func _ready() -> void:
 	model.add_child(glb)
 	skel = _find(glb, "Skeleton3D")
 	anim = _find(glb, "AnimationPlayer")
-	if anim == null:
-		# в модели Rocketbox нет клипов — плеер создаём сами, клипы из survivor_clips.json
-		anim = AnimationPlayer.new()
-		glb.add_child(anim)
-		anim.add_animation_library("", AnimationLibrary.new())
-	_add_json_clips("res://assets/character/survivor_clips.json")
 	loop_all(anim)
 	for sn in ["WalkStart", "RunStart"]:
 		if anim.has_animation(sn):
@@ -299,7 +293,7 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 		aim_rel = clampf(wrapf(aim_world - yaw, -PI, PI), -TWIST, TWIST)
 	aim_local += (aim_rel - aim_local) * minf(1.0, 14.0 * dt)
 
-	# Анимация ног. Вперёд (и всегда, пока не целится) — живой мокап Rocketbox: медленный шаг → шаг → быстрый шаг → бег → спринт.
+	# Анимация ног. Вперёд (и всегда, пока не целится) — живой мокап (Rocketbox): медленный шаг → шаг → быстрый шаг → бег → спринт.
 	# Вбок и назад (целясь) — записи Iglesias: шаг/бег в 8 направлениях. Темп = скорость по земле / скорость записи.
 	model.rotation.x = lerpf(model.rotation.x, 0.0, minf(1.0, 5.0 * dt))   # плывя — наклон вперёд
 	if swimming:
@@ -604,40 +598,7 @@ func _xr_set(n: Node, on: bool) -> void:
 
 # Клипы из .glb импортируются без повтора: бег играл один раз (0.7 с — «пара шагов»)
 # и замирал в позе полёта. Включаем зацикливание у всех.
-# Клипы плавания Swim_Fwd / Swim_Idle — из Universal Animation Library (Quaternius, CC0),
-# Клипы бойца (Idle/Walk/Run/Swim_*) перенесены со скелета Mixamo на Rocketbox (tools/character/retarget_mixamo.py → survivor_clips.json)
-func _add_json_clips(path: String) -> void:
-	if anim == null or skel == null:
-		return
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return
-	var data: Dictionary = JSON.parse_string(f.get_as_text())
-	var base: String = str(anim.get_node(anim.root_node).get_path_to(skel))
-	var lib := anim.get_animation_library("")
-	for cname in data.clips:
-		if anim.has_animation(cname):
-			continue          # свои клипы модели важнее (из json берётся только плавание)
-		var c: Dictionary = data.clips[cname]
-		var a := Animation.new()
-		a.length = c.len
-		a.loop_mode = Animation.LOOP_LINEAR
-		var n: int = int(c.n)
-		for bone in c.tracks:
-			if bone.ends_with("_pos"):
-				continue
-			var ti := a.add_track(Animation.TYPE_ROTATION_3D)
-			a.track_set_path(ti, NodePath(base + ":" + bone))
-			var q: Array = c.tracks[bone]
-			for i in n:
-				a.rotation_track_insert_key(ti, float(i) / 30.0, Quaternion(q[i][0], q[i][1], q[i][2], q[i][3]))
-		var hp := a.add_track(Animation.TYPE_POSITION_3D)
-		a.track_set_path(hp, NodePath(base + ":mixamorig_Hips"))
-		var pos: Array = c.tracks["mixamorig_Hips_pos"]
-		for i in n:
-			a.position_track_insert_key(hp, float(i) / 30.0, Vector3(pos[i][0], pos[i][1], pos[i][2]))
-		lib.add_animation(cname, a)
-
+# Клипы бойца (tools/character/build_swat.py): ходьба/бег — мокап Rocketbox, прицел/выстрел/шаг вбок — Iglesias, плавание — Quaternius UAL (CC0).
 static func loop_all(ap: AnimationPlayer) -> void:
 	if ap == null:
 		return

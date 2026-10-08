@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b17hmsmhuhs3i"
-path.s3tc="res://.godot/imported/Survivor_Map #18.jpg-d9229e07b87052c07e1e24a894f3e4e4.s3tc.ctex"
-path.etc2="res://.godot/imported/Survivor_Map #18.jpg-d9229e07b87052c07e1e24a894f3e4e4.etc2.ctex"
+uid="uid://cqwqbocvrmbms"
+path.s3tc="res://.godot/imported/Survivor_Soldier_Body_diffuse.jpg-3f0b85fb56d9d93b4595a8bf56d4a3af.s3tc.ctex"
+path.etc2="res://.godot/imported/Survivor_Soldier_Body_diffuse.jpg-3f0b85fb56d9d93b4595a8bf56d4a3af.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "c6d491fa3623110dec1800c18ee74d6d"
+"md5": "1664978671b9e603e6b52b20317a13d7"
 }
 
 [deps]
 
-source_file="res://assets/character/Survivor_Map #18.jpg"
-dest_files=["res://.godot/imported/Survivor_Map #18.jpg-d9229e07b87052c07e1e24a894f3e4e4.s3tc.ctex", "res://.godot/imported/Survivor_Map #18.jpg-d9229e07b87052c07e1e24a894f3e4e4.etc2.ctex"]
+source_file="res://assets/character/Survivor_Soldier_Body_diffuse.jpg"
+dest_files=["res://.godot/imported/Survivor_Soldier_Body_diffuse.jpg-3f0b85fb56d9d93b4595a8bf56d4a3af.s3tc.ctex", "res://.godot/imported/Survivor_Soldier_Body_diffuse.jpg-3f0b85fb56d9d93b4595a8bf56d4a3af.etc2.ctex"]
 
 [params]
 

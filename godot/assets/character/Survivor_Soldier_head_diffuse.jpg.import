@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b3hpbgpplm2m2"
-path.s3tc="res://.godot/imported/Survivor_Map #26.jpg-871290132128261e04be25dc66964f1d.s3tc.ctex"
-path.etc2="res://.godot/imported/Survivor_Map #26.jpg-871290132128261e04be25dc66964f1d.etc2.ctex"
+uid="uid://bbpsl13l20lku"
+path.s3tc="res://.godot/imported/Survivor_Soldier_head_diffuse.jpg-5daf069f2a7260c336c4bdc6ad724af4.s3tc.ctex"
+path.etc2="res://.godot/imported/Survivor_Soldier_head_diffuse.jpg-5daf069f2a7260c336c4bdc6ad724af4.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "df80ade36182cbf78c707e3d5b577b42"
+"md5": "adccaa68d7addfac760fc1b0459ff931"
 }
 
 [deps]
 
-source_file="res://assets/character/Survivor_Map #26.jpg"
-dest_files=["res://.godot/imported/Survivor_Map #26.jpg-871290132128261e04be25dc66964f1d.s3tc.ctex", "res://.godot/imported/Survivor_Map #26.jpg-871290132128261e04be25dc66964f1d.etc2.ctex"]
+source_file="res://assets/character/Survivor_Soldier_head_diffuse.jpg"
+dest_files=["res://.godot/imported/Survivor_Soldier_head_diffuse.jpg-5daf069f2a7260c336c4bdc6ad724af4.s3tc.ctex", "res://.godot/imported/Survivor_Soldier_head_diffuse.jpg-5daf069f2a7260c336c4bdc6ad724af4.etc2.ctex"]
 
 [params]
 
