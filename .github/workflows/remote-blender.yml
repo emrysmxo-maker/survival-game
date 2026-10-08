@@ -1,0 +1,52 @@
+name: Remote Blender
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/remote-blender.yml'
+      - 'tools/remote/blender_task.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-blender-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  blender:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install Blender 4.3.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxi6 libxrender1 libxfixes3 libxkbcommon0
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 --output blender-4.3.2-linux-x64.tar.xz https://download.blender.org/release/Blender4.3/blender-4.3.2-linux-x64.tar.xz
+          curl --fail --location --retry 3 --output blender.sha256 https://download.blender.org/release/Blender4.3/blender-4.3.2.sha256
+          grep -E ' [*]?blender-4\.3\.2-linux-x64\.tar\.xz$' blender.sha256 | sha256sum --check --strict -
+          mkdir -p blender
+          tar -xf blender-4.3.2-linux-x64.tar.xz -C blender --strip-components=1
+          echo "$RUNNER_TEMP/blender" >> "$GITHUB_PATH"
+      - name: Execute Blender task
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p remote-output
+          blender --background --factory-startup --python-exit-code 1 --python tools/remote/blender_task.py 2>&1 | tee remote-output/blender.log
+      - name: Save outputs and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-blender-${{ github.run_number }}
+          path: remote-output/
+          retention-days: 3
+          if-no-files-found: warn
