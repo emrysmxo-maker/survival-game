@@ -83,7 +83,7 @@ def brick():
     br = col(N, (140, 62, 44)) * tint[..., None] * (0.8 + 0.3 * noise(N, 1.2, 61))[..., None]
     mort = (v < 0.1) | (v > 0.93) | (xs < 0.04) | (xs > 0.97)
     out = np.where(mort[..., None], col(N, (150, 146, 138)), br)
-    pl = sm(fbm(N, 38, 62, 3), 0.42, 0.56)                                       # штукатурка
+    pl = sm(fbm(N, 38, 62, 3), 0.56, 0.68)                                       # штукатурка
     pc = mix(col(N, (196, 186, 164)), col(N, (170, 160, 140)), noise(N, 2, 63))
     out = mix(out, pc, pl * 0.95)
     out = mix(out, col(N, (60, 76, 40)), sm(fbm(N, 24, 64, 3), 0.7, 0.82) * 0.4)
@@ -128,27 +128,125 @@ def rustmetal():
     base = mix(base, col(N, (140, 78, 36)), sm(fbm(N, 3, 102), 0.6, 0.85) * 0.6)
     return base * (0.85 + 0.3 * noise(N, 1.0, 103))[..., None]
 
-# --- краска автомобиля (с ржавчиной и грязью) ---
+# --- краска автомобиля: выгоревшая, грязная, мелкая ржавчина; без ярких пятен ---
 def car(name, rgb, seed):
-    n = 256
+    n = 512
     global N, Y, X
     N0 = N
     N = n; Y, X = np.mgrid[0:N, 0:N] / N
-    paint = col(N, rgb) * (0.85 + 0.25 * noise(N, 3, seed))[..., None]
-    fade = sm(fbm(N, 9, seed + 1), 0.45, 0.7)
-    paint = mix(paint, col(N, rgb) * 1.25 + 25, fade * 0.35)            # выгорание
-    rust = mix(col(N, (112, 56, 28)), col(N, (74, 42, 26)), fbm(N, 4, seed + 2))
-    rm = sm(fbm(N, 12, seed + 3, 3), 0.58, 0.72) * 0.85
-    out = mix(paint, rust, rm)
-    out = mix(out, col(N, (88, 80, 64)), sm(fbm(N, 12, seed + 4), 0.55, 0.8) * 0.4)   # пыль
-    out *= (1 - 0.4 * sm(noise(N, 1.0, seed + 5, (30, 0.4)), 0.78, 0.94))[..., None]
-    save(name, out, 90)
+    rgb = np.array(rgb, float)
+    base = col(N, rgb) * (0.88 + 0.16 * fbm(N, 20, seed, 4))[..., None]
+    fade = sm(fbm(N, 28, seed + 1, 3), 0.4, 0.75)
+    base = mix(base, np.clip(rgb * 1.18 + 14, 0, 255) * np.ones((N, N, 3)), fade * 0.35)       # выгорание
+    base = mix(base, col(N, (92, 84, 70)), sm(fbm(N, 16, seed + 4, 4), 0.55, 0.85) * 0.38)      # пыль и грязь
+    # ржавчина: мелкие очаги, крупные редкие + царапины
+    fine = sm(fbm(N, 3.5, seed + 2, 4), 0.62, 0.78)
+    big = sm(fbm(N, 22, seed + 3, 3), 0.68, 0.8)
+    rustc = mix(col(N, (110, 56, 30)), col(N, (66, 40, 28)), fbm(N, 4, seed + 5))
+    base = mix(base, rustc, np.clip(fine * big * 1.4 + fine * 0.35, 0, 1) * 0.92)
+    sc = sm(noise(N, 0.8, seed + 6, (14, 0.5)), 0.86, 0.94)
+    base = mix(base, np.clip(rgb * 0.5, 0, 255) * np.ones((N, N, 3)), sc * 0.5)
+    base *= (1 - 0.4 * sm(noise(N, 1.0, seed + 7, (40, 0.35)), 0.8, 0.94))[..., None]            # потёки
+    save(name, base, 90)
     N = N0; Y, X = np.mgrid[0:N, 0:N] / N
 
+def tire():
+    base = col(N, (34, 33, 32)) * (0.8 + 0.4 * noise(N, 1.2, 301))[..., None]
+    base = mix(base, col(N, (92, 86, 76)), sm(fbm(N, 14, 302), 0.55, 0.8) * 0.4)
+    stripes = (np.sin(Y * 2 * np.pi * 14) > 0.4)
+    return base * (0.85 + 0.15 * stripes)[..., None]
+
+def glass():
+    base = col(N, (24, 32, 34)) * (0.8 + 0.5 * fbm(N, 20, 311))[..., None]
+    streak = sm(noise(N, 1.0, 312, (30, 0.4)), 0.7, 0.95)
+    return mix(base, col(N, (96, 106, 104)), streak * 0.35)
+
+def sheet(rgb, seed):         # крашеная жесть (бочки, баки, кабины)
+    return car_tex(rgb, seed)
+
+def car_tex(rgb, seed):
+    global N, Y, X
+    N0 = N; N = 512; Y, X = np.mgrid[0:N, 0:N] / N
+    rgb = np.array(rgb, float)
+    base = col(N, rgb) * (0.88 + 0.16 * fbm(N, 20, seed, 4))[..., None]
+    base = mix(base, col(N, (92, 84, 70)), sm(fbm(N, 16, seed + 4, 4), 0.55, 0.85) * 0.38)
+    fine = sm(fbm(N, 3.5, seed + 2, 4), 0.6, 0.78)
+    base = mix(base, mix(col(N, (110, 56, 30)), col(N, (66, 40, 28)), fbm(N, 4, seed + 5)), fine * 0.9)
+    out = base; N = N0; Y, X = np.mgrid[0:N, 0:N] / N
+    return out
+
+
+# --- кора (полосы вдоль U), торец спила, солома, брезент, земля грядок, жесть ---
+def bark():
+    streak = noise(N, 1.5, 401, (0.25, 18)) * 0.6 + noise(N, 1.0, 402, (0.2, 8)) * 0.4
+    base = mix(col(N, (62, 50, 40)), col(N, (110, 96, 80)), sm(streak, 0.3, 0.85))
+    base = mix(base, col(N, (70, 82, 44)), sm(fbm(N, 12, 403), 0.7, 0.85) * 0.45)
+    return base * (0.7 + 0.5 * noise(N, 1.0, 404))[..., None]
+
+def endgrain():
+    cx, cy = 0.5, 0.5
+    r = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+    rings = 0.5 + 0.5 * np.sin(r * 2 * np.pi * 22 + 3 * noise(N, 6, 411))
+    base = mix(col(N, (170, 138, 92)), col(N, (128, 96, 60)), rings)
+    base = mix(base, col(N, (92, 70, 48)), sm(r, 0.44, 0.5))
+    return base * (0.9 + 0.2 * noise(N, 1.0, 412))[..., None]
+
+def hay():
+    s1 = noise(N, 0.8, 421, (0.3, 6)) * 0.5 + noise(N, 0.6, 422, (6, 0.3)) * 0.5
+    base = mix(col(N, (150, 124, 62)), col(N, (206, 178, 98)), s1)
+    base = mix(base, col(N, (96, 90, 50)), sm(fbm(N, 14, 423), 0.6, 0.85) * 0.5)
+    return base
+
+def canvas(rgb, seed):
+    weave = 0.9 + 0.1 * np.sin(X * 2 * np.pi * 90) * np.sin(Y * 2 * np.pi * 90)
+    base = col(N, rgb) * (0.85 + 0.25 * fbm(N, 14, seed, 4))[..., None] * weave[..., None]
+    base = mix(base, col(N, (70, 66, 52)), sm(fbm(N, 10, seed + 1), 0.55, 0.85) * 0.5)
+    base = mix(base, col(N, (60, 78, 40)), sm(fbm(N, 12, seed + 2), 0.7, 0.85) * 0.4)
+    return base * (1 - 0.35 * sm(noise(N, 1.0, seed + 3, (30, 0.4)), 0.78, 0.94))[..., None]
+
+def soil():
+    furrow = 0.5 + 0.5 * np.sin(X * 2 * np.pi * 6)
+    base = mix(col(N, (58, 42, 30)), col(N, (92, 68, 46)), furrow * 0.6 + 0.4 * fbm(N, 3, 431))
+    base = mix(base, col(N, (74, 92, 44)), sm(fbm(N, 6, 432), 0.62, 0.8) * 0.55)       # сорняки
+    return base
+
+def earth():
+    base = mix(col(N, (84, 66, 44)), col(N, (108, 88, 58)), fbm(N, 6, 451))
+    base = mix(base, col(N, (74, 96, 48)), sm(fbm(N, 14, 452), 0.45, 0.7) * 0.85)
+    base = mix(base, col(N, (120, 112, 90)), sm(noise(N, 1.2, 453), 0.8, 0.9) * 0.5)
+    return base * (0.85 + 0.3 * noise(N, 0.8, 454))[..., None]
+
+def tin(rgb, seed):
+    wave = 0.5 + 0.5 * np.sin(Y * 2 * np.pi * 10)
+    base = col(N, rgb) * (0.7 + 0.5 * wave)[..., None] * (0.85 + 0.2 * fbm(N, 10, seed))[..., None]
+    rust = mix(col(N, (120, 62, 30)), col(N, (80, 46, 28)), fbm(N, 4, seed + 1))
+    base = mix(base, rust, sm(fbm(N, 7, seed + 2), 0.55, 0.75) * 0.8)
+    return base * (1 - 0.4 * sm(noise(N, 1.0, seed + 3, (40, 0.4)), 0.78, 0.93))[..., None]
+
+def asphalt():
+    base = col(N, (70, 70, 68)) * (0.8 + 0.4 * noise(N, 0.8, 441))[..., None]
+    base = mix(base, col(N, (96, 94, 86)), sm(fbm(N, 12, 442), 0.6, 0.8) * 0.5)
+    cr = sm(noise(N, 0.7, 443, (0.2, 30)), 0.88, 0.95)
+    return base * (1 - 0.6 * cr)[..., None]
+
+save('earth', earth()); save('bark', bark()); save('endgrain', endgrain()); save('hay', hay()); save('soil', soil()); save('asphalt', asphalt())
+save('canvas_olive', canvas((92, 98, 66), 451)); save('canvas_tan', canvas((150, 134, 98), 461)); save('tarp_blue', canvas((58, 94, 132), 471))
+save('tin_gray', tin((146, 148, 144), 481)); save('tin_green', tin((86, 108, 84), 491)); save('tin_blue', tin((70, 100, 130), 501)); save('tin_red', tin((130, 56, 44), 511))
 save('logs', logs()); save('boards_gray', boards(None, 51))
 save('boards_green', boards((74, 112, 92), 52)); save('boards_blue', boards((70, 100, 140), 53)); save('boards_red', boards((130, 52, 40), 54))
 save('brick', brick()); save('slate', slate()); save('roofmetal', roofmetal())
 save('concrete', concrete()); save('floorwood', floorwood()); save('rustmetal', rustmetal())
-car('car_red', (150, 40, 34), 200); car('car_blue', (58, 92, 140), 210); car('car_white', (205, 204, 196), 220)
-car('car_green', (74, 104, 70), 230); car('car_olive', (96, 100, 60), 240); car('car_yellow', (200, 168, 52), 250)
+car('car_red', (122, 44, 38), 200); car('car_blue', (66, 92, 122), 210); car('car_white', (196, 194, 184), 220)
+car('car_green', (70, 92, 66), 230); car('car_olive', (92, 94, 62), 240); car('car_yellow', (176, 150, 62), 250); car('car_brown', (110, 80, 54), 260)
+car('car_gray', (120, 124, 124), 270); car('car_orange', (170, 96, 40), 280); car('car_teal', (60, 104, 100), 290)
+save('tire', tire()); save('glass', glass())
+from PIL import ImageDraw
+_im = Image.new('RGBA', (256, 256), (0, 0, 0, 0)); _d = ImageDraw.Draw(_im)
+for _i in range(-256, 512, 24):
+    _d.line([(_i, 0), (_i + 256, 256)], fill=(120, 122, 120, 255), width=3); _d.line([(_i, 256), (_i + 256, 0)], fill=(120, 122, 120, 255), width=3)
+_im.save(f'{OUT}/chain.png')
+_im2 = Image.new('RGBA', (256, 256), (0, 0, 0, 0)); _d2 = ImageDraw.Draw(_im2)
+for _i in range(-256, 512, 32):
+    _d2.line([(_i, 0), (_i + 256, 256)], fill=(34, 52, 36, 255), width=3); _d2.line([(_i, 256), (_i + 256, 0)], fill=(34, 52, 36, 255), width=3)
+_im2.save(f'{OUT}/net.png')
 print('ok')

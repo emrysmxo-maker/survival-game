@@ -10,7 +10,7 @@ def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     _mats.clear()
 
-def material(name, tex=None, color=(0.5, 0.5, 0.5, 1), rough=0.9, metal=0.0, tile=1.0):
+def material(name, tex=None, color=(0.5, 0.5, 0.5, 1), rough=0.9, metal=0.0, tile=1.0, smooth=False):
     key = name
     if key in _mats: return _mats[key]
     m = bpy.data.materials.new(name); m.use_nodes = True
@@ -18,11 +18,15 @@ def material(name, tex=None, color=(0.5, 0.5, 0.5, 1), rough=0.9, metal=0.0, til
     b.inputs['Roughness'].default_value = rough; b.inputs['Metallic'].default_value = metal
     if tex:
         t = m.node_tree.nodes.new('ShaderNodeTexImage')
-        t.image = bpy.data.images.load(f'{TEX}/{tex}.jpg'); t.image.colorspace_settings.name = 'sRGB'
+        ext = 'png' if tex in ('chain', 'net') else 'jpg'
+        t.image = bpy.data.images.load(f'{TEX}/{tex}.{ext}'); t.image.colorspace_settings.name = 'sRGB'
         m.node_tree.links.new(t.outputs['Color'], b.inputs['Base Color'])
+        if tex in ('chain', 'net'):
+            m.node_tree.links.new(t.outputs['Alpha'], b.inputs['Alpha']); m.blend_method = 'BLEND'
     else:
         b.inputs['Base Color'].default_value = color
     m['tile'] = tile
+    m['smooth'] = smooth
     _mats[key] = m
     return m
 
@@ -60,6 +64,54 @@ class Acc:
         for f in ([0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]):
             bm.faces.new([vs[i] for i in f])
 
+    def loft(self, m, rings, cap=True):
+        """поверхность по сечениям (кольца точек одинакового числа), замкнутая; концы закрыты"""
+        bm = self._bm(m)
+        vs = [[bm.verts.new(Vector(p)) for p in ring] for ring in rings]
+        n = len(rings[0])
+        for i in range(len(rings) - 1):
+            for j in range(n):
+                k = (j + 1) % n
+                try: bm.faces.new([vs[i][j], vs[i][k], vs[i + 1][k], vs[i + 1][j]])
+                except ValueError: pass
+        if cap:
+            try: bm.faces.new(vs[0][::-1])
+            except ValueError: pass
+            try: bm.faces.new(vs[-1])
+            except ValueError: pass
+
+    def quad_xz(self, m, x0, x1, z0, z1, y):
+        self.face(m, [(x0, y, z0), (x1, y, z0), (x1, y, z1), (x0, y, z1)])
+
+    def face(self, m, pts):
+        bm = self._bm(m)
+        try: bm.faces.new([bm.verts.new(Vector(p)) for p in pts])
+        except ValueError: pass
+
+    def beam(self, m, p0, p1, w=0.08, h=None):
+        """брус/шест от точки p0 до p1 сечением w×h"""
+        p0 = Vector(p0); p1 = Vector(p1); d = p1 - p0
+        if d.length < 1e-6: return
+        q = d.normalized().to_track_quat('Z', 'Y')
+        M = Matrix.Translation((p0 + p1) / 2) @ q.to_matrix().to_4x4() @ Matrix.Diagonal((w, h or w, d.length, 1))
+        bmesh.ops.create_cube(self._bm(m), size=1.0, matrix=M)
+
+    def torus(self, m, c, R, r, axis='Y', seg=18, sides=8):
+        """тор (покрышка): большой радиус R, малый r, ось axis"""
+        rings = []
+        for i in range(seg + 1):
+            t = 2 * math.pi * i / seg
+            ring = []
+            for j in range(sides):
+                u = 2 * math.pi * j / sides
+                rr = R + r * math.cos(u)
+                p = (rr * math.cos(t), rr * math.sin(t), r * math.sin(u))      # ось тора — Z
+                if axis == 'X': p = (p[2], p[1], p[0])
+                elif axis == 'Y': p = (p[0], p[2], p[1])
+                ring.append((p[0] + c[0], p[1] + c[1], p[2] + c[2]))
+            rings.append(ring)
+        self.loft(m, rings, cap=False)
+
     def cyl(self, m, c, r, h, axis='Y', seg=14, r2=None):
         bm = self._bm(m)
         rot = {'X': Euler((0, math.pi / 2, 0)), 'Y': Euler((-math.pi / 2, 0, 0)), 'Z': Euler((0, 0, 0))}[axis]
@@ -82,7 +134,8 @@ class Acc:
             me = bpy.data.meshes.new(name + '_' + mname)
             bm.to_mesh(me); bm.free()
             me.materials.append(m)
-            for p in me.polygons: p.use_smooth = False
+            sm = bool(m.get('smooth', False))
+            for p in me.polygons: p.use_smooth = sm
             o = bpy.data.objects.new(name + '_' + mname, me)
             bpy.context.scene.collection.objects.link(o)
             objs.append(o)
@@ -99,7 +152,7 @@ def export(obj, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_image_format='JPEG', export_jpeg_quality=85, export_apply=True)
 
-def preview(obj, path, views=((1, -1.3, 0.8), (-1, 1.3, 0.8)), res=520, samples=24):
+def preview(obj, path, views=((1, -1.3, 0.8), (-1, 1.3, 0.8)), res=520, samples=24, fit=1.5):
     """картинка для проверки: Cycles на CPU, 2 ракурса (в одну полосу)"""
     sc = bpy.context.scene
     sc.render.engine = 'CYCLES'; sc.cycles.samples = samples; sc.cycles.device = 'CPU'
@@ -113,7 +166,7 @@ def preview(obj, path, views=((1, -1.3, 0.8), (-1, 1.3, 0.8)), res=520, samples=
     bm = bmesh.new(); bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=40)
     me = bpy.data.meshes.new('g'); bm.to_mesh(me); me.materials.append(gm)
     g = bpy.data.objects.new('g', me); bpy.context.scene.collection.objects.link(g)
-    dims = obj.dimensions; r = max(dims) * 1.5 + 2
+    dims = obj.dimensions; r = max(dims) * fit + 1.5
     cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); bpy.context.scene.collection.objects.link(cam); sc.camera = cam
     cam.data.lens = 40
     outs = []

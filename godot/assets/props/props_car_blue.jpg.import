@@ -1,0 +1,39 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://1dfy305hq5l5"
+path.s3tc="res://.godot/imported/props_car_blue.jpg-5cb14f2d825908c6384bbf9e68701d23.s3tc.ctex"
+path.etc2="res://.godot/imported/props_car_blue.jpg-5cb14f2d825908c6384bbf9e68701d23.etc2.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "daabc1c313809099c9c94604d9c51818"
+}
+
+[deps]
+
+source_file="res://assets/props/props_car_blue.jpg"
+dest_files=["res://.godot/imported/props_car_blue.jpg-5cb14f2d825908c6384bbf9e68701d23.s3tc.ctex", "res://.godot/imported/props_car_blue.jpg-5cb14f2d825908c6384bbf9e68701d23.etc2.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=1

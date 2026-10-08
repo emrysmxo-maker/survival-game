@@ -48,6 +48,56 @@ func _init() -> void:
 		var h: Dictionary = WorldGen.HAMLETS[key]
 		_dot(img, h.x, h.y, R, K, 4, Color(1, 0.4, 0.1))
 	img.save_png(OS.get_cmdline_user_args()[0])
+	# постройки: карта расстановки (дома, машины, заборы, остальное) крупно по каждой локации и хутору
+	var pr = load("res://scripts/props.gd").new()
+	pr._ready()
+	var pts := []
+	for key in pr._batch:
+		var b: Dictionary = pr._batch[key]
+		for xf in b.xf:
+			pts.append([b.model, xf.origin.x / WorldGen.T, xf.origin.z / WorldGen.T, atan2(xf.basis.x.z, xf.basis.x.x)])
+	print("pts ", pts.size(), " ", pts[0] if pts.size() > 0 else "")
+	var sites := {}
+	for k in WorldGen.FEATURES: sites[k] = WorldGen.FEATURES[k]
+	for k in WorldGen.HAMLETS: sites[k] = WorldGen.HAMLETS[k]
+	var args := OS.get_cmdline_user_args()
+	if args.size() > 1:
+		for k in args[1].split(","):
+			var st: Dictionary = sites[k]
+			var Z := 14
+			var half := int(st.r) + 6
+			var im2 := Image.create(half * 2 * Z, half * 2 * Z, false, Image.FORMAT_RGB8)
+			for py in half * 2 * Z:
+				for px in half * 2 * Z:
+					var x: float = st.x - half + float(px) / Z
+					var y: float = st.y - half + float(py) / Z
+					var t := WorldGen.terrain(x, y)
+					var c := Color(0.62, 0.72, 0.4).lerp(Color(0.18, 0.34, 0.18), WorldGen.forest_mask(x, y))
+					if t[1] > 0.3: c = Color(0.2, 0.4, 0.62)
+					if t[6] > 0.35: c = Color(0.66, 0.54, 0.36)
+					if Vector2(x - st.x, y - st.y).length() > st.r and Vector2(x - st.x, y - st.y).length() < st.r + 0.15: c = Color(1, 1, 0)
+					im2.set_pixel(px, py, c)
+			for p in pts:
+				var px2 := int((p[1] - (st.x - half)) * Z)
+				var py2 := int((p[2] - (st.y - half)) * Z)
+				var m: String = p[0]
+				var col := Color(0.5, 0.5, 0.5)
+				var rr := 3
+				if m.begins_with("house_") or m in ["club", "shop", "barn", "barn_long", "barracks", "chapel", "machine_shed", "sawmill_hall", "bunker_entrance", "transmitter"] or m.begins_with("shed") or m == "open_shed" or m == "boat_shed":
+					col = Color(0.9, 0.35, 0.1); rr = int(Z * pr.FOOT.get(m, 3.0) * 0.6)
+				elif m.begins_with("car_") or m.begins_with("tractor") or m.begins_with("trailer"):
+					col = Color(0.85, 0.1, 0.1); rr = int(Z * 1.6)
+				elif m.begins_with("fence") or m.begins_with("gate"):
+					col = Color(0.4, 0.25, 0.1); rr = 3
+				elif m.begins_with("garden"):
+					col = Color(0.2, 0.7, 0.2); rr = int(Z * 2.0)
+				for dy in range(-rr, rr + 1):
+					for dx in range(-rr, rr + 1):
+						var ax := px2 + dx
+						var ay := py2 + dy
+						if ax >= 0 and ay >= 0 and ax < half * 2 * Z and ay < half * 2 * Z:
+							im2.set_pixel(ax, ay, col)
+			im2.save_png(args[0].replace(".png", "_" + k + ".png"))
 	print("chunks ", n, " trees ", total, " avg/chunk ", snappedf(float(total) / n, 0.1), " max ", maxc, " dense(>=8) ", forest_chunks, " (", snappedf(100.0 * forest_chunks / n, 0.1), "%)")
 	quit()
 

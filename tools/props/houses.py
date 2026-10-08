@@ -222,12 +222,13 @@ def shed(name, seed, paint='blue'):
     planks_on_ground(a, M['gray'], rnd, 0, -ys - 1.0, 2.0, 4)
     return a.build(name)
 
+JOBS = {'house_izba_a': lambda: izba('house_izba_a', 1), 'house_izba_b': lambda: izba('house_izba_b', 2, 0.0),
+        'house_brick': lambda: brickhouse('house_brick', 3), 'barn': lambda: barn('barn', 4),
+        'shed_blue': lambda: shed('shed_blue', 5, 'blue'), 'shed_green': lambda: shed('shed_green', 6, 'green')}
+
 if __name__ == '__main__':
-    jobs = [('house_izba_a', lambda: izba('house_izba_a', 1)), ('house_izba_b', lambda: izba('house_izba_b', 2, 0.0)),
-            ('house_brick', lambda: brickhouse('house_brick', 3)), ('barn', lambda: barn('barn', 4)),
-            ('shed_blue', lambda: shed('shed_blue', 5, 'blue')), ('shed_green', lambda: shed('shed_green', 6, 'green'))]
     only = os.environ.get('ONLY')
-    for nm, fn in jobs:
+    for nm, fn in JOBS.items():
         if only and nm not in only.split(','): continue
         reset()
         o = fn()
