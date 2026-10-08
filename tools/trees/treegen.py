@@ -775,7 +775,7 @@ def card_mat(name, tw):
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "broadleaf.py"), encoding="utf-8").read())   # осина, дуб, ольха, ива, яблоня
 
 # =============== сборка игровых моделей ===============
-def build_tree(sp, var, H, tw, mats, dead=False):
+def build_tree(sp, var, H, tw, mats, dead=False, lod=0):
 	"""Возвращает (wood Mesh, leaf Mesh, высота)."""
 	seed(zlib.crc32((sp + var).encode()))
 	W, Lf = Mesh(), Mesh()
@@ -821,19 +821,35 @@ def build_tree(sp, var, H, tw, mats, dead=False):
 		c, rr = cr
 		dv = Vector(((p.x - c.x) / rr.x, (p.y - c.y) / rr.y, (p.z - c.z) / rr.z)).length
 		return ground_ao(p.z) * (0.55 + 0.45 * min(1.0, dv))
-	ts = 10 if H > 6 else 6
-	tube(W, tp, tr, ts, matf, aof)
+	def thin(pts, rads, k):                                           # каждая k-я точка (конец сохраняется)
+		if k <= 1 or len(pts) <= 3:
+			return pts, rads
+		idx = list(range(0, len(pts), k))
+		if idx[-1] != len(pts) - 1:
+			idx.append(len(pts) - 1)
+		return [pts[i] for i in idx], [rads[i] for i in idx]
+	ts = [10 if H > 6 else 6, 6 if H > 6 else 4, 4][lod]
+	tube(W, *thin(tp, tr, [1, 1, 2][lod]), ts, matf, aof)
+	rmin = [0.011 if sp in BROAD_P else 0.0, 0.025, 0.06][lod]
 	for (p1, r1) in L1s:
-		if r1[0] < 0.011 and (sp in BROAD_P):
-			continue                                                   # тонкие веточки скрыты листвой
-		tube(W, p1, r1, 6 if r1[0] > 0.08 else (4 if r1[0] > 0.02 else 3), matf, aof)
-	for (p1, r1) in stubs:
-		tube(W, p1, r1, 3, lambda p, r, a: (len(mats) - 1 if (sp == "birch" or sp in BROAD_P) else 0), aof)
+		if r1[0] < rmin:
+			continue                                                   # тонкие ветки скрыты листвой
+		sides = (6 if r1[0] > 0.08 else (4 if r1[0] > 0.02 else 3)) if lod == 0 else 3
+		tube(W, *thin(p1, r1, [1, 2, 3][lod]), sides, matf, aof)
+	if lod == 0:
+		for (p1, r1) in stubs:
+			tube(W, p1, r1, 3, lambda p, r, a: (len(mats) - 1 if (sp == "birch" or sp in BROAD_P) else 0), aof)
 	Lf.crown = cr
+	keep, grow_k = ([(1.0, 1.0), (0.6, 1.25), (0.33, 1.6)] if sp == "spruce" else [(1.0, 1.0), (0.5, 1.3), (0.2, 1.9)])[lod]
 	for (q, d, roll, sz) in sprays:
+		if lod and rnd.random() > keep:
+			continue
+		sz *= grow_k
 		card(Lf, q, d, roll, sz, tw, cr)
-		if sp != "spruce":                                             # у ели лапы горизонтальны — сверху и так видны
+		if sp != "spruce":
 			card(Lf, q, d, roll + math.radians(R(70, 110)), sz * R(0.85, 1.0), tw, cr)   # крест-накрест: не видно «ребром»
+		else:
+			card(Lf, q, d, roll + math.radians(R(25, 45) * (1 if rnd.random() < 0.5 else -1)), sz * R(0.8, 0.95), tw, cr)   # у ели — вторая лапа с наклоном
 	return W, Lf, max(v[2] for v in W.v)
 
 SPECIES = {
@@ -879,17 +895,20 @@ def main():
 		cm = card_mat(sp + "_twig", tw)
 		woods, leaves = [], []
 		for (vn, H, dead) in vars_:
-			Wm, Lm, top = build_tree(sp, vn, H, tw, bmats, dead)
-			wo = Wm.build(vn, [dmat] if dead else bmats)
-			woods.append(wo)
-			if Lm.f:
-				leaves.append(Lm.build(vn + "_l", [cm]))
+			lod_t = []
+			for lod in (2, 1, 0):                                          # 0 — последним: его данные идут в kinds
+				Wm, Lm, top = build_tree(sp, vn, H, tw, bmats, dead, lod)
+				nm = vn + ("_l%d" % lod if lod else "")
+				woods.append(Wm.build(nm, [dmat] if dead else bmats))
+				if Lm.f:
+					leaves.append(Lm.build(nm + "_l", [cm]))
+				lod_t.append("L%d %d" % (lod, Wm.tris() + len(Lm.f) * 2))
 			cat = "dead" if dead else ("sapling" if (H < 6 and sp != "apple") else "tree")
-			kinds[vn] = {"m": sp, "n": vn, "h": round(top, 2), "sc": 1.0, "cat": cat, "yaw": 0, "wood_only": dead}
+			kinds[vn] = {"m": sp, "n": vn, "h": round(top, 2), "sc": 1.0, "cat": cat, "yaw": 0, "wood_only": dead, "lods": [vn + "_l1", vn + "_l2"]}
 			if Lm.f:
 				c, rr = Lm.crown
 				kinds[vn]["crown"] = [round(c.z / top, 3), round(rr.z / top, 3), round(max(rr.x, rr.y) * 0.85, 2), 1 if sp in ("pine", "spruce") else 0]
-			stats.append("%s: %.1f м, кора %d тр., карточек %d" % (vn, top, Wm.tris(), len(Lm.f)))
+			stats.append("%s: %.1f м, кора %d тр., карточек %d; треугольников по уровням: %s" % (vn, top, Wm.tris(), len(Lm.f), ", ".join(reversed(lod_t))))
 		export(woods, os.path.join(OUT, sp + "_wood.glb"))
 		for o in woods:
 			o.name = o.name + "_w"

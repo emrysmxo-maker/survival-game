@@ -5,7 +5,11 @@ extends Node3D
 # Все экземпляры одного вида рисуются одним MultiMesh. Чанки считаются в фоновых потоках.
 
 var load_radius := 3       # чанков вокруг бойца (5×5 / 7×7, настройка качества)
-const DROP_R := 5
+const DROP_MARGIN := 2           # чанков запаса до выгрузки
+const MAX_LOAD_R := 8             # не дальше 8 чанков (≈80 м) от центра: при сильном отдалении дальше — край
+const MAX_PENDING := 6            # чанков в работе одновременно (фоновые потоки)
+const SMALL_R := 45.0             # тайлов (~38 м)
+var _lr := -1
 const GRID := 24           # клеток сетки земли на чанк (шаг 0.5 тайла)
 const OCCLUDERS := ["tree", "sapm", "shrub"]
 const GROUND_LAYERS := ["floor", "grass", "moss", "ash", "rocky", "swamp", "path", "riverbed"]
@@ -128,22 +132,19 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 	var flat: bool = cat in WorldGen.FLAT_CATS
 	var pre := Transform3D((ref[1] as Transform3D).basis, Vector3(0.0, (ref[1] as Transform3D).origin.y, 0.0))
 	var shadow: bool = not flat and not (cat in ["grass", "flower", "moss"])
-	var mmis := []
-	for part in [wood, leaf]:
-		if part.is_empty():
+	var lv: Array = [_make_mmis(wood, leaf, cat, top * bs, shadow)]
+	for ln in kd.get("lods", []):          # упрощённые версии дерева (уровни детализации): те же экземпляры
+		var lw := _find_mesh(kd.m, "wood", ln)
+		var ll := [] if kd.wood_only else _find_mesh(kd.m, "leaf", ln)
+		if lw.is_empty() and ll.is_empty():
 			continue
-		var is_leaf: bool = part == leaf and not leaf.is_empty()
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		var src: ArrayMesh = (part[0] as MeshInstance3D).mesh
-		mm.mesh = _foliage_mesh(src, cat, top * bs) if is_leaf else src
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		# листва-иглы тени не даёт (тонкие карточки мерцают) — тень кроны от простого эллипсоида
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if (shadow and not is_leaf) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.extra_cull_margin = 2.0          # запас на качание ветром; невидимое отсекается целиком
-		add_child(mmi)
-		mmis.append(mmi)
+		var arr := _make_mmis(lw, ll, cat, top * bs, shadow)
+		for mmi in arr:
+			mmi.visible = false
+		lv.append(arr)
+	var mmis := []
+	for arr in lv:
+		mmis.append_array(arr)
 	var proxy: MultiMeshInstance3D = null
 	if shadow and not leaf.is_empty():
 		var pm := MultiMesh.new()
@@ -154,11 +155,43 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		proxy.extra_cull_margin = 2.0
 		add_child(proxy)
-	kinds[key] = {"proxy": proxy, "mmis": mmis, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
+	kinds[key] = {"proxy": proxy, "mmis": mmis, "lv": lv, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
 	if kd.has("crown"):              # крона из генератора: центр и полуось по высоте (доли), радиус (м)
 		kinds[key]["cy"] = float(kd.crown[0])
 		kinds[key]["cv"] = float(kd.crown[1])
 		kinds[key]["cr"] = float(kd.crown[2]) * bs
+
+func _make_mmis(wood: Array, leaf: Array, cat: String, href: float, shadow: bool) -> Array:
+	var out := []
+	for part in [wood, leaf]:
+		if part.is_empty():
+			continue
+		var is_leaf: bool = part == leaf
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		var src: ArrayMesh = (part[0] as MeshInstance3D).mesh
+		mm.mesh = _foliage_mesh(src, cat, href) if is_leaf else src
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		# листва-иглы тени не даёт (тонкие карточки мерцают) — тень кроны от простого эллипсоида
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if (shadow and not is_leaf) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.extra_cull_margin = 2.0          # запас на качание ветром; невидимое отсекается целиком
+		add_child(mmi)
+		out.append(mmi)
+	return out
+
+# Уровень детализации деревьев: 0 — полные, 1 — вдвое проще, 2 — силуэт (выбирает main.gd по приближению)
+var lod := 0
+func set_lod(l: int) -> void:
+	lod = l
+	for key in kinds:
+		var lv: Array = kinds[key].get("lv", [])
+		if lv.size() < 2:
+			continue
+		var use := mini(l, lv.size() - 1)
+		for i in lv.size():
+			for mmi in lv[i]:
+				mmi.visible = i == use and not _noplants
 
 # Нерегулярная крона для тени: хвойные — стопка конусов, лиственные — кучка шаров
 static var _crown_cache := {}
@@ -200,19 +233,23 @@ func _crown_mesh(conifer: bool) -> ArrayMesh:
 func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 	player_tile = tile_pos
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))
-	if c != center:
+	# радиус загрузки — сколько видит камера (не меньше настройки качества); выгрузка — с запасом DROP_MARGIN,
+	# чтобы на границе чанки не грузились/выгружались туда-обратно
+	var lr := clampi(ceili(view_r / WorldGen.CHUNK), load_radius, MAX_LOAD_R)
+	if c != center or lr != _lr:
 		center = c
+		_lr = lr
 		for k in chunks.keys():
-			if absi(k.x - c.x) > DROP_R or absi(k.y - c.y) > DROP_R:
+			if absi(k.x - c.x) > lr + DROP_MARGIN or absi(k.y - c.y) > lr + DROP_MARGIN:
 				chunks[k].mesh.queue_free()
 				chunks.erase(k)
 				_obs_cache.clear()
 				_dirty = true
-	if pending.size() < 4:
+	if pending.size() < MAX_PENDING:
 		var best := Vector2i.ZERO
 		var bd := 1e9
-		for dx in range(-load_radius, load_radius + 1):
-			for dy in range(-load_radius, load_radius + 1):
+		for dx in range(-lr, lr + 1):
+			for dy in range(-lr, lr + 1):
 				var k := Vector2i(c.x + dx, c.y + dy)
 				if chunks.has(k) or pending.has(k):
 					continue
@@ -415,7 +452,7 @@ func _rebuild_sprites() -> void:
 		var dist := near.distance_to(player_tile)
 		if dist > view_r + 12.0:
 			continue
-		var small_ok := dist <= view_r + 1.5
+		var small_ok := dist <= minf(view_r + 1.5, SMALL_R)      # трава и мелочь — не дальше SMALL_R тайлов (при отдалении их не видно)
 		var bufs: Dictionary = chunks[k].c.bufs
 		for key in bufs:
 			if not small_ok and kinds.has(key) and kinds[key].cat in SMALL_CATS:

@@ -3,6 +3,9 @@ extends CanvasLayer
 # карта с локациями), перелёт камеры 📍 к локации, время суток с паузой.
 
 const VERSION := "G0.14"
+var fps_btn: Button
+var _ft: Array = []
+var _ft_sum := 0.0
 var main
 var info: Label
 var ver: Label
@@ -63,6 +66,11 @@ func _ready() -> void:
 	ub.pressed.connect(func():
 		Engine.set_meta("from_game", true)
 		get_tree().change_scene_to_file("res://boot.tscn"))
+	fps_btn = _button("", Vector2.ZERO, Vector2(190, 40), Color(0.12, 0.12, 0.2, 0.95))
+	fps_btn.reparent(q_panel)
+	fps_btn.pressed.connect(func():
+		main.settings.set_fps_max(not main.settings.fps_max)
+		_refresh_q())
 	for i in 4:
 		var qb := _button("", Vector2.ZERO, Vector2(190, 40), Color(0.06, 0.09, 0.06, 0.9))
 		qb.reparent(q_panel)
@@ -162,10 +170,17 @@ func toast(t: String) -> void:
 	_toast_t = 2.8
 
 func _process(dt: float) -> void:
+	# fps за последние 5 с: среднее и худшее (по самому долгому кадру)
+	_ft.append(dt)
+	_ft_sum += dt
+	while _ft_sum > 5.0 and _ft.size() > 1:
+		_ft_sum -= _ft.pop_front()
 	_toast_t -= dt
 	toast_lbl.modulate.a = clampf(_toast_t / 0.6, 0.0, 1.0)
 
 func _refresh_q() -> void:
+	if fps_btn:
+		fps_btn.text = "Кадры: максимум" if main.settings.fps_max else "Кадры: 60"
 	for i in q_btns.size():
 		q_btns[i].text = ("● " if main.settings.level == i else "   ") + main.settings.NAMES[i]
 
@@ -226,7 +241,11 @@ func due(dt: float) -> bool:
 
 func update_hud(dt: float, tile: Vector2, eco: String, trees: int) -> void:
 	info.text = "Экосистема: %s\nКоординаты: X: %d, Y: %d\nДеревьев рядом: %d" % [eco, roundi(tile.x), roundi(tile.y), trees]
-	ver.text = "%s · %d fps · %dx%d" % [VERSION, Engine.get_frames_per_second(), get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y]
+	var worst := 0.0
+	for f in _ft:
+		worst = maxf(worst, f)
+	var avg := float(_ft.size()) / maxf(_ft_sum, 0.001)
+	ver.text = "%s · %d fps (ср %d, мин %d) · %dx%d" % [VERSION, Engine.get_frames_per_second(), roundi(avg), roundi(1.0 / maxf(worst, 0.001)), get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y]
 	time_lbl.text = main.daynight.label()
 	_slider_lock = true
 	slider.value = main.daynight.t

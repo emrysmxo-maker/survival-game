@@ -10,6 +10,8 @@ const CAM_SIZE_MIN := 2.0           # приближение
 const CAM_SIZE_MAX := 60.0          # отдаление
 const CAM_ZOOM_SPEED := 1.1         # кнопки −/+ (экспонента)
 const KEY_PAN := 12.0               # м/с при стрелках/WASD (на ПК)
+const LOD1_SIZE := 24.0             # до этого приближения деревья полные, дальше — проще
+const LOD2_SIZE := 40.0             # дальше — силуэты
 
 var world
 var daynight
@@ -112,6 +114,12 @@ func _update_camera(dt: float) -> void:
 		_pan(-kb * KEY_PAN * dt * vh / cam_size)
 	cam.rotation_degrees = Vector3(-cam_elev, cam_yaw, 0)
 	cam.size = cam_size
+	# деревья проще при отдалении (орто-камера: мельчают от приближения, а не от расстояния)
+	var want := (0 if cam_size <= LOD1_SIZE else (1 if cam_size <= LOD2_SIZE else 2))
+	if settings.level == 0:
+		want = mini(want + 1, 2)
+	if want != world.lod:
+		world.set_lod(want)
 	var vs := get_viewport().get_visible_rect().size
 	var hw: float = cam_size * vs.x / maxf(vs.y, 1.0) * 0.5
 	var hh: float = cam_size * 0.5 / maxf(sin(deg_to_rad(cam_elev)), 0.25)
