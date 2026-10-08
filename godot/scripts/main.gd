@@ -215,7 +215,7 @@ func _process_game(dt: float) -> void:
 	_xray_t -= dt
 	if _xray_t <= 0.0:
 		_xray_t = 0.1
-		player.set_xray(world.occluded(player.global_position, 1.5, cam))
+		player.set_xray(world.occluded(player.global_position, 1.5, cam) and not _clean)
 		for z in zombies.list:
 			if not z.dead:
 				var on: bool = world.occluded(z.node.global_position, 1.5, cam)
@@ -246,6 +246,7 @@ func _process(dt_raw: float) -> void:
 			get_tree().quit()
 
 var _tt := 0.0
+var _clean := OS.get_cmdline_user_args().has("--clean")   # снимки позы: без рентгена
 
 func _set_xray_node(n: Node, on: bool) -> void:
 	if n is GeometryInstance3D:

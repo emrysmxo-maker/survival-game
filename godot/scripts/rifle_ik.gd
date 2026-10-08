@@ -14,18 +14,27 @@ var _t := 0.0
 var _shoot_t := 0.0
 var _ready_done := false
 var _ok := false
+var _dbg := OS.get_cmdline_user_args().has("--pose")   # замер позы для devtest (после всех правок модификатора)
+var dbg := {}
 
 const TORSO_W := {"Spine": 0.85, "Spine1": 0.9, "Spine2": 0.95, "Neck": 1.0, "Head": 1.0}
 const CLIPS := {
 	"rifle": {"hold": "HoldAR", "aim": "AimAR", "shoot": "ShootAR", "reload": "ReloadAR"},
-	"pistol": {"hold": "MilIdle", "aim": "AimPistol", "shoot": "ShootPistol", "reload": "ReloadPistol"}}
-const CHEEK_DOWN := 0.22          # щека к прикладу: голова вниз (рад, при прицеле из автомата)
-const CHEEK_TILT := 0.20          # и к правому плечу
-const RUN_LEAN := 0.16            # наклон корпуса вперёд на бегу (рад, на полной скорости)
+	"pistol": {"hold": "AimPistol", "aim": "AimPistol", "shoot": "ShootPistol", "reload": "ReloadPistol"}}
+const PISTOL_LOW := 0.75          # пистолет наготове: руки опущены на столько (рад) от прицела
+const PISTOL_BACK := 0.12         # и ближе к груди (м)
+const IDLE_LEAN := 0.08           # стоя: корпус чуть вперёд (рад)
+const RUN_LEAN := 0.26            # наклон корпуса вперёд на бегу (рад, на полной скорости)
 const SWAY := 0.07                # скрутка плеч в шаге (рад)
 const BOB := 0.035                # покачивание оружия в шаге (рад)
-const EYE_OVER_BUTT := 0.085      # автомат к лицу: глаз выше центра приклада на столько (м) — щека на прикладе
-const BUTT_FWD := 0.10            # торец приклада впереди плечевого сустава (м) — «в карман» плеча
+const AIM_CROUCH := 0.025         # прицел: таз ниже на столько (м) — колени согнуты
+const AIM_LEAN := 0.17            # прицел: корпус вперёд (рад) — «нос над носками»
+const BUTT_IN := 0.05             # торец приклада: от плечевого сустава к груди (м) — «карман» плеча
+const BUTT_FWD := 0.06            # и вперёд
+const BUTT_DOWN := 0.02           # и чуть ниже сустава
+const GRIP_FWD := 0.04            # левая рука дальше по цевью, чем в записи (м)
+const EYE_FWD := 0.13             # глаз впереди торца приклада по стволу (м) — щека на гребне приклада
+const EYE_OVER_BORE := 0.065      # и выше оси ствола (линия прицела)
 
 func _bone(n: String) -> int:
 	if not _b.has(n):
@@ -146,6 +155,10 @@ func _process_modification() -> void:
 	var ph := 0.0
 	if player.anim and player.anim.current_animation != "" and player.anim.current_animation_length > 0.0:
 		ph = player.anim.current_animation_position / player.anim.current_animation_length * TAU
+	var still := (1.0 - spd) * (1.0 - k) * (1.0 - rl)
+	if still > 0.01:                   # стоя: корпус не заваливается назад (в записи стойки −5°)
+		_rot_global(skel, _bone("Spine"), right_s, -IDLE_LEAN * 0.5 * still)
+		_rot_global(skel, _bone("Spine1"), right_s, -IDLE_LEAN * 0.5 * still)
 	if spd > 0.01:
 		var lean := RUN_LEAN * spd * (1.0 - 0.6 * k)
 		_rot_global(skel, _bone("Spine"), right_s, -lean * 0.5)      # «+» вокруг правой оси — назад, поэтому минус
@@ -160,37 +173,96 @@ func _process_modification() -> void:
 		var err_yaw := wrapf(player.aim_local - atan2(d.x, d.z), -PI, PI) * k
 		for pr in [["Spine", 0.3], ["Spine1", 0.35], ["Spine2", 0.35]]:
 			_rot_global(skel, _bone(pr[0]), up_s, err_yaw * pr[1])
-	# 4б) автомат к лицу (не в записи — там он у груди): обе кисти вместе с автоматом поднимаются так,
-	#     чтобы приклад лёг под щеку и упёрся в плечо; локти — в той же стороне, что в записи (двухзвенный IK)
-	var lift := k * (1.0 - rl) if w == "rifle" else 0.0
-	var eye := skel.find_bone("mixamorig_RightEye")
-	if lift > 0.001 and eye >= 0:
+	# 4а) стойка стрелка: колени согнуты — таз ниже, стопы на месте (IK ног, колено вперёд)
+	var crouch: float = AIM_CROUCH * k * (1.0 - rl) * (0.5 if player.moving else 1.0)
+	if crouch > 0.001:
+		var hips := _bone("Hips")
+		var legs := []
+		for sd in ["Left", "Right"]:
+			legs.append([_bone(sd + "UpLeg"), _bone(sd + "Leg"), _bone(sd + "Foot")])
+		var feet := []
+		for l in legs:
+			feet.append(skel.get_bone_global_pose(l[2]))
+		var hg := skel.get_bone_global_pose(hips)
+		hg.origin -= up_s * crouch
+		skel.set_bone_global_pose(hips, hg)
+		for i in legs.size():
+			var l: Array = legs[i]
+			var ft: Transform3D = feet[i]
+			_ik(skel, l[0], l[1], l[2], ft.origin, skel.get_bone_global_pose(l[1]).origin + fwd_s)
+			var pg := skel.get_bone_global_pose(skel.get_bone_parent(l[2]))
+			skel.set_bone_pose_rotation(l[2], (pg.basis.orthonormalized().inverse() * ft.basis.orthonormalized()).get_rotation_quaternion())
+	# 4б) прицел из автомата как у стрелка: корпус наклонён вперёд («нос над носками»), приклад в «кармане» плеча,
+	#     ствол на цель, ГОЛОВА опускается к прикладу (щека на прикладе), локти вниз. Руки ставит двухзвенный IK:
+	#     правая кисть — по хвату автомата, левая — на цевье (как в записи, чуть дальше вперёд).
+	var aim_k := k * (1.0 - rl) if w == "rifle" else 0.0
+	if aim_k > 0.001:
+		for pr in [["Spine", 0.35], ["Spine1", 0.35], ["Spine2", 0.3]]:
+			_rot_global(skel, _bone(pr[0]), right_s, -AIM_LEAN * pr[1] * aim_k)
 		var rh0 := skel.get_bone_global_pose(rh)
 		var lh := _bone("LeftHand")
 		var lh0 := skel.get_bone_global_pose(lh)
 		var bt0: Vector3 = rh0 * (st.bt as Vector3)
-		var e_m: Vector3 = s2m * skel.get_bone_global_pose(eye).origin
-		var b_m: Vector3 = s2m * bt0
-		var sh_m: Vector3 = s2m * skel.get_bone_global_pose(_bone("RightArm")).origin
-		var dh := Vector3(d.x, 0.0, d.z).normalized()
-		var dy := clampf(e_m.y - EYE_OVER_BUTT - b_m.y, -0.05, 0.25)
-		var dfwd := clampf((sh_m + dh * BUTT_FWD - b_m).dot(dh), -0.15, 0.05)
-		var off: Vector3 = m2s * ((Vector3.UP * dy + dh * dfwd) * lift)
-		for ch in [[_bone("RightArm"), _bone("RightForeArm"), rh, rh0], [_bone("LeftArm"), _bone("LeftForeArm"), lh, lh0]]:
-			var el: Vector3 = skel.get_bone_global_pose(ch[1]).origin + off
-			var tgt: Vector3 = (ch[3] as Transform3D).origin + off
+		var z0: Vector3 = (rh0 * (st.mz as Vector3) - bt0).normalized()
+		var y0: Vector3 = (up_s - z0 * z0.dot(up_s)).normalized()
+		var r0 := Basis(y0.cross(z0), y0, z0)
+		# куда смотрит ствол: на цель по горизонтали (aim_local — угол цели относительно ног)
+		var z1: Vector3 = (m2s * Vector3(sin(player.aim_local), 0.0, cos(player.aim_local))).normalized()
+		var y1: Vector3 = up_s
+		var r1 := Basis(y1.cross(z1), y1, z1)
+		var sh: Vector3 = skel.get_bone_global_pose(_bone("RightArm")).origin
+		var chest: Vector3 = skel.get_bone_global_pose(_bone("Spine2")).origin
+		var inward: Vector3 = chest - sh
+		inward = (inward - up_s * inward.dot(up_s)).normalized()
+		var bp: Vector3 = sh + inward * BUTT_IN + z1 * BUTT_FWD - up_s * BUTT_DOWN    # торец приклада — в плечо
+		var rot: Basis = (r1 * r0.inverse()).orthonormalized()
+		var rot_k := Basis(Quaternion.IDENTITY.slerp(rot.get_rotation_quaternion(), aim_k))
+		var off: Vector3 = (bp - bt0) * aim_k
+		var rh1 := Transform3D(rot_k * rh0.basis, bt0 + off + rot_k * (rh0.origin - bt0))
+		var lh1 := Transform3D(rot_k * lh0.basis, bt0 + off + rot_k * (lh0.origin - bt0) + z1 * GRIP_FWD * aim_k)
+		var down: Vector3 = -up_s
+		for ch in [[_bone("RightArm"), _bone("RightForeArm"), rh, rh1, -inward * 0.45], [_bone("LeftArm"), _bone("LeftForeArm"), lh, lh1, -inward * 0.25]]:
+			var tgt: Vector3 = (ch[3] as Transform3D).origin
 			var mid: Vector3 = (skel.get_bone_global_pose(ch[0]).origin + tgt) * 0.5
-			_ik(skel, ch[0], ch[1], ch[2], tgt, el + (el - mid))
+			_ik(skel, ch[0], ch[1], ch[2], tgt, mid + down + (ch[4] as Vector3))    # локоть вниз и чуть наружу
 			var pg := skel.get_bone_global_pose(skel.get_bone_parent(ch[2]))
 			skel.set_bone_pose_rotation(ch[2], (pg.basis.orthonormalized().inverse() * (ch[3] as Transform3D).basis.orthonormalized()).get_rotation_quaternion())
-	# 5) щека к прикладу (автомат): голова вниз и к правому плечу; у пистолета — чуть вниз к мушке
+		# щека на прикладе: глаз — над осью ствола, немного впереди торца; голову (шея + голова) поворачиваем к этой точке
+		var eye := skel.find_bone("mixamorig_RightEye")
+		if eye >= 0:
+			var eye_t: Vector3 = bt0 + off + z1 * EYE_FWD + up_s * EYE_OVER_BORE
+			for pr in [[_bone("Neck"), 0.5], [_bone("Head"), 1.0]]:
+				var piv: Vector3 = skel.get_bone_global_pose(pr[0]).origin
+				var e_now: Vector3 = skel.get_bone_global_pose(eye).origin - piv
+				var e_want: Vector3 = eye_t - piv
+				if e_now.length() < 1e-4 or e_want.length() < 1e-4:
+					continue
+				var q := Quaternion(e_now.normalized(), e_want.normalized())
+				var ang: float = minf(q.get_angle(), deg_to_rad(40.0)) * float(pr[1]) * aim_k
+				if ang > 1e-4:
+					_rot_global(skel, pr[0], q.get_axis().normalized(), ang)
+	# 4в) пистолет наготове: хват двумя руками как в прицеле, но кисти опущены перед грудью стволом вниз-вперёд
+	var low: float = (1.0 - k) * (1.0 - rl) if w == "pistol" else 0.0
+	if low > 0.001:
+		var lh := _bone("LeftHand")
+		var piv: Vector3 = (skel.get_bone_global_pose(_bone("RightArm")).origin + skel.get_bone_global_pose(_bone("LeftArm")).origin) * 0.5
+		var rb := Basis(right_s, -PISTOL_LOW * low)
+		var back: Vector3 = -fwd_s * PISTOL_BACK * low - up_s * 0.03 * low
+		var tg := []
+		for hb in [rh, lh]:
+			var g := skel.get_bone_global_pose(hb)
+			tg.append(Transform3D(rb * g.basis, piv + rb * (g.origin - piv) + back))
+		for ch in [[_bone("RightArm"), _bone("RightForeArm"), rh, tg[0], -right_s * 0.4], [_bone("LeftArm"), _bone("LeftForeArm"), lh, tg[1], right_s * 0.4]]:
+			var tgt: Vector3 = (ch[3] as Transform3D).origin
+			var mid: Vector3 = (skel.get_bone_global_pose(ch[0]).origin + tgt) * 0.5
+			_ik(skel, ch[0], ch[1], ch[2], tgt, mid - up_s + (ch[4] as Vector3))
+			var pg := skel.get_bone_global_pose(skel.get_bone_parent(ch[2]))
+			skel.set_bone_pose_rotation(ch[2], (pg.basis.orthonormalized().inverse() * (ch[3] as Transform3D).basis.orthonormalized()).get_rotation_quaternion())
+	# 5) пистолет: голова чуть вниз к мушке
 	var cheek := k * (1.0 - rl)
-	if cheek > 0.001:
-		var down := CHEEK_DOWN if w == "rifle" else 0.08
-		var tilt := CHEEK_TILT if w == "rifle" else 0.0
-		_rot_global(skel, _bone("Neck"), right_s, -down * 0.4 * cheek)
-		_rot_global(skel, _bone("Head"), right_s, -down * 0.6 * cheek)
-		_rot_global(skel, _bone("Head"), fwd_s, tilt * cheek)
+	if cheek > 0.001 and w == "pistol":
+		_rot_global(skel, _bone("Neck"), right_s, -0.08 * 0.4 * cheek)
+		_rot_global(skel, _bone("Head"), right_s, -0.08 * 0.6 * cheek)
 	# 6) отдача: короткий толчок корпуса (дуло вверх)
 	var rc: float = player.recoil
 	if rc > 0.001:
@@ -206,6 +278,11 @@ func _process_modification() -> void:
 	player.rifle_len = bt.distance_to(mz)
 	if player.muzzle_flash:
 		player.muzzle_flash.position = Vector3(0, 0, player.rifle_len)
+	if _dbg:
+		for i in skel.get_bone_count():
+			dbg[skel.get_bone_name(i).trim_prefix("mixamorig_")] = skel.global_transform * skel.get_bone_global_pose(i).origin
+		dbg["butt"] = skel.global_transform * (hp * (st.bt as Vector3))
+		dbg["muzzle"] = skel.global_transform * (hp * (st.mz as Vector3))
 
 func _rot_global(skel: Skeleton3D, bi: int, axis: Vector3, ang: float) -> void:
 	if bi < 0 or absf(ang) < 1e-5:

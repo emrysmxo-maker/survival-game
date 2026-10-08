@@ -5,7 +5,52 @@ extends RefCounted
 static func _yaw(d: Vector2) -> float:
 	return atan2(d.x, d.y)
 
+static func _hide_mm(n: Node) -> void:
+	for c in n.get_children():
+		if c is MultiMeshInstance3D:
+			c.visible = false
+		_hide_mm(c)
+
+static var _ik = null
+static func _bp(sk: Skeleton3D, n: String) -> Vector3:
+	if _ik != null and _ik.dbg.has(n):
+		return _ik.dbg[n]
+	return sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_" + n)).origin
+
+# замер позы (--pose): высоты локтей относительно плеч, наклон корпуса, сгиб колен, голова над прикладом
+static func pose_report(m) -> void:
+	var sk: Skeleton3D = m.player.skel
+	var y0: float = m.player.global_position.y
+	var hips := _bp(sk, "Hips")
+	var neck := _bp(sk, "Neck")
+	var fwd: Vector3 = m.player.model.global_transform.basis.z.normalized()
+	var tv := (neck - hips)
+	var lean := rad_to_deg(atan2(tv.dot(fwd), tv.y))
+	var knee := func(side: String) -> float:
+		var a := _bp(sk, side + "UpLeg"); var b := _bp(sk, side + "Leg"); var c := _bp(sk, side + "Foot")
+		return rad_to_deg((a - b).angle_to(c - b))
+	if _ik == null:
+		for c in sk.get_children():
+			if c is SkeletonModifier3D and "dbg" in c:
+				_ik = c
+	var hd := _bp(sk, "RightEye")
+	var bt := _bp(sk, "butt") if _ik != null and _ik.dbg.has("butt") else hd
+	print("POSE t=", snappedf(m._tt, 0.1), " anim=", m.player.anim.current_animation, " aim=", snappedf(m.player.aim_blend, 0.01),
+		" elbowR-shR=", snappedf(_bp(sk, "RightForeArm").y - _bp(sk, "RightArm").y, 0.01),
+		" elbowL-shL=", snappedf(_bp(sk, "LeftForeArm").y - _bp(sk, "LeftArm").y, 0.01),
+		" handR=", snappedf(_bp(sk, "RightHand").y - y0, 0.01), " shR=", snappedf(_bp(sk, "RightArm").y - y0, 0.01),
+		" head=", snappedf(_bp(sk, "Head").y - y0, 0.01), " lean=", snappedf(lean, 0.1),
+		" kneeL=", snappedf(knee.call("Left"), 1), " kneeR=", snappedf(knee.call("Right"), 1),
+		" hipsY=", snappedf(hips.y - y0, 0.01),
+		" eye-butt=", (hd - bt).snappedf(0.01), " butt-shR=", (bt - _bp(sk, "RightArm")).snappedf(0.01),
+		" elbowR_out=", snappedf((_bp(sk, "RightForeArm") - _bp(sk, "Spine2")).dot(-m.player.model.global_transform.basis.x.normalized()), 0.01),
+		" elbowL_out=", snappedf((_bp(sk, "LeftForeArm") - _bp(sk, "Spine2")).dot(m.player.model.global_transform.basis.x.normalized()), 0.01))
+
 static func run(m, dt: float) -> void:
+	if OS.get_cmdline_user_args().has("--pose") and Engine.get_process_frames() % 5 == 0 and m._tt > 0.3:
+		pose_report(m)
+	if OS.get_cmdline_user_args().has("--clean") and Engine.get_process_frames() % 10 == 0:
+		_hide_mm(m.world)   # снимки позы: без деревьев и кустов (земля остаётся)
 	if OS.get_cmdline_user_args().has("--weapon=pistol") and not m.player.has_pistol:
 		m.player.has_pistol = true
 		m.player.ammo["pistol"] = 12
