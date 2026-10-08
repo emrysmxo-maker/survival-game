@@ -61,6 +61,28 @@ func _init() -> void:
 	for k in WorldGen.FEATURES: sites[k] = WorldGen.FEATURES[k]
 	for k in WorldGen.HAMLETS: sites[k] = WorldGen.HAMLETS[k]
 	var args := OS.get_cmdline_user_args()
+	# выгрузка сцены в JSON для просмотра в Blender (tools/props/scene_render.py): аргументы: <png> <сайты через запятую> <json> <сайт>
+	if args.size() > 3:
+		var st0: Dictionary = sites[args[3]]
+		var out := {"site": args[3], "cx": st0.x, "cy": st0.y, "r": st0.r, "h0": WorldGen.height_m(st0.x, st0.y), "props": [], "trees": []}
+		var lim: float = st0.r + 14.0
+		for key in pr._batch:
+			var b2: Dictionary = pr._batch[key]
+			for xf in b2.xf:
+				var tx: float = xf.origin.x / WorldGen.T
+				var ty: float = xf.origin.z / WorldGen.T
+				if Vector2(tx - st0.x, ty - st0.y).length() < lim:
+					var bs: Basis = xf.basis
+					out.props.append({"m": b2.model, "p": [xf.origin.x, xf.origin.y, xf.origin.z], "b": [bs.x.x, bs.x.y, bs.x.z, bs.y.x, bs.y.y, bs.y.z, bs.z.x, bs.z.y, bs.z.z]})
+		var CHs := WorldGen.CHUNK
+		for cy2 in range(int(floor((st0.y - lim) / CHs)), int(floor((st0.y + lim) / CHs)) + 1):
+			for cx2 in range(int(floor((st0.x - lim) / CHs)), int(floor((st0.x + lim) / CHs)) + 1):
+				var cc2 := WorldGen.chunk_content(cx2, cy2, 1.0)
+				for o in cc2.trees:
+					if Vector2(o.x - st0.x, o.y - st0.y).length() < lim:
+						out.trees.append([o.x * WorldGen.T, WorldGen.height_m(o.x, o.y), o.y * WorldGen.T, o.scale])
+		var fj := FileAccess.open(args[2], FileAccess.WRITE)
+		fj.store_string(JSON.stringify(out))
 	if args.size() > 1:
 		for k in args[1].split(","):
 			var st: Dictionary = sites[k]
