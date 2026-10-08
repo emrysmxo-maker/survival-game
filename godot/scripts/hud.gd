@@ -16,6 +16,15 @@ var auto_btn: Button
 var zombie_btn: Button
 var tp_btn: Button
 var gear_btn: Button
+var weapon_btn: Button
+var reload_btn: Button
+var hp_bar: ColorRect
+var armor_bar: ColorRect
+var stat_lbl: Label
+var stat_box: Control
+var toast_lbl: Label
+var _toast_t := 0.0
+var hurt: ColorRect
 var q_panel: VBoxContainer
 var q_btns: Array = []
 var tp_panel: VBoxContainer
@@ -152,8 +161,81 @@ func _ready() -> void:
 	pause_btn.pressed.connect(func():
 		main.daynight.auto = not main.daynight.auto
 		pause_btn.text = "II" if main.daynight.auto else "▶")
+	# оружие: кнопка смены (автомат ↔ пистолет) с патронами и кнопка перезарядки
+	weapon_btn = _button("АВТОМАТ", Vector2.ZERO, Vector2(124, 56), Color(0.12, 0.16, 0.12, 0.88))
+	weapon_btn.add_theme_font_size_override("font_size", 15)
+	weapon_btn.pressed.connect(func():
+		var p = main.player
+		if p.has_pistol:
+			p.set_weapon("pistol" if p.weapon_kind == "rifle" else "rifle")
+		else:
+			toast("Пистолета нет — найди на земле (светлые кольца)")
+		_refresh_weapon())
+	reload_btn = _button("⟳", Vector2.ZERO, Vector2(52, 56), Color(0.12, 0.16, 0.12, 0.88))
+	reload_btn.add_theme_font_size_override("font_size", 24)
+	reload_btn.pressed.connect(func(): main.player.start_reload())
+	# здоровье и броня
+	stat_box = Control.new()
+	add_child(stat_box)
+	var bg := ColorRect.new()
+	bg.color = Color(0.05, 0.07, 0.05, 0.75)
+	bg.size = Vector2(212, 46)
+	stat_box.add_child(bg)
+	hp_bar = ColorRect.new()
+	hp_bar.color = Color(0.78, 0.16, 0.14)
+	hp_bar.position = Vector2(6, 6)
+	hp_bar.size = Vector2(200, 14)
+	stat_box.add_child(hp_bar)
+	armor_bar = ColorRect.new()
+	armor_bar.color = Color(0.35, 0.55, 0.8)
+	armor_bar.position = Vector2(6, 24)
+	armor_bar.size = Vector2(0, 8)
+	stat_box.add_child(armor_bar)
+	stat_lbl = Label.new()
+	stat_lbl.position = Vector2(8, 30)
+	stat_lbl.add_theme_font_size_override("font_size", 11)
+	stat_box.add_child(stat_lbl)
+	for c in [bg, hp_bar, armor_bar, stat_lbl]:
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast_lbl = Label.new()
+	toast_lbl.add_theme_font_size_override("font_size", 20)
+	toast_lbl.add_theme_color_override("font_color", Color(1.0, 0.93, 0.7))
+	toast_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	toast_lbl.add_theme_constant_override("outline_size", 6)
+	toast_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(toast_lbl)
+	hurt = ColorRect.new()
+	hurt.color = Color(0.7, 0.0, 0.0, 0.0)
+	hurt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hurt)
 	get_viewport().size_changed.connect(_layout)
 	_layout()
+
+func toast(t: String) -> void:
+	toast_lbl.text = t
+	_toast_t = 2.8
+
+func _refresh_weapon() -> void:
+	var p = main.player
+	if p == null:
+		return
+	var w: String = p.weapon_kind
+	var nm := "АВТОМАТ" if w == "rifle" else "ПИСТОЛЕТ"
+	var am := "перезарядка…" if p.reload_t > 0.0 else "%d / %d" % [p.ammo[w], p.reserve[w]]
+	weapon_btn.text = "%s\n%s" % [nm, am]
+
+func _process(dt: float) -> void:
+	if main == null or main.player == null:
+		return
+	var p = main.player
+	_toast_t -= dt
+	toast_lbl.modulate.a = clampf(_toast_t / 0.6, 0.0, 1.0)
+	hurt.color.a = clampf(p.hurt_t, 0.0, 0.35) * 0.9
+	hp_bar.size.x = 200.0 * clampf(p.hp / 100.0, 0.0, 1.0)
+	armor_bar.size.x = 200.0 * clampf(p.armor / 100.0, 0.0, 1.0)
+	stat_lbl.text = "Здоровье %d   Броня %d" % [maxi(0, roundi(p.hp)), roundi(p.armor)]
+	_refresh_weapon()
 
 func _refresh_q() -> void:
 	for i in q_btns.size():
@@ -190,6 +272,12 @@ func _layout() -> void:
 	zombie_btn.position = Vector2(12, vs.y - 58)
 	auto_btn.position = Vector2(vs.x - 112, vs.y - 112)
 	auto_btn.size = Vector2(96, 96)
+	weapon_btn.position = Vector2(vs.x - 136, 290)
+	reload_btn.position = Vector2(vs.x - 196, 290)
+	stat_box.position = Vector2(12, vs.y - 112)
+	toast_lbl.position = Vector2(vs.x / 2.0 - 300, 64)
+	toast_lbl.size = Vector2(600, 30)
+	hurt.size = vs
 	var tb: Control = get_node("TimeBox")
 	tb.position = Vector2(vs.x / 2.0 - 170, vs.y - 50)
 	var s := minf(vs.y - 40, vs.x - 40)
@@ -199,7 +287,7 @@ func _layout() -> void:
 # кнопки, на которых стики не начинаются
 func ui_rects() -> Array:
 	var out := []
-	for c in [mini, zombie_btn, auto_btn, tp_btn, gear_btn, get_node("TimeBox")]:
+	for c in [mini, zombie_btn, auto_btn, tp_btn, gear_btn, get_node("TimeBox"), weapon_btn, reload_btn]:
 		out.append(func(): return c.get_global_rect() if c.visible else Rect2())
 	out.append(func(): return tp_panel.get_global_rect() if tp_panel.visible else Rect2())
 	out.append(func(): return q_panel.get_global_rect() if q_panel.visible else Rect2())

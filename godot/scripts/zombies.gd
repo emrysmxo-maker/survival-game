@@ -8,6 +8,8 @@ const WALK_TPS := 0.55
 const CRAWL_TPS := 0.22
 const HIT_R := 0.38
 const REACH := 0.75
+const BITE_T := 1.1       # раз в столько секунд кусает, если стоит вплотную
+const BITE_DMG := 14.0
 const MAX := 6
 const PARTS := [
 	["head", 0.12, 55.0, 0.0], ["torso", 0.43, 16.0, 0.0],
@@ -38,6 +40,7 @@ class Zombie:
 	var dead_t := 0.0
 	var yaw := 0.0
 	var fall := 0.0
+	var bite_cd := 0.6
 
 func _ready() -> void:
 	_scene = load("res://assets/character/Zombie.glb")
@@ -125,6 +128,10 @@ func update_zombies(dt: float) -> void:
 		else:
 			if z.anim and z.anim.current_animation != "Idle":
 				z.anim.play("Idle", 0.2)
+			z.bite_cd -= dt
+			if z.bite_cd <= 0.0 and not player.swimming:
+				z.bite_cd = BITE_T
+				player.take_damage(BITE_DMG * (0.5 if z.crawl else 1.0))
 		if z.anim:
 			z.anim.speed_scale = 0.35 if z.crawl else 0.75
 		z.model.rotation.x = 1.25 if z.crawl else 0.0
@@ -171,6 +178,7 @@ func _damage(z: Zombie, b: Dictionary) -> void:
 			dmg = p[2]
 			break
 		r -= p[1]
+	dmg *= float(b.get("k", 1.0))
 	z.hp -= dmg
 	var hit_p := Vector3(b.x * WorldGen.T, b.z, b.y * WorldGen.T)
 	for i in 4:

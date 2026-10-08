@@ -3,7 +3,7 @@
 # без деформации сетки: целевой поворот = (поворот источника × обратный покой источника) × покой цели.
 # Запуск: python -I build_swat.py <Swat.fbx> <Animations/Male Iglesias> <выход.glb>
 # Окружение: RB_ANIMS (папка записей Rocketbox), RB_MODEL (Military_Male_03/Export/Military_Male_03.fbx — T-покой Rocketbox),
-#            RIFLE_HOLD (json от extract_rifle_hold.py), KI_BLEND (HumanM_SoldierAnimationsFREE_2.0.blend), SWIM (опц.: json+glb плавания)
+#            RIFLE_HOLD / PISTOL_HOLD (json от extract_hold.py), KI_BLEND (HumanM_SoldierAnimationsFREE_2.0.blend), SWIM (опц.: json+glb плавания)
 import sys, os, math, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from swat_common import *
@@ -17,7 +17,9 @@ RB_CLIPS = {'Idle': 'm_idle_neutral_01', 'WalkSlow': 'm_walk_slow_01', 'Walk': '
             'WalkStart': 'm_walk_start', 'RunStart': 'm_run_start', 'WalkStop': 'm_walk_stop', 'RunStop': 'm_run_stop'}
 CLIPS = {'MilIdle': 'Idles/HumanM@MilitaryIdle01', 'AimAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Aim01',
          'ShootAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Aim01_Shoot01', 'ReloadAR': 'Combat/AssaultRifle/HumanM@AssaultRifle_Reload01',
-         'HoldAR': '../Masked Poses/HumanM@WeaponHold_AssaultRifle01'}      # поза «автомат наготове» (только руки и кисти)
+         'HoldAR': '../Masked Poses/HumanM@WeaponHold_AssaultRifle01',      # поза «автомат наготове» (только руки и кисти)
+         'AimPistol': 'Combat/Gun/HumanM@Gun_Aim02', 'ShootPistol': 'Combat/Gun/HumanM@Gun_Aim02_Shoot01',
+         'ReloadPistol': 'Combat/Gun/HumanM@Gun_Reload02'}
 for _d in ('Forward', 'Backward', 'Left', 'Right', 'ForwardLeft', 'ForwardRight', 'BackwardLeft', 'BackwardRight'):
     CLIPS['SWalk' + _d] = f'Movement/Walk/HumanM@Walk01_{_d}'
     CLIPS['SRun' + _d] = f'Movement/Run/HumanM@Run01_{_d}'
@@ -172,13 +174,13 @@ if os.environ.get('SWIM'):
     exec(open(os.environ['SWIM']).read())
 
 # ---------- автомат на правой кисти (меш со скином, хват из .blend Iglesias) ----------
-def attach_rifle():
-    hold = json.load(open(os.environ['RIFLE_HOLD']))
+def attach_weapon(obj_name, env, key, mat_name):
+    hold = json.load(open(os.environ[env]))
     with bpy.data.libraries.load(os.environ['KI_BLEND']) as (sd, dd):
         dd.meshes = [hold['mesh']]
     me = dd.meshes[0]
-    rifle = bpy.data.objects.new('Rifle', me); bpy.context.scene.collection.objects.link(rifle)
-    mat = bpy.data.materials.new('RifleMat'); mat.use_nodes = True
+    rifle = bpy.data.objects.new(obj_name, me); bpy.context.scene.collection.objects.link(rifle)
+    mat = bpy.data.materials.new(mat_name); mat.use_nodes = True
     nt = mat.node_tree; bsdf = nt.nodes['Principled BSDF']
     tex = nt.nodes.new('ShaderNodeTexImage')
     tex.image = bpy.data.images.load(ANIMS.replace('Animations/Male', 'Textures/HumanAnimations_ColorPalette.png'))
@@ -197,9 +199,10 @@ def attach_rifle():
     vg = rifle.vertex_groups.new(name=MX + 'RightHand'); vg.add(range(len(me.vertices)), 1.0, 'REPLACE')
     mod = rifle.modifiers.new('Armature', 'ARMATURE'); mod.object = tgt
     def g(v): w = W @ Vector(v); return [round(w.x, 4), round(w.z, 4), round(-w.y, 4)]
-    SPEEDS['rifle'] = {'muzzle': g(hold['muzzle']), 'port': g(hold['port']), 'butt': g(hold['butt'])}
-    print('RIFLE attached', SPEEDS['rifle'])
-attach_rifle()
+    SPEEDS[key] = {'muzzle': g(hold['muzzle']), 'port': g(hold['port']), 'butt': g(hold['butt'])}
+    print('WEAPON attached', key, SPEEDS[key])
+attach_weapon('Rifle', 'RIFLE_HOLD', 'rifle', 'RifleMat')
+attach_weapon('Pistol', 'PISTOL_HOLD', 'pistol', 'PistolMat')
 for o in list(new_ig): bpy.data.objects.remove(o)
 json.dump(SPEEDS, open(OUT.replace('.glb', '_speeds.json'), 'w'))
 for pb in tgt.pose.bones:

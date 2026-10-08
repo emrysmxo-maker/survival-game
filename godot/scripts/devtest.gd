@@ -6,6 +6,11 @@ static func _yaw(d: Vector2) -> float:
 	return atan2(d.x, d.y)
 
 static func run(m, dt: float) -> void:
+	if OS.get_cmdline_user_args().has("--weapon=pistol") and not m.player.has_pistol:
+		m.player.has_pistol = true
+		m.player.ammo["pistol"] = 12
+		m.player.reserve["pistol"] = 24
+		m.player.set_weapon("pistol")
 	if m._test_script == "run" and Engine.get_process_frames() % 10 == 0:
 		var an = m.player.anim
 		print("ANIM name=", an.current_animation, " playing=", an.is_playing(), " pos=", snappedf(an.current_animation_position, 0.01), " foot=", snappedf(m.player.foot_offset(), 0.001))
@@ -71,7 +76,9 @@ static func run(m, dt: float) -> void:
 				m.zombies.spawn(); m.zombies.spawn()
 				m.zombies.list[0].tile = m.player.tile + Vector2(3, 1)
 				m.zombies.list[1].tile = m.player.tile + Vector2(-1, 3)
-			m.weapon.auto = m._tt > 1.0
+			m.weapon.auto = m._tt > 1.0 and not OS.get_cmdline_user_args().has("--noauto")
+			if Engine.get_process_frames() % 30 == 0:
+				print("ZT t=", snappedf(m._tt, 0.1), " hp=", snappedf(m.player.hp, 0.1), " ammo=", m.player.ammo, " res=", m.player.reserve, " reload=", snappedf(m.player.reload_t, 0.01))
 		"behind":
 			if not m.has_meta("done"):
 				m.set_meta("done", true)

@@ -69,8 +69,42 @@ var _anim_speed := 1.0
 var RIFLE_BUTT := Vector3.ZERO
 var rifle_len := 0.6
 var rifle_pts := {}                 # дуло/приклад/окно в покое (координаты файла модели) — из survivor_speeds.json
+var pistol_pts := {}
 var rifle_mesh: Node3D
+var pistol_mesh: Node3D
 var glb: Node3D
+
+# --- оружие, здоровье, снаряжение ---
+var weapon_kind := "rifle"          # "rifle" (автомат) | "pistol"
+var has_pistol := false             # пистолет — находится лутом
+var ammo := {"rifle": 30, "pistol": 0}          # в магазине
+var reserve := {"rifle": 90, "pistol": 0}       # в запасе
+const MAG := {"rifle": 30, "pistol": 12}
+var reload_t := 0.0                 # >0 — идёт перезарядка (сек осталось)
+var reload_len := 1.7
+var fire_blend := 0.0               # 0..1 — запись выстрела поверх прицела (пока жмёт огонь)
+var hp := 100.0
+var armor := 0.0                    # 0..100: каска +25, бронежилет +50 — режет урон
+var helmet := false
+var vest := false
+var hurt_t := 0.0                   # вспышка «ранен» на экране
+
+func set_weapon(w: String) -> void:
+	if w == "pistol" and not has_pistol:
+		return
+	if w != weapon_kind:
+		weapon_kind = w
+		reload_t = 0.0
+
+func start_reload() -> void:
+	var w := weapon_kind
+	if reload_t > 0.0 or ammo[w] >= MAG[w] or reserve[w] <= 0:
+		return
+	reload_t = reload_len
+
+func take_damage(d: float) -> void:
+	hp -= d * (1.0 - clampf(armor, 0.0, 100.0) / 160.0)
+	hurt_t = 0.35
 
 func _ready() -> void:
 	var scn: PackedScene = load("res://assets/character/Survivor.glb")
@@ -95,10 +129,11 @@ func _ready() -> void:
 			for gi in GAIT_NAMES.size():
 				if sp.has(GAIT_NAMES[gi]) and float(sp[GAIT_NAMES[gi]]) > 0.1:
 					_gait_mps[gi] = float(sp[GAIT_NAMES[gi]]) * CHAR_SCALE
-			if sp.has("rifle"):
-				for kk in sp["rifle"]:
-					var a: Array = sp["rifle"][kk]
-					rifle_pts[kk] = Vector3(a[0], a[1], a[2])
+			for wk in ["rifle", "pistol"]:
+				if sp.has(wk):
+					for kk in sp[wk]:
+						var a: Array = sp[wk][kk]
+						(rifle_pts if wk == "rifle" else pistol_pts)[kk] = Vector3(a[0], a[1], a[2])
 	_make_rifle()
 	add_xray(model, true)
 	blob = make_blob(0.75)
@@ -137,6 +172,7 @@ func _make_rifle() -> void:
 	rifle_rig = Node3D.new()
 	model.add_child(rifle_rig)
 	rifle_mesh = glb.find_child("Rifle", true, false)
+	pistol_mesh = glb.find_child("Pistol", true, false)
 	# вспышка у дула: два перекрещенных язычка + звезда, аддитивно
 	muzzle_flash = Node3D.new()
 	rifle_rig.add_child(muzzle_flash)
@@ -268,6 +304,17 @@ func step(dt: float, stick: Vector2, aim_stick: Vector2, aim_active: bool, fire_
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, dt * 9.0 * (1.0 if aiming else 0.6))
 	recoil = maxf(0.0, recoil - dt * 14.0)
 	flash_t = maxf(0.0, flash_t - dt)
+	fire_blend = move_toward(fire_blend, 1.0 if (firing and reload_t <= 0.0) else 0.0, dt * (10.0 if firing else 4.0))
+	hurt_t = maxf(0.0, hurt_t - dt)
+	hp = minf(100.0, hp + dt * 0.8)          # медленно заживает
+	if reload_t > 0.0:
+		reload_t -= dt
+		if reload_t <= 0.0:
+			reload_t = 0.0
+			var w := weapon_kind
+			var n: int = mini(MAG[w] - ammo[w], reserve[w])
+			ammo[w] += n
+			reserve[w] -= n
 	muzzle_flash.visible = flash_t > 0.0
 
 	# --- тело: как в нормальных шутерах. Целится — боец ЛИЦОМ к цели (разворот с конечной скоростью, шагая ногами),

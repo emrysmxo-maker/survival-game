@@ -16,6 +16,7 @@ var world
 var player
 var weapon
 var zombies
+var loot
 var effects
 var daynight
 var settings
@@ -68,6 +69,10 @@ func _ready() -> void:
 	zombies.effects = effects
 	add_child(zombies)
 	weapon.zombies = zombies
+	loot = load("res://scripts/loot.gd").new()
+	loot.player = player
+	loot.world = world
+	add_child(loot)
 
 	cam = Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -83,6 +88,7 @@ func _ready() -> void:
 	hud = load("res://scripts/hud.gd").new()
 	hud.main = self
 	add_child(hud)
+	loot.hud = hud
 	var ui := CanvasLayer.new()
 	ui.layer = 0
 	add_child(ui)
@@ -194,6 +200,17 @@ func _process_game(dt: float) -> void:
 	weapon.update_weapon(dt, player.firing)
 	water_fx.update_fx(dt)
 	zombies.update_zombies(dt)
+	loot.update_loot(dt)
+	if player.hp <= 0.0:
+		# погиб: возрождение в лагере, снаряжение теряется (броня), оружие и патроны остаются
+		player.hp = 100.0
+		player.armor = 0.0
+		player.helmet = false
+		player.vest = false
+		for z in zombies.list:
+			z.dead = true
+		teleport(_start)
+		hud.toast("Ты погиб. Возрождение в лагере")
 	world.update_world(player.tile, cam)
 	_xray_t -= dt
 	if _xray_t <= 0.0:

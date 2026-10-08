@@ -3,7 +3,9 @@ extends Node3D
 # пыль/щепки в месте попадания, автострельба по ближнему зомби.
 # Перенос src/weapon.js.
 
-const FIRE_INTERVAL := 0.11
+const FIRE_INTERVAL := {"rifle": 0.11, "pistol": 0.30}
+const DMG_K := {"rifle": 1.0, "pistol": 1.35}     # пистолет — реже, но тяжелее пуля
+const SPREAD_K := {"rifle": 1.0, "pistol": 1.6}
 const BULLET_SPEED := 30.0     # тайлов/с
 const BULLET_LIFE := 0.55
 const BULLET_SPREAD := 0.02
@@ -74,10 +76,18 @@ func update_weapon(dt: float, firing: bool) -> void:
 	if _warm < 3:
 		_warm_up()
 	cooldown -= dt
-	var ready: bool = player.aim_blend > 0.75 and player.barrel_on_target()
+	var w: String = player.weapon_kind
+	var ready: bool = player.aim_blend > 0.75 and player.barrel_on_target() and player.reload_t <= 0.0
 	if firing and ready and cooldown <= 0.0:
-		_shoot()
-		cooldown = FIRE_INTERVAL
+		if player.ammo[w] > 0:
+			player.ammo[w] -= 1
+			_shoot()
+			cooldown = FIRE_INTERVAL[w]
+			if player.ammo[w] == 0:
+				player.start_reload()          # магазин пуст — перезарядка сама
+		else:
+			player.start_reload()
+			cooldown = 0.3
 	_update_bullets(dt)
 	_update_casings(dt)
 	_update_puffs(dt)
@@ -87,7 +97,8 @@ func _shoot() -> void:
 	_gun_sound()
 	var mz: Vector3 = player.muzzle_world()
 	var dir3: Vector3 = player.barrel_dir()
-	var d := Vector2(dir3.x, dir3.z).normalized().rotated(randf_range(-BULLET_SPREAD, BULLET_SPREAD))
+	var sk: float = SPREAD_K[player.weapon_kind]
+	var d := Vector2(dir3.x, dir3.z).normalized().rotated(randf_range(-BULLET_SPREAD, BULLET_SPREAD) * sk)
 	var tr: MeshInstance3D = _tracer_pool.pop_back() if not _tracer_pool.is_empty() else null
 	if tr == null:
 		tr = MeshInstance3D.new()
@@ -96,7 +107,7 @@ func _shoot() -> void:
 		tr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(tr)
 	tr.visible = true
-	var b := {"x": mz.x / WorldGen.T, "y": mz.z / WorldGen.T, "z": mz.y, "dx": d.x, "dy": d.y, "vz": clampf(dir3.y, -0.3, 0.3), "age": 0.0, "node": tr}
+	var b := {"x": mz.x / WorldGen.T, "y": mz.z / WorldGen.T, "z": mz.y, "dx": d.x, "dy": d.y, "vz": clampf(dir3.y, -0.3, 0.3), "age": 0.0, "node": tr, "k": DMG_K[player.weapon_kind]}
 	bullets.append(b)
 	_place_bullet(b)
 	# дымок у дула
