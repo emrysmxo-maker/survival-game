@@ -1,0 +1,39 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://c2cxbd0h8k8dq"
+path.s3tc="res://.godot/imported/pine_leaf_pine_twig_n.jpg-082dacbc74fa6e92f2a081eb4242e5fa.s3tc.ctex"
+path.etc2="res://.godot/imported/pine_leaf_pine_twig_n.jpg-082dacbc74fa6e92f2a081eb4242e5fa.etc2.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "d9f047aeefab4eaefb2540998c3e6281"
+}
+
+[deps]
+
+source_file="res://assets/models/pine_leaf_pine_twig_n.jpg"
+dest_files=["res://.godot/imported/pine_leaf_pine_twig_n.jpg-082dacbc74fa6e92f2a081eb4242e5fa.s3tc.ctex", "res://.godot/imported/pine_leaf_pine_twig_n.jpg-082dacbc74fa6e92f2a081eb4242e5fa.etc2.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=1

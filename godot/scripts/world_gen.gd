@@ -63,16 +63,16 @@ const ZONES := [
 	{"name": "Западный ельник", "x": -160.0, "y": 20.0, "canopy": [["FIR", 4], ["PINE", 2], ["BIRCH", 1]], "bias": 0.78, "dens": 4, "dead": 0.06, "fern": 1.0, "grass": 0.3, "shrub": 0.4},
 ]
 
-# ---------- лес: наборы картинок-импосторов (assets/imp, запечены из моделей Poly Haven CC0 и EZ-Tree MIT) ----------
-const FIR := ["fir_a_0", "fir_a_1", "fir_b_0", "fir_b_1", "fir_c_0", "fir_c_1"]
-const PINE := ["pine_a_0", "pine_a_1", "pine_b_0", "pine_b_1", "pine_c_0", "pine_c_1"]
-const BROAD := ["broad1_0", "broad1_1", "broad2_0", "broad2_1", "smalltree_0", "smalltree_1"]
-const BIRCH := ["aspen0_0", "aspen1_0"]     # берёзы пока нет: жакаранда (перистые листья) удалена, на её месте — лиственное деревце
-const OAK := ["oak0_0", "oak1_0"]
-const ASPEN := ["aspen0_0", "aspen1_0"]
-const DEAD := ["dead0_0", "dead1_0", "dead2_0"]
-const SAP_SMALL := ["firsap_a", "firsap_b", "firsap_c", "pinesap_a", "pinesap_b", "pinesap_c"]
-const SAP_MED := ["firsapm_a", "firsapm_b", "firsapm_c", "pinesapm_a", "pinesapm_b", "pinesapm_c"]
+# ---------- лес: свои деревья из Blender (tools/trees/treegen.py), настоящие размеры ----------
+const FIR := ["spruce_a", "spruce_b", "spruce_c"]
+const PINE := ["pine_a", "pine_b", "pine_c"]
+const BIRCH := ["birch_a", "birch_b", "birch_c"]
+const BROAD := ["birch_a", "birch_b", "birch_c"]     # TODO осина/дуб/ольха — следующими породами
+const OAK := ["birch_a", "birch_b", "birch_c"]
+const ASPEN := ["birch_a", "birch_b", "birch_c"]
+const DEAD := ["pine_dead_a", "spruce_dead_a"]
+const SAP_SMALL := ["spruce_sap_a", "pine_sap_a", "birch_sap_a"]
+const SAP_MED := ["spruce_sap_b", "pine_sap_b", "birch_sap_b"]
 const SHRUB := ["shrub2_a", "shrub2_b", "shrub2_c", "shrub2_d", "shrub3_a", "shrub3_b", "shrub3_c", "shrub3_d", "shrub4"]
 const FERN := ["fern_a", "fern_b", "fern_c", "fern_d"]
 const NETTLE := ["nettle_medium_a", "nettle_medium_b", "nettle_small_a", "nettle_small_b", "nettle_tall_a", "nettle_tall_b"]
@@ -437,7 +437,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 	var objs: Array = []
 	var trees: Array = []
 	# 1) деревья: массивы леса (густо) и рощицы; на лугах и в полях пусто
-	var cap: int = 7 + int(eco.dens) * 2          # зона «густая» — до 17 деревьев на чанк, «поле» — до 9 в роще
+	var cap: int = 3 + int(eco.dens)              # деревья в настоящий размер (крона 6–9 м): до 8 на чанк 10×10 м
 	for i in 90:
 		if trees.size() >= cap:
 			break
@@ -450,7 +450,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var td := tree_density(x, y)
 		if td < 0.04 or rd > td:
 			continue
-		var spacing := 2.2 + (1.0 - td) * 1.4
+		var spacing := 4.8 + (1.0 - td) * 2.4         # 4–6 м между стволами (в тайлах по 0.84 м), как в спелом лесу
 		var ok := true
 		for t in trees:
 			if Vector2(t.x - x, t.y - y).length() < spacing:

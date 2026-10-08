@@ -20,7 +20,7 @@ var kinds := {}            # вид -> {"mmis": [MultiMeshInstance3D], "pre", "b
 var kinds_meta := {}
 var _scenes := {}
 var gallery := OS.get_cmdline_user_args().has("--gallery")
-const TREE_K := 0.5                     # масштаб деревьев (1.0 — как раньше)
+const TREE_K := 1.0                     # деревья в настоящий размер (было 0.5 — из-за этого дома были выше деревьев)
 var crown_shadows := true
 var _noplants := OS.get_cmdline_user_args().has("--noplants")
 var ground_detail := true:
@@ -148,13 +148,17 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 	if shadow and not leaf.is_empty():
 		var pm := MultiMesh.new()
 		pm.transform_format = MultiMesh.TRANSFORM_3D
-		pm.mesh = _crown_mesh(key.begins_with("fir") or key.begins_with("pine"))
+		pm.mesh = _crown_mesh(int(kd.get("crown", [0, 0, 0, 0])[3]) == 1 if kd.has("crown") else (key.begins_with("fir") or key.begins_with("pine")))
 		proxy = MultiMeshInstance3D.new()
 		proxy.multimesh = pm
 		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		proxy.extra_cull_margin = 2.0
 		add_child(proxy)
 	kinds[key] = {"proxy": proxy, "mmis": mmis, "pre": pre, "bs": bs, "top": top * bs, "cr": maxf(aabb.size.x, aabb.size.z) * 0.5 * bs * 0.7, "flat": flat, "cat": cat, "yaw": deg_to_rad(float(kd.yaw))}
+	if kd.has("crown"):              # крона из генератора: центр и полуось по высоте (доли), радиус (м)
+		kinds[key]["cy"] = float(kd.crown[0])
+		kinds[key]["cv"] = float(kd.crown[1])
+		kinds[key]["cr"] = float(kd.crown[2]) * bs
 
 # Нерегулярная крона для тени: хвойные — стопка конусов, лиственные — кучка шаров
 static var _crown_cache := {}
@@ -442,8 +446,8 @@ func _rebuild_sprites() -> void:
 				var o := i * 12
 				var sc: float = sqrt(buf[o] * buf[o] + buf[o + 4] * buf[o + 4] + buf[o + 8] * buf[o + 8]) / kd.bs
 				var rh: float = kd.cr * sc
-				var rv: float = kd.top * (0.3 if tall else 0.5) * sc
-				var ey: float = kd.top * (0.62 if tall else 0.5) * sc
+				var rv: float = kd.top * float(kd.get("cv", 0.3 if tall else 0.5)) * sc
+				var ey: float = kd.top * float(kd.get("cy", 0.62 if tall else 0.5)) * sc
 				var k: float = 1.0 / (sc * float(kd.bs))
 				for r in 3:
 					pb[o + r * 4] = buf[o + r * 4] * k * rh

@@ -39,7 +39,7 @@ void vertex() {
 void fragment() {
 	vec4 c = texture(albedo_tex, UV);
 	if (c.a < alpha_cut) { discard; }
-	ALBEDO = c.rgb * tint.rgb;
+	ALBEDO = c.rgb * tint.rgb * COLOR.rgb;     // затенение внутри кроны (цвет вершин; без него — белый)
 	ROUGHNESS = 0.9;
 	if (has_normal) { NORMAL_MAP = texture(normal_tex, UV).rgb; }
 	BACKLIGHT = c.rgb * translucency;
