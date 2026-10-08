@@ -9,7 +9,7 @@
 - После каждой правки: коммит в `main` + push + дать ссылку на APK. Обновлять `CHANGES_DRAFT.md`. Версию в `hud.gd` вручную НЕ менять — CI подставляет «сборка N · коммит» сам (то же написано в описании Release).
 - Сначала замерить причину (лог/числа), потом чинить. Не гадать. Одна проблема за раз.
 - «Пока обсуждаем / ничего не делай» — не запускать ничего.
-- Инструменты: ТОЛЬКО Blender (bpy) и Godot. Игру не запускать для снимков/записи кадров (без xvfb-снимков, --shot/--shots) — проверять расчётом/логом в Godot headless и в Blender.
+- Инструменты: ТОЛЬКО Blender (bpy) и Godot. Снимки игры РАЗРЕШЕНЫ (владелец снял запрет): `bash tools/ci/task.sh shot x:y[:cam[:yaw[:elev[:time]]]]/...` — проверять вид снимками, числа — логом.
 - Рабочий цикл: правка кода → проверка разбора (`godot --headless --path godot -s res://scripts/parsecheck.gd` — грузит все скрипты/шейдеры) → коммит+push → ссылка. Скриншоты/тесты на экране — только если меняется вид или владелец просит.
 - Не тратить токены: не читать файлы целиком без нужды, не переделывать решённое.
 
@@ -42,7 +42,7 @@
 - Сборка 70: ДЕРЕВЬЯ СВОИ (Blender, `tools/trees/treegen.py`): берёза/сосна/ель + подрост и сухостой, настоящие высоты (15–25 м), `TREE_K`=1; ствол трубками с процедурной корой, листва — карточки-веточки (детальная ветка отрисована в текстуру + нормали). Старые деревья Poly Haven удалены. Пересборка: `/tmp/claude-0/blender/v/bin/python -I tools/trees/treegen.py /tmp/claude-0/trees/game` → копировать `*_wood.glb/*_leaf.glb` в `godot/assets/models`, `kinds_trees.json` влить в `kinds.json`, `godot --headless --import`. Показ: `tools/trees/show.py`; проверка: `scripts/treecheck.gd`. Эталон реализма — `tools/trees/birch.py`. План — `docs/ПЛАН.md`, промт — `docs/ПРОМТ.md`. Нужен новый APK (apk_min 70).
 - Сборка 71: + осина, дуб, ольха, ива, яблоня (`tools/trees/broadleaf.py`); у воды — ольха/ива; яблони пока не расставлены (дворы). Дубрава тяжёлая (1,6 млн тр. на 70×70 м) — LOD на этапе 2. Нужен новый APK (apk_min 71).
 - Сборка 72: fps без ограничения (⚙ «Кадры: максимум / 60», `settings.fps_max`), счётчик ср./мин.; LOD деревьев — 3 версии (узлы `<вар>_l1/_l2`, `kinds.lods`; `world.set_lod` по `main.cam_size`: ≤24 м / ≤40 м / дальше); радиус загрузки чанков по камере (`MAX_LOAD_R` 8, выгрузка +`DROP_MARGIN` 2). Проверка разбора всех скриптов: `godot --headless --path godot -s res://scripts/parsecheck.gd`. Нужен новый APK (apk_min 72).
-- Сборка 73: земля — `macro_tex` (шум) для анти-повтора, пятен и луж; камни группами. Шейдеры проверять запуском на программном Vulkan только по логу ошибок (`--quit-after 40 main.tscn`), без снимков.
+- Сборка 73: земля — `macro_tex` (шум) для анти-повтора, пятен и луж; камни группами. Шейдеры — `task.sh shaders` (лог ошибок) и `task.sh shot`.
 - Сборка 74: ДОМА `tools/houses/house.py` (полые, 1:1, фото-текстуры Poly Haven 1K + нормали, `get_tex.py` → /tmp/claude-0/houses/tex, для игры ужать в tex_game: цвет 1024 q78, нормали 512), крыша — узел `<дом>_roof`; сборка в props.glb: `HOUSE_TEX=/tmp/claude-0/houses/tex_game python -I tools/props/build_all.py …` (новые дома заменяют старые с тем же именем; ещё fence_prof_a/b, fence_mil_a/b, concrete_pad). `props.gd`: S=1, улицы `_street` (прямые, участки `_plot`, проверка `_plot_ok`, причины отказов в логе «props:»), посёлок `h_poselok`, бункер `_bunker`. `WorldGen.add_clear/cleared/add_tree` — дворы без леса, сады. Нужен новый APK (apk_min 74).
 - Сборка 76: МАШИНЫ `tools/cars/car.py` (кузов по сечениям, разметка граней: стёкла/фары/номера; колёса, салон; `JOBS` — старые имена car_sedan_* и т.д. заменены, новые car_solaris_silver, car_duster_brown, car_police, car_ambulance, car_fire…), входят в props.glb через build_all; списки `CARS`/`YARD_CARS` в props.gd. Нужен новый APK (apk_min 76).
 - Сборка 77: асфальт на ROADS (`asphalt_dist`, terrain t[8], канал дороги: 0–0,5 грунт / 0,5–1 асфальт), разметка `road_dash`, мосты `bridge` (`_road_marks`), провода `wire_unit` между столбами (`_wires`), знаки `sign_town/round/info`, фонари `lamp_post` на улицах. Нужен новый APK (apk_min 77).
@@ -63,9 +63,11 @@
 - Инструменты: `tools/models/prep_models.py` (оригиналы → игровые glb: gltfpack + сокращение карточек листвы), `make_kinds.py`. Оригиналы моделей лежат вне репозитория (скачивать с Poly Haven).
 
 ## Как проверять без телефона
-Godot: `/tmp/claude-0/godot/Godot_v4.3-stable_linux.x86_64` (если нет — скачать 4.3-stable). Видеокарты нет — программный Vulkan:
-`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json xvfb-run -a godot --path godot --rendering-driver vulkan --rendering-method mobile -- --shot=/tmp/x.png --at=6 --time=12 --nofade`
-ВАЖНО: локально добавлять `--updurl=http://127.0.0.1:1/` — иначе игра скачает code.pck с GitHub и покажет НЕ локальный код. Доп. аргументы: `--cam=<размер>`, `--camyaw=`, `--camelev=`, `--test=run|runaim|behind|fireback|zombie`, `--gallery`, `--fixeddt=`. После смены .glb: `godot --headless --import`. Без `--nofade` снимок чёрный.
+- Установка всего (Godot 4.3, Blender bpy 5.2.2, текстуры) в новом контейнере: `bash tools/ci/setup.sh` (~1 мин, повторно не качает).
+- Задачи: `bash tools/ci/task.sh <задача>` — список в начале файла: parsecheck, shot, blender <файл.py>, godot <файл.gd>, props, trees, houses/cars/places (превью), scene, mapcheck, treecheck, shaders. Результаты — в `$OUT` (/tmp/claude-0/out).
+- Снимок игры: `task.sh shot -43:-97:30/166:-133:12` → `$OUT/shots/shot_<точка>_<кадр>.png` (`scripts/shot.gd`: `--shot=папка --views=… --shots=N --every=с --wait=с`; ~40 с на точку на программном Vulkan, fps на снимках не настоящие). Вручную: `--updurl=http://127.0.0.1:1/` обязательно, иначе игра скачает code.pck с GitHub.
+- То же на сервере GitHub: workflow «Tools» (`.github/workflows/tools.yml`, ручной запуск: task + args) → результат в ветке `tools-out`. Инструкция для других ИИ — `docs/ДЛЯ_ИИ.md`.
+- Модели: если скрипты `tools/props|houses|cars|trees` изменены, а .glb не пересобраны, сборка APK пересоберёт их сама (`tools/ci/models.sh check`). После своей пересборки и коммита .glb — `bash tools/ci/models.sh stamp`.
 
 ## Сборка и выдача
 Push в `main` → GitHub Actions собирает APK → Release `godot-latest`: https://github.com/emrysmxo-maker/survival-game/releases/download/godot-latest/survival-godot.apk (APK >100 МБ, в репозиторий не кладётся).

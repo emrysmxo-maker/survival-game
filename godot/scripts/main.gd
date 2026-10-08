@@ -80,6 +80,11 @@ func _ready() -> void:
 	teleport(focus)
 	if OS.get_cmdline_user_args().has("--bigmap"):
 		hud._open_big()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--shot="):                        # снимки без телефона (scripts/shot.gd)
+			var sh = load("res://scripts/shot.gd").new()
+			sh.main = self
+			add_child(sh)
 
 func teleport(t: Vector2) -> void:
 	var lim := WorldGen.MAP_RADIUS - 5.0

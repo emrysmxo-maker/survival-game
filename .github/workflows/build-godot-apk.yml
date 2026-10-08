@@ -46,6 +46,39 @@ jobs:
           EOT
           sed -i 's/^ *//' ~/.config/godot/editor_settings-4.tres
 
+      - name: Модели устарели? (скрипты Blender менялись, а .glb нет)
+        id: models
+        run: echo "stale=$(bash tools/ci/models.sh check | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v5
+        if: steps.models.outputs.stale != ''
+        id: py
+        with:
+          python-version: "3.13"
+
+      - name: Кэш Blender/текстур
+        if: steps.models.outputs.stale != ''
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/claude-0/godot
+            /tmp/claude-0/blender
+            /tmp/claude-0/props/tex
+            /tmp/claude-0/houses
+            /tmp/claude-0/trees/dl
+          key: tools-${{ steps.py.outputs.python-version }}-${{ hashFiles('tools/ci/setup.sh', 'tools/ci/*.py', 'tools/props/tex.py', 'tools/houses/get_tex.py') }}
+
+      - name: Пересборка моделей в Blender
+        if: steps.models.outputs.stale != ''
+        env:
+          PYTHON313: ${{ steps.py.outputs.python-path }}
+          GODOT: /home/runner/godot/godot
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxrender1 libxi6 libxkbcommon0 libsm6 libgl1 libxxf86vm1 libxfixes3 libegl1 >/dev/null
+          bash tools/ci/setup.sh
+          for m in ${{ steps.models.outputs.stale }}; do bash tools/ci/task.sh $m; done
+          bash tools/ci/models.sh stamp
+
       - name: Import and export APK
         env:
           GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ github.workspace }}/android/android.keystore
@@ -60,11 +93,16 @@ jobs:
           echo "${{ github.run_number }}" > apk_build.txt
           mkdir -p build
           ~/godot/godot --headless --path . --import || true
+          # не выпускать сломанную сборку: все скрипты и шейдеры должны разбираться
+          ~/godot/godot --headless --path . -s res://scripts/parsecheck.gd 2>&1 | tee /tmp/parse.log | tail -20
+          grep -q "PARSECHECK ok" /tmp/parse.log
           ~/godot/godot --headless --path . --export-release "Android" build/survival-godot.apk
           # маленький пакет с кодом (скрипты, шейдеры, сцены): игра на телефоне докачивает его сама
           ~/godot/godot --headless --path . --export-pack "Code" build/code.pck
           SIZE=$(stat -c%s build/code.pck)
           APKMIN=$(cat apk_min.txt | tr -d '[:space:]')
+          # модели пересобраны в этой сборке — старым APK нужен новый APK
+          if [ -n "${{ steps.models.outputs.stale }}" ]; then APKMIN=${{ github.run_number }}; fi
           echo "{\"build\":${{ github.run_number }},\"sha\":\"${GITHUB_SHA::7}\",\"size\":$SIZE,\"apk_min\":${APKMIN:-0}}" > build/update.json
           cat build/update.json
           ls -la build

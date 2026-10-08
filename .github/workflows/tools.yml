@@ -1,0 +1,104 @@
+# Godot + Blender на сервере GitHub: проверки, снимки игры, сборка и превью моделей, свои скрипты.
+# Запуск: Actions → Tools → Run workflow, или через API/коннектор GitHub (workflow_dispatch).
+# Код в репозиторий не пушит. Результат (лог, картинки, модели) — в ветке `tools-out` (папка out/) и во вложении запуска.
+# Подробно — docs/ДЛЯ_ИИ.md.
+name: Tools
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Задача из tools/ci/task.sh"
+        type: choice
+        default: parsecheck
+        options: [parsecheck, import, shot, blender, godot, treecheck, mapcheck, scene, shaders, props, houses, cars, places, trees, treeshow]
+      args:
+        description: "Аргументы (например -43:-97:30 · tools/x.py · village,farm · car_police)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tools
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TOOLS: /tmp/claude-0
+      OUT: /tmp/claude-0/out
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        id: py
+        with:
+          python-version: "3.13"
+
+      - name: Кэш Godot/Blender/текстур
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/claude-0/godot
+            /tmp/claude-0/blender
+            /tmp/claude-0/props/tex
+            /tmp/claude-0/houses
+            /tmp/claude-0/trees/dl
+          key: tools-${{ steps.py.outputs.python-version }}-${{ hashFiles('tools/ci/setup.sh', 'tools/ci/*.py', 'tools/props/tex.py', 'tools/houses/get_tex.py') }}
+
+      - name: Кэш импорта Godot
+        uses: actions/cache@v4
+        with:
+          path: godot/.godot
+          key: import-${{ hashFiles('godot/assets/**', 'godot/project.godot') }}
+          restore-keys: import-
+
+      - name: Системные библиотеки (bpy без экрана, программный Vulkan)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxrender1 libxi6 libxkbcommon0 libsm6 libgl1 libxxf86vm1 libxfixes3 libegl1 \
+            mesa-vulkan-drivers xvfb >/dev/null
+
+      - name: Установка Godot и Blender
+        env:
+          PYTHON313: ${{ steps.py.outputs.python-path }}
+        run: bash tools/ci/setup.sh
+
+      - name: Задача
+        env:
+          TASK: ${{ inputs.task }}
+          ARGS: ${{ inputs.args }}
+        run: |
+          set -o pipefail
+          mkdir -p "$OUT"
+          # аргументы — только имена, пути, числа и координаты (без команд оболочки)
+          if ! [[ "$ARGS" =~ ^[A-Za-z0-9_,.:@/\ -]*$ ]]; then echo "недопустимые символы в args"; exit 2; fi
+          {
+            echo "### task=$TASK args=$ARGS  коммит $(git rev-parse --short HEAD)"
+            bash tools/ci/task.sh "$TASK" $ARGS
+            echo "### изменённые файлы (не пушатся):"; git status --short | head -100
+          } 2>&1 | tee "$OUT/log.txt"
+
+      - name: Результат → ветка tools-out
+        if: always()
+        run: |
+          mkdir -p /tmp/pub/out && cp -r "$OUT"/. /tmp/pub/out/ 2>/dev/null || true
+          find /tmp/pub/out -type f -size +45M -delete
+          cd /tmp/pub
+          printf 'Запуск %s: task=%s args=%s, ветка %s, коммит %s\nЛог: out/log.txt\n%s\n' \
+            "${{ github.run_number }}" "${{ inputs.task }}" "${{ inputs.args }}" "${{ github.ref_name }}" "${{ github.sha }}" \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > README.md
+          git init -q -b tools-out && git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "tools run ${{ github.run_number }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" tools-out
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tools-out
+          path: /tmp/claude-0/out
+          retention-days: 7
