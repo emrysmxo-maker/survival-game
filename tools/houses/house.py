@@ -42,6 +42,7 @@ FLAT = {   # без текстуры: (цвет sRGB, шероховатость
 	"gas": ((0.85, 0.68, 0.10), 0.5, 0.2), "soot": ((0.05, 0.045, 0.04), 1.0, 0.0),
 	"stove": ((0.86, 0.85, 0.80), 0.95, 0.0), "wood_raw": ((0.50, 0.40, 0.29), 0.85, 0.0),
 	"rubber": ((0.08, 0.08, 0.08), 0.9, 0.0),
+	"headlight": ((0.80, 0.82, 0.84), 0.05, 0.6), "frame": ((0.08, 0.08, 0.08), 0.6, 0.4),
 }
 _MATS = {}
 
@@ -609,7 +610,66 @@ def concrete_pad(name, L, D):
 			hb.box(mat("concrete"), (-L / 2 + (i + 0.5) * L / nx, -D / 2 + (j + 0.5) * D / ny, 0.06), (L / nx - 0.04, D / ny - 0.04, 0.22), (c, c, c * 0.98))
 	return hb.build(name, ao=False), None
 
+def road_dash(name):
+	hb = HB()
+	hb.box(mat("frame_white"), (0, 0, 0.01), (3.0, 0.12, 0.02), (0.92, 0.92, 0.88))
+	return hb.build(name, ao=False), None
+
+def bridge(name):
+	"""Бетонный мост 18×7 м: пролётное строение, тротуары, металлические перила, опоры, асфальт сверху."""
+	hb = HB()
+	L, Wd = 18.0, 7.0
+	hb.box(mat("concrete"), (0, 0, -0.45), (L, Wd, 0.6), (0.8, 0.8, 0.78))                 # плита
+	hb.box(mat("block"), (0, 0, -0.13), (L, Wd - 1.6, 0.04), (0.35, 0.35, 0.37))              # асфальт
+	for sy in (-1, 1):
+		hb.box(mat("concrete"), (0, sy * (Wd / 2 - 0.4), -0.05), (L, 0.8, 0.2), (0.75, 0.75, 0.72))   # тротуар
+		hb.box(mat("metal_paint"), (0, sy * (Wd / 2 - 0.05), 0.95), (L, 0.06, 0.06), (0.35, 0.45, 0.4))  # перила
+		hb.box(mat("metal_paint"), (0, sy * (Wd / 2 - 0.05), 0.5), (L, 0.04, 0.04), (0.35, 0.45, 0.4))
+		for i in range(13):
+			hb.box(mat("metal_paint"), (-L / 2 + 0.3 + i * (L - 0.6) / 12, sy * (Wd / 2 - 0.05), 0.47), (0.06, 0.06, 0.95), (0.35, 0.45, 0.4))
+	for x in (-L / 2 + 0.6, -3.0, 3.0, L / 2 - 0.6):                                           # опоры
+		hb.box(mat("concrete"), (x, 0, -2.6), (0.9, Wd * 0.8, 4.0), (0.7, 0.7, 0.68))
+	return hb.build(name), None
+
+def sign(name, kind):
+	"""Дорожный знак на стойке: town — белый прямоугольник «населённый пункт» (без надписи), round — круглый (красная кайма), info — синий."""
+	hb = HB()
+	hb.cyl(mat("metal_paint"), (0, 0, 1.25), 0.035, 2.5, "Z", 8, col=(0.6, 0.6, 0.6))
+	if kind == "town":
+		hb.box(mat("frame_white"), (0, -0.04, 2.15), (1.0, 0.03, 0.6), (0.95, 0.95, 0.92))
+		hb.box(mat("frame_white"), (0, -0.06, 2.15), (0.85, 0.01, 0.12), (0.05, 0.05, 0.05))
+	elif kind == "round":
+		hb.cyl(mat("frame_white"), (0, -0.04, 2.1), 0.35, 0.03, "Y", 20, col=(0.75, 0.08, 0.06))
+		hb.cyl(mat("frame_white"), (0, -0.06, 2.1), 0.27, 0.01, "Y", 20, col=(0.95, 0.95, 0.92))
+		hb.box(mat("frame_white"), (0, -0.075, 2.1), (0.28, 0.01, 0.12), (0.05, 0.05, 0.05))
+	else:
+		hb.box(mat("frame_white"), (0, -0.04, 2.1), (0.7, 0.03, 0.7), (0.12, 0.3, 0.65))
+		hb.box(mat("frame_white"), (0, -0.06, 2.1), (0.12, 0.01, 0.45), (0.95, 0.95, 0.92))
+	return hb.build(name), None
+
+def lamp_post(name):
+	"""Уличный фонарь: бетонная опора 8 м, кронштейн, светильник."""
+	hb = HB()
+	hb.cyl(mat("concrete"), (0, 0, 4.0), 0.12, 8.0, "Z", 8, r2=0.08, col=(0.8, 0.8, 0.78))
+	hb.beam(mat("metal_paint"), (0, 0, 7.6), (1.4, 0, 7.9), 0.05, col=(0.4, 0.4, 0.4))
+	hb.box(mat("metal_paint"), (1.55, 0, 7.82), (0.6, 0.25, 0.12), (0.35, 0.35, 0.35))
+	hb.box(mat("headlight"), (1.55, 0, 7.75), (0.5, 0.2, 0.02), (1, 1, 1))
+	return hb.build(name), None
+
+def wire_unit(name):
+	"""Провод ЛЭП длиной 1 м вдоль X (растягивается при расстановке)."""
+	hb = HB()
+	hb.box(mat("frame"), (0.5, 0, 0), (1.0, 0.018, 0.018), (0.2, 0.2, 0.2))
+	return hb.build(name, ao=False), None
+
 EXTRA = {
+	"road_dash": lambda: road_dash("road_dash"),
+	"bridge": lambda: bridge("bridge"),
+	"sign_town": lambda: sign("sign_town", "town"),
+	"sign_round": lambda: sign("sign_round", "round"),
+	"sign_info": lambda: sign("sign_info", "info"),
+	"lamp_post": lambda: lamp_post("lamp_post"),
+	"wire_unit": lambda: wire_unit("wire_unit"),
 	"fence_prof_a": lambda: fence_prof("fence_prof_a", (0.62, 0.48, 0.40)),
 	"fence_prof_b": lambda: fence_prof("fence_prof_b", (0.36, 0.70, 0.42)),
 	"fence_mil_a": lambda: fence_mil("fence_mil_a", False),

@@ -43,7 +43,10 @@ void fragment() {
 	float m11 = texture(macro_tex, wm / 11.0 + vec2(0.31, 0.67)).r;
 	float m4 = texture(macro_tex, wm / 3.7 + vec2(0.71, 0.13)).r;
 	float mk = ssf(0.38, 0.62, m11);                         // анти-повтор — по шуму, а не правильным узором
-	float path = w1.r, swamp = w1.g, riverbed = w1.b, rocky = w1.a;
+	float rr = w1.r;                                         // 0..0,5 — грунтовая дорога, 0,5..1 — асфальт
+	float asph = clamp((rr - 0.5) * 2.0, 0.0, 1.0);
+	float path = rr < 0.5 ? clamp(rr * 2.0, 0.0, 1.0) : 0.0;
+	float swamp = w1.g, riverbed = w1.b, rocky = w1.a;
 	float water = w2.x, clearing = w2.y;
 	float w[8];
 	w[0] = 1.0;
@@ -71,6 +74,15 @@ void fragment() {
 	c *= bright;
 	c = mix(c, c * vec3(1.10, 1.03, 0.80), ssf(0.55, 0.8, m11) * (w[1] * 0.6 + clearing * 0.3));   // выгоревшая трава
 	c = mix(c, c * vec3(0.86, 1.04, 0.84), ssf(0.45, 0.2, m40) * 0.5);                             // сочная зелень в низинах
+	// асфальт: тёмный, с заплатками, трещинами и выбоинами (заброшено ~2 года)
+	if (asph > 0.0) {
+		vec3 ac = vec3(0.105, 0.105, 0.11) * mix(0.82, 1.18, m4) * mix(0.9, 1.1, m40);
+		ac = mix(ac, vec3(0.07, 0.07, 0.075), ssf(0.62, 0.66, m11) * 0.8);                 // заплатки
+		float crack = 1.0 - ssf(0.0, 0.035, abs(m4 - 0.5)) * 1.0;
+		ac = mix(ac, vec3(0.05, 0.05, 0.05), crack * 0.55 * ssf(0.4, 0.6, m11));              // трещины
+		ac = mix(ac, c * 0.8, ssf(0.72, 0.8, m40) * 0.6);                                     // земля и трава в выбоинах
+		c = mix(c, ac, asph);
+	}
 	// лужи на болоте — неровные, по шуму
 	float puddle = swamp * ssf(0.6, 0.7, m11 * 0.7 + m4 * 0.3) * 0.8;
 	c = mix(c, c * 0.45 + vec3(0.02, 0.04, 0.04), puddle);
@@ -85,6 +97,6 @@ void fragment() {
 		NORMAL_MAP = mix(nm, vec3(0.5, 0.5, 1.0), puddle);
 		NORMAL_MAP_DEPTH = 1.2;
 	}
-	ROUGHNESS = mix(mix(0.95, 0.78, water * 0.9), 0.12, puddle);     // мокрый песок матовый, глянец только в лужах
+	ROUGHNESS = mix(mix(mix(0.95, 0.85, asph), 0.78, water * 0.9), 0.12, puddle);     // мокрый песок матовый, глянец только в лужах
 	SPECULAR = mix(0.2, 0.6, wet);
 }

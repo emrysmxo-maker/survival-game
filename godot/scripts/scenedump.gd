@@ -26,6 +26,20 @@ func _init() -> void:
 				if Vector2(tx - st.x, ty - st.y).length() < lim:
 					var bs: Basis = xf.basis
 					out.props.append({"m": b.model, "p": [xf.origin.x, xf.origin.y, xf.origin.z], "b": [bs.x.x, bs.x.y, bs.x.z, bs.y.x, bs.y.y, bs.y.z, bs.z.x, bs.z.y, bs.z.z]})
+		# рельеф сеткой 1 тайл: высота и раскраска (вода, асфальт, грунт, лес)
+		var grid := []
+		var gx0 := floorf(st.x - lim)
+		var gy0 := floorf(st.y - lim)
+		var gn := int(lim * 2.0) + 1
+		for j in gn:
+			for i in gn:
+				var x := gx0 + i
+				var y := gy0 + j
+				var t := WorldGen.terrain(x, y)
+				var L := WorldGen.ground_layers_t(x, y, t)
+				var wa := WorldGen.water_at(x, y)
+				grid.append([snappedf(WorldGen.height_m(x, y), 0.01), snappedf(L[0], 0.01), snappedf(wa.x, 0.01), snappedf(wa.y * WorldGen.HK, 0.01), snappedf(WorldGen.forest_mask(x, y), 0.01)])
+		out["grid"] = {"x0": gx0 * WorldGen.T, "y0": gy0 * WorldGen.T, "n": gn, "step": WorldGen.T, "v": grid}
 		out["roads"] = []
 		for rd in WorldGen._roads:
 			var line := []

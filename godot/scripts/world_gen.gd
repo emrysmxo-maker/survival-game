@@ -199,6 +199,18 @@ static func init() -> void:
 		out.append({"pts": pts, "bb": bb.grow(4.0), "track": r in TRACKS})
 	_roads = out
 
+# расстояние до асфальтовых дорог (ROADS; просёлки и тропы — грунт)
+static func asphalt_dist(wx: float, wy: float) -> float:
+	var p := Vector2(wx, wy)
+	var d := 999.0
+	for r in _roads:
+		if r.track or not r.bb.has_point(p):
+			continue
+		var pts: PackedVector2Array = r.pts
+		for i in pts.size() - 1:
+			d = minf(d, p.distance_to(Geometry2D.get_closest_point_to_segment(p, pts[i], pts[i + 1])))
+	return d
+
 static func path_dist(wx: float, wy: float) -> float:
 	var p := Vector2(wx, wy)
 	var d := 999.0
@@ -275,9 +287,10 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 		h = lerpf(h, lvl - 0.04 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)          # дно: мелко у берега, глубже к центру
 	var rocky := ss(3.2, 5.2, hb) * 0.85
 	var pd := path_dist(wx, wy)
-	var path := ss(2.0, 0.8, pd)
+	var ad := asphalt_dist(wx, wy)
+	var path := maxf(ss(2.0, 0.8, pd), ss(3.6, 2.4, ad))
 	var lwet := ss(0.8, 1.0, lk.w) if lk.z >= 0.0 else 0.0     # мягкий переход «мокро» у кромки (без ступенек на текстуре)
-	return PackedFloat32Array([h, maxf(rwater, lwet), ravine, swamp, clearing, rocky, path, pd])
+	return PackedFloat32Array([h, maxf(rwater, lwet), ravine, swamp, clearing, rocky, path, pd, ad])
 
 static func lake_level(i: int) -> float:
 	return _lk[i * 5 + 4]
@@ -323,6 +336,13 @@ static func ground_layers(wx: float, wy: float) -> PackedFloat32Array:
 static func ground_layers_t(wx: float, wy: float, t: PackedFloat32Array) -> PackedFloat32Array:
 	var swamp := t[3]
 	var path := ss(1.9, 0.7, t[7]) * (1.0 - swamp * 0.7)
+	# асфальт (главные дороги ~4,5 м) с грунтовой обочиной; кодируется в том же канале: 0..0,5 — грунт, 0,5..1 — асфальт
+	var asph := ss(2.9, 2.2, t[8])
+	path = maxf(path, ss(3.7, 2.6, t[8]))
+	if asph > 0.01:
+		path = 0.5 + 0.5 * asph
+	else:
+		path *= 0.5
 	var lkb := lake_at(wx, wy)
 	var sand := ss(0.25, 1.0, lkb.w) * (1.0 - lkb.x * 0.0) if lkb.z >= 0.0 else 0.0     # песчаная полоса вокруг озёр
 	var riverbed := maxf(maxf(ss(2.6, 1.2, river_dist(wx, wy)), t[1]), sand)   # песок с галькой (Poly Haven coast_sand_01) — берега и дно

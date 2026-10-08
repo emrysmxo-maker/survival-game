@@ -92,6 +92,7 @@ func _ready() -> void:
 			_hamlet(key)
 	_rings()
 	_forest_houses()
+	_road_marks()
 	_road_stuff()
 	_fields()
 	_flush()
@@ -152,7 +153,7 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 	if not _meshes.has(model):
 		return false
 	var t := WorldGen.terrain(tx, ty)
-	var wet_ok := model == "pier" or model.begins_with("boat")
+	var wet_ok := model == "pier" or model.begins_with("boat") or model == "bridge"
 	if (t[1] > 0.02 and not wet_ok) or t[2] > 0.6:
 		return false
 	var th := deg_to_rad(yaw_deg)
@@ -187,6 +188,8 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 		var hf2 := _h(tx + f.x * d2, ty + f.y * d2) - _h(tx - f.x * d2, ty - f.y * d2)
 		yb = yb * Basis(Vector3(0, 0, 1), atan2(hf2, 2.0 * d2 * T))
 		y = _h(tx, ty) - 0.03
+	elif mode == "dash":
+		y = _h(tx, ty) + 0.03
 	elif mode == "min":
 		var rad := _rad(model) * 0.8
 		y = _h(tx, ty)
@@ -413,6 +416,16 @@ func _street(site: Vector2, own: String, dir: Vector2, half_len: float, free_r: 
 	var hi := 0
 	var step := w + 1.5 * M
 	var n := int(half_len * 2.0 / step)
+	var nrm0 := Vector2(-dir.y, dir.x)
+	for e: float in [-1.0, 1.0]:                                       # знак «населённый пункт» на въездах
+		var sp := site + dir * e * (half_len + 1.0) + nrm0 * 3.6 * e
+		put("sign_town", sp.x, sp.y, rad_to_deg(atan2(-dir.y, dir.x)) + 90.0 * e, "pt", false)
+	var ls := -half_len + 6.0
+	while ls < half_len - 4.0:                                         # фонари вдоль улицы
+		var lp := site + dir * ls + nrm0 * 3.3
+		var bd := -nrm0
+		put("lamp_post", lp.x, lp.y, rad_to_deg(atan2(-bd.y, bd.x)), "pt", false)
+		ls += 30.0
 	for sd: float in [1.0, -1.0]:
 		for i in n:
 			if placed >= cap:
@@ -671,7 +684,8 @@ func _road_stuff() -> void:
 		var track: bool = rd.track
 		if pts.size() < 5:
 			continue                                                  # улицы поселений
-		# столбы вдоль дороги (на просёлках — реже)
+		# столбы вдоль дороги (на просёлках — реже) и провода между ними
+		var poles: Array = []
 		var acc := 0.0
 		for i in pts.size() - 1:
 			var seg := pts[i + 1] - pts[i]
@@ -681,8 +695,13 @@ func _road_stuff() -> void:
 			while d < L:
 				if acc <= 0.0:
 					var p := pts[i] + dir * d + Vector2(-dir.y, dir.x) * 3.4
-					if not _near_site(p, 2.0) and not (track and _rng.randf() < 0.6):
-						put("pole_wood", p.x, p.y, rad_to_deg(atan2(-dir.y, dir.x)) + 90.0)
+					var yaw0 := rad_to_deg(atan2(-dir.y, dir.x)) + 90.0
+					if not _near_site(p, 2.0) and not (track and _rng.randf() < 0.6) and put("pole_wood", p.x, p.y, yaw0):
+						if not poles.is_empty() and (poles[-1][0] as Vector2).distance_to(p) < 24.0:
+							_wires(poles[-1][0], poles[-1][1], p, yaw0)
+						poles.append([p, yaw0])
+					else:
+						poles.clear()
 					acc = 16.0
 				d += 3.0
 				acc -= 3.0
@@ -699,6 +718,62 @@ func _road_stuff() -> void:
 			if _rng.randf() < 0.25:
 				yaw += _rng.randf_range(40.0, 70.0)
 			put(CARS[_rng.randi() % CARS.size()], p2.x, p2.y, yaw)
+
+# провода ЛЭП между двумя столбами: по 2 провода на траверсе, с провисом
+func _wires(p0: Vector2, yaw0: float, p1: Vector2, yaw1: float) -> void:
+	for side: float in [-0.9, 0.9]:
+		var a := _wire_pt(p0, yaw0, side)
+		var b := _wire_pt(p1, yaw1, side)
+		var mid := (a + b) * 0.5 - Vector3(0, 0.55, 0)
+		for seg in [[a, mid], [mid, b]]:
+			var s0: Vector3 = seg[0]
+			var s1: Vector3 = seg[1]
+			var xv := s1 - s0
+			var zv := xv.cross(Vector3.UP).normalized()
+			var yv := zv.cross(xv).normalized()
+			_add("wire_unit", p0.x, p0.y, Transform3D(Basis(xv, yv, zv), s0))
+
+func _wire_pt(p: Vector2, yaw: float, side: float) -> Vector3:
+	var cb := Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(0, 0, -1)       # траверса столба (ось Y модели в Blender)
+	return Vector3(p.x * T, _h(p.x, p.y) + 8.05, p.y * T) + cb * side
+
+# разметка по оси асфальтовых дорог (кроме поселений), мосты через реку
+func _road_marks() -> void:
+	for rd in WorldGen._roads:
+		var pts: PackedVector2Array = rd.pts
+		if rd.track or pts.size() < 5:
+			continue
+		var acc := 0.0
+		var wet_run: Array = []
+		for i in pts.size() - 1:
+			var seg := pts[i + 1] - pts[i]
+			var L := seg.length()
+			var dir := seg / maxf(L, 1e-3)
+			var d := 0.0
+			while d < L:
+				var p := pts[i] + dir * d
+				var tw := WorldGen.terrain(p.x, p.y)
+				var river := tw[1] > 0.3 and WorldGen.river_dist(p.x, p.y) < 4.0 and WorldGen.ford_factor(p.x, p.y) < 0.5
+				if river:
+					wet_run.append([p, dir])
+				elif not wet_run.is_empty():
+					var a: Vector2 = wet_run[0][0]
+					var b: Vector2 = wet_run[-1][0]
+					var c := (a + b) * 0.5
+					var bd: Vector2 = wet_run[0][1]
+					var ya := maxf(_h(a.x - bd.x * 9.0, a.y - bd.y * 9.0), _h(b.x + bd.x * 9.0, b.y + bd.y * 9.0))
+					var yaw := rad_to_deg(atan2(-bd.y, bd.x))
+					var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), Vector3(c.x * T, ya + 0.15, c.y * T))
+					_add("bridge", c.x, c.y, xf)
+					WorldGen.add_clear(c.x, c.y, 12.0, 5.0, deg_to_rad(yaw))
+					_rej["мостов"] = str(_rej.get("мостов", "")) + "%d:%d " % [roundi(c.x), roundi(c.y)]
+					wet_run.clear()
+				if acc <= 0.0 and not river and tw[1] < 0.02 and not _near_site(p, 6.0):
+					put("road_dash", p.x, p.y, rad_to_deg(atan2(-dir.y, dir.x)), "dash", false)
+				if acc <= 0.0:
+					acc = 7.2
+				d += 1.2
+				acc -= 1.2
 
 # ---------------- поля: стога, тюки, брошенная техника ----------------
 func _fields() -> void:
