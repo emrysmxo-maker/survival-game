@@ -67,12 +67,14 @@ const ZONES := [
 const FIR := ["spruce_a", "spruce_b", "spruce_c"]
 const PINE := ["pine_a", "pine_b", "pine_c"]
 const BIRCH := ["birch_a", "birch_b", "birch_c"]
-const BROAD := ["birch_a", "birch_b", "birch_c"]     # TODO осина/дуб/ольха — следующими породами
-const OAK := ["birch_a", "birch_b", "birch_c"]
-const ASPEN := ["birch_a", "birch_b", "birch_c"]
+const BROAD := ["alder_a", "alder_b", "aspen_b", "birch_b"]
+const OAK := ["oak_a", "oak_b", "oak_c"]
+const ASPEN := ["aspen_a", "aspen_b"]
+const WET := ["alder_a", "alder_b", "willow_a", "willow_b"]        # сырые низины, берега
+const APPLE := ["apple_a", "apple_b", "apple_c"]                   # одичавшие сады (ставятся у дворов — этап расстановки)
 const DEAD := ["pine_dead_a", "spruce_dead_a"]
 const SAP_SMALL := ["spruce_sap_a", "pine_sap_a", "birch_sap_a"]
-const SAP_MED := ["spruce_sap_b", "pine_sap_b", "birch_sap_b"]
+const SAP_MED := ["spruce_sap_b", "pine_sap_b", "birch_sap_b", "aspen_sap_a", "oak_sap_a"]
 const SHRUB := ["shrub2_a", "shrub2_b", "shrub2_c", "shrub2_d", "shrub3_a", "shrub3_b", "shrub3_c", "shrub3_d", "shrub4"]
 const FERN := ["fern_a", "fern_b", "fern_c", "fern_d"]
 const NETTLE := ["nettle_medium_a", "nettle_medium_b", "nettle_small_a", "nettle_small_b", "nettle_tall_a", "nettle_tall_b"]
@@ -463,6 +465,8 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 			continue
 		var dead: bool = rng.randf() < (eco.dead + (0.2 if spot[3] > 0.5 else 0.0))
 		var set: Array = DEAD if dead else _pick_weighted(eco.canopy, rng.randf())
+		if not dead and spot[3] > 0.25 and rng.randf() < 0.75:
+			set = WET                                  # у воды и в сырых низинах — ольха и ива
 		var key: String = set[int(rng.randf() * set.size())]
 		var o: Dictionary = _obj(rng, x, y, key, "dead" if dead else "tree", 0.88 + rng.randf() * 0.24)
 		objs.append(o)

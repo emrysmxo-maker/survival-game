@@ -640,9 +640,11 @@ def capture(name, M, res):
 	sc = bpy.context.scene
 	for o in list(sc.collection.objects):
 		bpy.data.objects.remove(o)
-	if "birch_leaf_atlas" not in LEAF_IMG:
-		LEAF_IMG["birch_leaf_atlas"] = save_img("birch_leaf_atlas", leaf_atlas_birch()[..., :3], leaf_atlas_birch()[..., 3], fmt="PNG")
-	atlas = LEAF_IMG["birch_leaf_atlas"]
+	sp_at = getattr(M, "atlas", "birch")
+	if sp_at not in LEAF_IMG:
+		la = leaf_atlas_birch() if sp_at == "birch" else leaf_atlas(**BROAD_P[sp_at]["leaf"])
+		LEAF_IMG[sp_at] = save_img(sp_at + "_leaf_atlas", la[..., :3], la[..., 3], fmt="PNG")
+	atlas = LEAF_IMG[sp_at]
 	xs = [v[0] for v in M.v]; zs = [v[2] for v in M.v]
 	bw, bh = max(xs) - min(xs), max(zs) - min(zs)
 	RX = res[0]
@@ -770,6 +772,8 @@ def card_mat(name, tw):
 	nt.links.new(nm.outputs["Normal"], b.inputs["Normal"])
 	return m
 
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "broadleaf.py"), encoding="utf-8").read())   # осина, дуб, ольха, ива, яблоня
+
 # =============== сборка игровых моделей ===============
 def build_tree(sp, var, H, tw, mats, dead=False):
 	"""Возвращает (wood Mesh, leaf Mesh, высота)."""
@@ -791,9 +795,22 @@ def build_tree(sp, var, H, tw, mats, dead=False):
 				return 1
 			edge = H * (0.42 + 0.06 * math.sin(2 * a + p.z * 1.3))
 			return 1 if p.z > edge else 0
-	else:
+	elif sp == "spruce":
 		tp, tr, L1s, sprays, stubs = spruce_frame(H, dead)
 		def matf(p, r, a):
+			return 0
+	else:
+		trunks, L1s, sprays, stubs = broad_frame(sp, H)
+		tp, tr = trunks[0]
+		L1s = trunks[1:] + L1s
+		has_base = BROAD_P[sp]["base"]
+		ntw = len(mats) - 1
+		def matf(p, r, a):
+			if r < 0.02:
+				return ntw
+			if has_base:
+				edge = 1.0 + 0.5 * math.sin(3 * a + p.z * 2.1) + 0.3 * math.sin(7 * a)
+				return 1 if p.z < edge * min(1.0, H / 12) else 0
 			return 0
 	pts = [q for (q, _, _, _) in sprays] or [p for p in tp]
 	if sprays:
@@ -807,9 +824,11 @@ def build_tree(sp, var, H, tw, mats, dead=False):
 	ts = 10 if H > 6 else 6
 	tube(W, tp, tr, ts, matf, aof)
 	for (p1, r1) in L1s:
-		tube(W, p1, r1, 4 if r1[0] > 0.02 else 3, matf, aof)
+		if r1[0] < 0.011 and (sp in BROAD_P):
+			continue                                                   # тонкие веточки скрыты листвой
+		tube(W, p1, r1, 6 if r1[0] > 0.08 else (4 if r1[0] > 0.02 else 3), matf, aof)
 	for (p1, r1) in stubs:
-		tube(W, p1, r1, 3, lambda p, r, a: (0 if sp != "birch" else 2), aof)
+		tube(W, p1, r1, 3, lambda p, r, a: (len(mats) - 1 if (sp == "birch" or sp in BROAD_P) else 0), aof)
 	Lf.crown = cr
 	for (q, d, roll, sz) in sprays:
 		card(Lf, q, d, roll, sz, tw, cr)
@@ -825,6 +844,16 @@ SPECIES = {
 		(512, 512), [("bark_pine_low", bark_pine_low), ("bark_pine_up", bark_pine_up)], twig_pine),
 	"spruce": ([("spruce_a", 21.0, False), ("spruce_b", 17.0, False), ("spruce_c", 24.0, False), ("spruce_sap_a", 1.6, False), ("spruce_sap_b", 3.2, False), ("spruce_dead_a", 14.0, True)],
 		(512, 512), [("bark_spruce", bark_spruce)], twig_spruce),
+	"aspen": ([("aspen_a", 20.0, False), ("aspen_b", 17.0, False), ("aspen_sap_a", 4.0, False)],
+		(512, 512), [("bark_aspen", bark_aspen), ("bark_aspen_base", bark_aspen_base), ("bark_twig", bark_twig)], lambda: twig_broad("aspen")),
+	"oak": ([("oak_a", 18.0, False), ("oak_b", 15.0, False), ("oak_c", 21.0, False), ("oak_sap_a", 4.5, False)],
+		(512, 512), [("bark_oak", bark_oak), ("bark_twig", bark_twig)], lambda: twig_broad("oak")),
+	"alder": ([("alder_a", 16.0, False), ("alder_b", 13.0, False)],
+		(512, 512), [("bark_alder", bark_alder), ("bark_twig", bark_twig)], lambda: twig_broad("alder")),
+	"willow": ([("willow_a", 12.0, False), ("willow_b", 10.0, False)],
+		(512, 512), [("bark_willow", bark_willow), ("bark_twig", bark_twig)], lambda: twig_broad("willow")),
+	"apple": ([("apple_a", 5.5, False), ("apple_b", 4.5, False), ("apple_c", 6.5, False)],
+		(512, 512), [("bark_apple", bark_apple), ("bark_twig", bark_twig)], lambda: twig_broad("apple")),
 }
 
 def export(objs, path):
@@ -855,7 +884,7 @@ def main():
 			woods.append(wo)
 			if Lm.f:
 				leaves.append(Lm.build(vn + "_l", [cm]))
-			cat = "dead" if dead else ("sapling" if H < 6 else "tree")
+			cat = "dead" if dead else ("sapling" if (H < 6 and sp != "apple") else "tree")
 			kinds[vn] = {"m": sp, "n": vn, "h": round(top, 2), "sc": 1.0, "cat": cat, "yaw": 0, "wood_only": dead}
 			if Lm.f:
 				c, rr = Lm.crown

@@ -1,0 +1,39 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://dwb2l1op24raf"
+path.s3tc="res://.godot/imported/alder_wood_bark_alder.jpg-5c50265f7dab9f1dce75bb2d346fc06c.s3tc.ctex"
+path.etc2="res://.godot/imported/alder_wood_bark_alder.jpg-5c50265f7dab9f1dce75bb2d346fc06c.etc2.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "763fcff1e02bdc78605d24f0b60a2e40"
+}
+
+[deps]
+
+source_file="res://assets/models/alder_wood_bark_alder.jpg"
+dest_files=["res://.godot/imported/alder_wood_bark_alder.jpg-5c50265f7dab9f1dce75bb2d346fc06c.s3tc.ctex", "res://.godot/imported/alder_wood_bark_alder.jpg-5c50265f7dab9f1dce75bb2d346fc06c.etc2.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=1
