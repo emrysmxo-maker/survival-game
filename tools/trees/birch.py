@@ -76,10 +76,10 @@ def bark_white():
 		stamp(dark, R(0.55, 1.0), R(0, w), R(0, h), R(14, 80), R(1.0, 2.6), 0.15)
 	for _ in range(45):                      # крупные чёрные трещины-пояски
 		stamp(dark, 1.0, R(0, w), R(0, h), R(90, 340), R(3.0, 9.0), 0.35)
-	peel = fnoise(h, w, 2.0, ax=3.0)
-	pm = np.clip((peel - 1.5) * 3.0, 0, 1)   # отслоения бересты — розовато-рыжие
+	peel = fnoise(h, w, 1.6)
+	pm = np.clip((peel - 2.1) * 3.0, 0, 1)   # отслоения бересты — розовато-рыжие
 	col = col * (1 - pm[..., None]) + np.array([0.80, 0.66, 0.55]) * pm[..., None]
-	edge = np.clip(1 - np.abs(peel - 1.5) * 8, 0, 1) * 0.35
+	edge = np.clip(1 - np.abs(peel - 2.1) * 8, 0, 1) * 0.35
 	ink = np.array([0.10, 0.09, 0.085])
 	col = col * (1 - dark[..., None]) + ink * dark[..., None]
 	col *= (1 - edge[..., None] * 0.5)
