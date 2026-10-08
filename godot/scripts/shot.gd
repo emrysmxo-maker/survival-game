@@ -19,6 +19,8 @@ func _ready() -> void:
 		if a.begins_with("--shots="): shots = maxi(1, int(a.substr(8)))
 		if a.begins_with("--every="): every = float(a.substr(8))
 		if a.begins_with("--wait="): wait = float(a.substr(7))
+		if a == "--hide-props": main.props.visible = false            # замер: вклад построек в кадр
+		if a == "--no-shadow": main.daynight.sun.shadow_enabled = false
 	DirAccess.make_dir_recursive_absolute(out)
 	if views.is_empty():
 		views.append([str(main.focus.x), str(main.focus.y)])
@@ -45,6 +47,26 @@ func _run() -> void:
 			await RenderingServer.frame_post_draw
 			var path := "%s/shot_%02d_%02d.jpg" % [out, i, k]                # JPG ~0,3–0,5 МБ: коннекторы ИИ не берут файлы > 1 МБ
 			get_viewport().get_texture().get_image().save_jpg(path, 0.82)
+			if OS.get_cmdline_user_args().has("--kinds"):            # замер: треугольники по видам растений
+				var tl: Array = []
+				for key in main.world.kinds:
+					var kd: Dictionary = main.world.kinds[key]
+					var tri := 0
+					var cnt := 0
+					for mmi in kd.mmis:
+						var mm: MultiMesh = mmi.multimesh
+						cnt = mm.instance_count
+						if mm.mesh:
+							for si in mm.mesh.get_surface_count():
+								tri += mm.mesh.surface_get_array_index_len(si) / 3 * mm.instance_count
+					if tri > 0:
+						tl.append([tri, key, cnt, kd.cat])
+				tl.sort_custom(func(a, b): return a[0] > b[0])
+				for e in tl.slice(0, 14):
+					print("KIND %-22s %-7s шт %5d  треуг %8d" % [e[1], e[3], e[2], e[0]])
+			var rs := RenderingServer
+			print("DRAW вызовов %d  треугольников %d  объектов %d" % [rs.get_rendering_info(rs.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+				rs.get_rendering_info(rs.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME), rs.get_rendering_info(rs.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME)])
 			print("SHOT %s  точка %s,%s  cam %.0f yaw %.0f elev %.0f  чанков ждали %.1f с  деревьев рядом %d  fps %d" % [path, v[0], v[1],
 				main.cam_size, main.cam_yaw, main.cam_elev, (Time.get_ticks_msec() - t0) / 1000.0, main.world.count_trees(), Engine.get_frames_per_second()])
 			if k < shots - 1: await _sleep(every)

@@ -65,7 +65,7 @@ PY
 		imp; mkdir -p "$OUT/shots"
 		VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json timeout "${GT:-1800}" xvfb-run -a -s "-screen 0 1600x720x24" "$GODOT" --path "$REPO/godot" \
 			--rendering-driver vulkan --rendering-method mobile --resolution 1600x720 res://main.tscn -- --updurl=http://127.0.0.1:1/ \
-			--shot="$OUT/shots" "--views=${1:-4:6}" --shots="${2:-1}" 2>&1 | grep -E "SHOT|SCRIPT ERROR|Parse Error|ERROR: res:" || true
+			--shot="$OUT/shots" "--views=${1:-4:6}" --shots="${2:-1}" 2>&1 | grep -E "SHOT|DRAW|SCRIPT ERROR|Parse Error|ERROR: res:" || true
 		ls "$OUT/shots" ;;
 	blender|godot)
 		f=$(realpath -m "$REPO/$1"); shift
