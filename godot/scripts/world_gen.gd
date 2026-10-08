@@ -22,6 +22,23 @@ const FEATURES := {
 	"tower": {"x": -35.0, "y": -178.0, "r": 12.0, "name": "Радиовышка"},
 }
 const LANDMARKS := ["camp", "village", "sawmill", "lakebase", "farm", "bunker", "tower"]
+# хутора, дачи, кордоны: малые поляны с постройками (расстановка — scripts/props.gd); ровная земля, леса нет, к каждому ведёт просёлок
+const HAMLETS := {
+	"h_stone": {"x": -75.0, "y": -150.0, "r": 10.0, "name": "Хутор Каменный"},
+	"h_pond": {"x": -175.0, "y": -82.0, "r": 10.0, "name": "Починок"},
+	"h_vyselki": {"x": -85.0, "y": -60.0, "r": 12.0, "name": "Выселки"},
+	"h_zarechye": {"x": -45.0, "y": 118.0, "r": 12.0, "name": "Заречье"},
+	"h_dachi": {"x": 70.0, "y": 25.0, "r": 14.0, "name": "Дачный посёлок"},
+	"h_novo": {"x": 100.0, "y": 118.0, "r": 11.0, "name": "Новосёлки"},
+	"h_bereza": {"x": 140.0, "y": -25.0, "r": 11.0, "name": "Берёзовка"},
+	"h_ranger": {"x": 15.0, "y": -105.0, "r": 9.0, "name": "Лесничество"},
+	"h_hunter": {"x": -20.0, "y": -140.0, "r": 7.0, "name": "Охотничья заимка"},
+	"h_sosn": {"x": 95.0, "y": -65.0, "r": 9.0, "name": "Хутор Сосновый"},
+	"h_cem": {"x": -140.0, "y": -62.0, "r": 8.0, "name": "Старое кладбище"},
+	"h_yuzhny": {"x": 75.0, "y": 175.0, "r": 10.0, "name": "Хутор Южный"},
+}
+const TRACKS := [["h_stone", "tower"], ["h_pond", "village"], ["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"], ["h_novo", "farm"],
+	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_sosn", "sawmill"], ["h_cem", "village"], ["h_yuzhny", "farm"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
 # озёра: центр, радиус (берег неровный), глубина
@@ -34,16 +51,16 @@ const LAKES := [
 ]
 # зоны растительности: центр (тайлы) и состав; зона — ближайший центр (с «изгибом» границ)
 const ZONES := [
-	{"name": "Северный бор", "x": 40.0, "y": -150.0, "canopy": [["FIR", 5], ["PINE", 4], ["BIRCH", 1]], "dens": 5, "dead": 0.05, "fern": 0.9, "grass": 0.3, "shrub": 0.4},
-	{"name": "Скалистые холмы", "x": -60.0, "y": -195.0, "canopy": [["PINE", 3], ["FIR", 2]], "dens": 3, "dead": 0.15, "fern": 0.3, "grass": 0.5, "shrub": 0.3},
-	{"name": "Поля у деревни", "x": -135.0, "y": -95.0, "canopy": [["BIRCH", 3], ["BROAD", 1]], "dens": 1, "dead": 0.02, "fern": 0.1, "grass": 1.6, "shrub": 0.5},
-	{"name": "Смешанный лес", "x": -10.0, "y": -30.0, "canopy": [["FIR", 2], ["PINE", 2], ["BIRCH", 3], ["ASPEN", 1], ["OAK", 1], ["BROAD", 1]], "dens": 3, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
-	{"name": "Смешанный лес", "x": 60.0, "y": -40.0, "canopy": [["FIR", 2], ["PINE", 1], ["BIRCH", 3], ["ASPEN", 2], ["BROAD", 1]], "dens": 3, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
-	{"name": "Озёрный край", "x": 150.0, "y": 40.0, "canopy": [["BIRCH", 3], ["ASPEN", 2], ["BROAD", 2]], "dens": 2, "dead": 0.04, "fern": 0.4, "grass": 1.1, "shrub": 0.8},
-	{"name": "Южные поля", "x": 40.0, "y": 165.0, "canopy": [["OAK", 2], ["BROAD", 2], ["BIRCH", 1]], "dens": 1, "dead": 0.03, "fern": 0.1, "grass": 1.6, "shrub": 0.6},
-	{"name": "Дубрава", "x": 120.0, "y": 150.0, "canopy": [["OAK", 4], ["BROAD", 2], ["ASPEN", 1]], "dens": 3, "dead": 0.04, "fern": 0.5, "grass": 0.8, "shrub": 0.8},
-	{"name": "Гиблые топи", "x": -150.0, "y": 130.0, "canopy": [["BIRCH", 3], ["PINE", 1], ["DEAD", 3]], "dens": 2, "dead": 0.3, "fern": 0.3, "grass": 0.9, "shrub": 0.4},
-	{"name": "Западный ельник", "x": -160.0, "y": 20.0, "canopy": [["FIR", 4], ["PINE", 2], ["BIRCH", 1]], "dens": 4, "dead": 0.06, "fern": 1.0, "grass": 0.3, "shrub": 0.4},
+	{"name": "Северный бор", "x": 40.0, "y": -150.0, "canopy": [["FIR", 5], ["PINE", 4], ["BIRCH", 1]], "bias": 0.80, "dens": 5, "dead": 0.05, "fern": 0.9, "grass": 0.3, "shrub": 0.4},
+	{"name": "Скалистые холмы", "x": -60.0, "y": -195.0, "canopy": [["PINE", 3], ["FIR", 2]], "bias": 0.36, "dens": 3, "dead": 0.15, "fern": 0.3, "grass": 0.5, "shrub": 0.3},
+	{"name": "Поля у деревни", "x": -135.0, "y": -95.0, "canopy": [["BIRCH", 3], ["BROAD", 1]], "bias": 0.12, "dens": 1, "dead": 0.02, "fern": 0.1, "grass": 1.6, "shrub": 0.5},
+	{"name": "Смешанный лес", "x": -10.0, "y": -30.0, "canopy": [["FIR", 2], ["PINE", 2], ["BIRCH", 3], ["ASPEN", 1], ["OAK", 1], ["BROAD", 1]], "bias": 0.58, "dens": 3, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
+	{"name": "Смешанный лес", "x": 60.0, "y": -40.0, "canopy": [["FIR", 2], ["PINE", 1], ["BIRCH", 3], ["ASPEN", 2], ["BROAD", 1]], "bias": 0.58, "dens": 3, "dead": 0.05, "fern": 0.8, "grass": 0.6, "shrub": 0.6},
+	{"name": "Озёрный край", "x": 150.0, "y": 40.0, "canopy": [["BIRCH", 3], ["ASPEN", 2], ["BROAD", 2]], "bias": 0.38, "dens": 2, "dead": 0.04, "fern": 0.4, "grass": 1.1, "shrub": 0.8},
+	{"name": "Южные поля", "x": 40.0, "y": 165.0, "canopy": [["OAK", 2], ["BROAD", 2], ["BIRCH", 1]], "bias": 0.12, "dens": 1, "dead": 0.03, "fern": 0.1, "grass": 1.6, "shrub": 0.6},
+	{"name": "Дубрава", "x": 120.0, "y": 150.0, "canopy": [["OAK", 4], ["BROAD", 2], ["ASPEN", 1]], "bias": 0.72, "dens": 3, "dead": 0.04, "fern": 0.5, "grass": 0.8, "shrub": 0.8},
+	{"name": "Гиблые топи", "x": -150.0, "y": 130.0, "canopy": [["BIRCH", 3], ["PINE", 1], ["DEAD", 3]], "bias": 0.42, "dens": 2, "dead": 0.3, "fern": 0.3, "grass": 0.9, "shrub": 0.4},
+	{"name": "Западный ельник", "x": -160.0, "y": 20.0, "canopy": [["FIR", 4], ["PINE", 2], ["BIRCH", 1]], "bias": 0.78, "dens": 4, "dead": 0.06, "fern": 1.0, "grass": 0.3, "shrub": 0.4},
 ]
 
 # ---------- лес: наборы картинок-импосторов (assets/imp, запечены из моделей Poly Haven CC0 и EZ-Tree MIT) ----------
@@ -104,6 +121,9 @@ static var _roads: Array = []
 static var _lk := PackedFloat32Array()   # озёра: x, y, r, глубина, уровень (числами — безопасно из потоков)
 static var _ft := PackedFloat32Array()   # локации: x, y, r, высота поляны
 static var _zn := PackedFloat32Array()   # центры зон: x, y
+static var _zb := PackedFloat32Array()   # лесистость зон (0..1)
+static func site(key: String) -> Dictionary:
+	return FEATURES[key] if FEATURES.has(key) else HAMLETS[key]
 static func init() -> void:
 	if not _roads.is_empty():
 		return
@@ -114,6 +134,13 @@ static func init() -> void:
 	for key in LANDMARKS:
 		var f: Dictionary = FEATURES[key]
 		ft.append_array([f.x, f.y, f.r, base_height(f.x, f.y)])
+	for key in HAMLETS:
+		var f2: Dictionary = HAMLETS[key]
+		ft.append_array([f2.x, f2.y, f2.r, base_height(f2.x, f2.y)])
+	var zb := PackedFloat32Array()
+	for z in ZONES:
+		zb.append(z.bias)
+	_zb = zb
 	var zn := PackedFloat32Array()
 	for z in ZONES:
 		zn.append_array([z.x, z.y])
@@ -122,9 +149,9 @@ static func init() -> void:
 	_zn = zn
 	var out := []
 	var seed := 1
-	for r in ROADS:
-		var a: Dictionary = FEATURES[r[0]]
-		var b: Dictionary = FEATURES[r[1]]
+	for r in ROADS + TRACKS:
+		var a: Dictionary = site(r[0])
+		var b: Dictionary = site(r[1])
 		var pa := Vector2(a.x, a.y)
 		var pb := Vector2(b.x, b.y)
 		var n := (pb - pa).normalized().orthogonal()
@@ -137,7 +164,7 @@ static func init() -> void:
 		var bb := Rect2(pts[0], Vector2.ZERO)
 		for p in pts:
 			bb = bb.expand(p)
-		out.append({"pts": pts, "bb": bb.grow(4.0)})
+		out.append({"pts": pts, "bb": bb.grow(4.0), "track": r in TRACKS})
 	_roads = out
 
 static func path_dist(wx: float, wy: float) -> float:
@@ -267,7 +294,8 @@ static func ground_layers_t(wx: float, wy: float, t: PackedFloat32Array) -> Pack
 	var lkb := lake_at(wx, wy)
 	var sand := ss(0.25, 1.0, lkb.w) * (1.0 - lkb.x * 0.0) if lkb.z >= 0.0 else 0.0     # песчаная полоса вокруг озёр
 	var riverbed := maxf(maxf(ss(2.6, 1.2, river_dist(wx, wy)), t[1]), sand)   # песок с галькой (Poly Haven coast_sand_01) — берега и дно
-	return PackedFloat32Array([path, swamp, riverbed, t[5] * 0.6, t[1], t[4]])
+	var meadow := 1.0 - forest_mask(wx, wy) * 0.95
+	return PackedFloat32Array([path, swamp, riverbed, t[5] * 0.6, t[1], maxf(t[4], meadow * (1.0 - swamp))])
 
 # название места: локация (если внутри) или зона
 static func place_name(wx: float, wy: float) -> String:
@@ -275,6 +303,10 @@ static func place_name(wx: float, wy: float) -> String:
 		var f: Dictionary = FEATURES[key]
 		if Vector2(wx - f.x, wy - f.y).length() < f.r:
 			return f.name
+	for key in HAMLETS:
+		var h: Dictionary = HAMLETS[key]
+		if Vector2(wx - h.x, wy - h.y).length() < h.r:
+			return h.name
 	if river_dist(wx, wy) < 14.0:
 		return "Река Быстрянка"
 	if lake_at(wx, wy).x > 0.3:
@@ -320,6 +352,49 @@ static func _pick_weighted(groups: Array, r: float) -> Array:
 		x -= g[1]
 	return groups[0][0]
 
+# ---------- шум и лесистость: лес — крупные массивы, между ними поляны и луга; на лугах — редкие рощицы ----------
+static func _hash2(ix: int, iy: int, sd: int) -> float:
+	var n: int = (ix * 374761393 + iy * 668265263 + sd * 1274126177) & 0x7FFFFFFF
+	n = ((n ^ (n >> 13)) * 1103515245 + 12345) & 0x7FFFFFFF
+	return float(n & 0xFFFF) / 65535.0
+
+static func vnoise(x: float, y: float, scale: float, sd: int) -> float:
+	var fx := x / scale
+	var fy := y / scale
+	var ix := int(floor(fx))
+	var iy := int(floor(fy))
+	var tx := fx - ix
+	var ty := fy - iy
+	tx = tx * tx * (3.0 - 2.0 * tx)
+	ty = ty * ty * (3.0 - 2.0 * ty)
+	var a := _hash2(ix, iy, sd)
+	var b := _hash2(ix + 1, iy, sd)
+	var c := _hash2(ix, iy + 1, sd)
+	var d := _hash2(ix + 1, iy + 1, sd)
+	return lerpf(lerpf(a, b, tx), lerpf(c, d, tx), ty)
+
+# лесистость зоны с плавными переходами (веса по расстоянию до центров зон)
+static func forest_bias(wx: float, wy: float) -> float:
+	var sum := 0.0
+	var ws := 0.0
+	for i in _zb.size():
+		var dx: float = wx - _zn[i * 2]
+		var dy: float = wy - _zn[i * 2 + 1]
+		var w := 1.0 / pow(dx * dx + dy * dy + 900.0, 2.0)
+		sum += w * _zb[i]
+		ws += w
+	return sum / maxf(ws, 1e-12)
+
+# 0..1: сплошной лес (массивы 40–120 тайлов), резкая кромка
+static func forest_mask(wx: float, wy: float) -> float:
+	var n := 0.55 * vnoise(wx, wy, 38.0, 11) + 0.3 * vnoise(wx, wy, 17.0, 12) + 0.15 * vnoise(wx, wy, 7.0, 13)
+	return ss(0.47, 0.56, n + (forest_bias(wx, wy) - 0.5) * 1.25)
+
+# плотность деревьев: лес + небольшие рощицы на открытых местах
+static func tree_density(wx: float, wy: float) -> float:
+	var grove := ss(0.72, 0.8, vnoise(wx, wy, 11.0, 21)) * 0.85
+	return maxf(forest_mask(wx, wy), grove)
+
 # Лесистость (0..1): крупные пятна — густой лес, редколесье, поляны без деревьев.
 # В полях (мало деревьев в зоне) — только редкие рощицы.
 static func forest_patch(wx: float, wy: float, dens: int) -> float:
@@ -361,26 +436,27 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 	rng.seed = absi(((cx * 73856093) & 0xFFFFFFFF) ^ ((cy * 19349663) & 0xFFFFFFFF)) + 12345
 	var objs: Array = []
 	var trees: Array = []
-	# 1) деревья: кандидаты с минимальным расстоянием
-	var want: int = eco.dens
-	if want <= 1:      # поля: деревья только рощицами
-		want = int(round(5.0 * forest_patch(sx + CHUNK * 0.5, sy + CHUNK * 0.5, 1)))
-	for i in want * 4:
-		if trees.size() >= want:
+	# 1) деревья: массивы леса (густо) и рощицы; на лугах и в полях пусто
+	var cap: int = 7 + int(eco.dens) * 2          # зона «густая» — до 17 деревьев на чанк, «поле» — до 9 в роще
+	for i in 90:
+		if trees.size() >= cap:
 			break
 		var x: float = sx + 0.8 + rng.randf() * (CHUNK - 1.6)
 		var y: float = sy + 0.8 + rng.randf() * (CHUNK - 1.6)
 		var r0: float = rng.randf()
+		var rd: float = rng.randf()
 		if not in_map(x, y, 1.0):
 			continue
+		var td := tree_density(x, y)
+		if td < 0.04 or rd > td:
+			continue
+		var spacing := 2.2 + (1.0 - td) * 1.4
 		var ok := true
 		for t in trees:
-			if Vector2(t.x - x, t.y - y).length() < 3.0:
+			if Vector2(t.x - x, t.y - y).length() < spacing:
 				ok = false
 				break
 		if not ok:
-			continue
-		if rng.randf() > forest_patch(x, y, int(eco.dens)):
 			continue
 		var spot := tree_spot(x, y, r0)
 		if spot.is_empty():
@@ -391,24 +467,34 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var o: Dictionary = _obj(rng, x, y, key, "dead" if dead else "tree", 0.88 + rng.randf() * 0.24)
 		objs.append(o)
 		trees.append(o)
-	# 2) подрост, кусты
-	for i in 3:
+	# 2) подрост и кусты: под пологом и по опушкам; на лугах — куртинами
+	for i in 7:
 		var x2: float = sx + rng.randf() * CHUNK
 		var y2: float = sy + rng.randf() * CHUNK
+		var r2: float = rng.randf()
+		var ra: float = rng.randf()
 		var t2 := terrain(x2, y2)
 		if t2[1] > 0.02 or t2[6] > 0.3 or t2[4] > 0.5 or in_feature(x2, y2):
 			continue
-		var r2: float = rng.randf()
-		if r2 < 0.45:
+		var td2 := tree_density(x2, y2)
+		if ra > 0.12 + 0.75 * td2:
+			continue
+		if r2 < 0.5:
 			objs.append(_obj(rng, x2, y2, SAP_SMALL[int(rng.randf() * SAP_SMALL.size())], "sap", 0.8 + rng.randf() * 0.4))
-		elif r2 < 0.7:
+		elif r2 < 0.75:
 			objs.append(_obj(rng, x2, y2, SAP_MED[int(rng.randf() * SAP_MED.size())], "sapm", 0.8 + rng.randf() * 0.35))
-	var nshrub := int(round(3.0 * eco.shrub * density))
+	var nshrub := int(round(9.0 * eco.shrub * density))
 	for i in nshrub:
 		var x3: float = sx + rng.randf() * CHUNK
 		var y3: float = sy + rng.randf() * CHUNK
+		var rs: float = rng.randf()
 		var t3 := terrain(x3, y3)
 		if t3[1] > 0.02 or path_dist(x3, y3) < 1.5 or t3[3] > 0.6 or in_feature(x3, y3):
+			continue
+		var td3 := tree_density(x3, y3)
+		var edge := 4.0 * td3 * (1.0 - td3)                        # опушка
+		var clump := ss(0.62, 0.78, vnoise(x3, y3, 5.0, 31))      # куртина
+		if rs > 0.08 + 0.55 * edge + 0.7 * clump + 0.25 * td3:
 			continue
 		objs.append(_obj(rng, x3, y3, SHRUB[int(rng.randf() * SHRUB.size())], "shrub", 0.8 + rng.randf() * 0.4))
 	# 3) травяной ярус по месту: тень леса — папоротник и мох, поляны — трава и цветы, у воды — крапива
@@ -421,7 +507,7 @@ static func chunk_content(cx: int, cy: int, density: float = 1.0) -> Dictionary:
 		var t4 := terrain(x4, y4)
 		if t4[1] > 0.02 or path_dist(x4, y4) < 1.2:
 			continue
-		var clearing := maxf(t4[4], ss(0.18, 0.46, soil_noise(x4, y4)))
+		var clearing := maxf(t4[4], 1.0 - forest_mask(x4, y4) * 0.92)
 		var w := {
 			"fern": (0.35 + t4[2] * 0.5) * (1.0 - clearing) * (1.0 - t4[5] * 0.6) * eco.fern,
 			"grass": (0.25 + clearing * 1.2 + t4[3] * 0.6) * eco.grass,
