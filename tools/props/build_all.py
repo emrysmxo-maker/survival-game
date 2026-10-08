@@ -10,11 +10,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import house as house2                      # реалистичные дома (tools/houses): оболочка + крыша «<имя>_roof»
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'cars'))
 import car as cars2                         # реалистичные машины (tools/cars)
+import places as places2                    # новые места (tools/houses/places.py)
 reset()
 count = 0
 names = []
 only = os.environ.get('ONLY')
 for nm, fn in house2.JOBS.items():
+    if only and nm not in only.split(','): continue
+    shell, roof = fn()
+    shell.name = nm
+    names.append(nm); count += 1
+    if roof is not None:
+        roof.name = nm + '_roof'
+        names.append(nm + '_roof')
+for nm, fn in places2.JOBS.items():
     if only and nm not in only.split(','): continue
     shell, roof = fn()
     shell.name = nm

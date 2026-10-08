@@ -8,6 +8,8 @@ const CHUNK := 12                 # тайлов в чанке
 const T := 0.837                  # метров Godot в одном тайле (так боец/деревья в тех же пропорциях)
 const HK := 0.75                  # высота рельефа старой игры (м) -> метры Godot
 const MAP_RADIUS := 220.0
+const RAIL_Y0 := -10.0                    # железная дорога: y на западном и восточном краю карты (тайлы)
+const RAIL_Y1 := 100.0
 const PX := 0.016                 # метров Godot в одном «экранном px» старой игры (размеры спрайтов)
 
 # ---------- карта: 7 локаций (пока пустые поляны — места под будущие миссии) ----------
@@ -37,10 +39,11 @@ const HAMLETS := {
 	"h_cem": {"x": -140.0, "y": -62.0, "r": 8.0, "name": "Старое кладбище"},
 	"h_yuzhny": {"x": 75.0, "y": 175.0, "r": 10.0, "name": "Хутор Южный"},
 	"h_poselok": {"x": -54.0, "y": -105.0, "r": 12.0, "name": "Посёлок Луговой"},
+	"h_lager": {"x": -99.0, "y": 104.0, "r": 16.0, "name": "Детский лагерь «Берёзка»"},
 }
 const TRACKS := [["h_stone", "tower"], ["h_pond", "village"], ["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"], ["h_novo", "farm"],
 	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_sosn", "sawmill"], ["h_cem", "village"], ["h_yuzhny", "farm"],
-	["h_poselok", "village"], ["h_poselok", "h_ranger"]]
+	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "h_zarechye"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
 # озёра: центр, радиус (берег неровный), глубина
@@ -207,6 +210,16 @@ static func init() -> void:
 		for p in pts:
 			bb = bb.expand(p)
 		out.append({"pts": pts, "bb": bb.grow(4.0), "track": r in TRACKS})
+	# железная дорога через всю карту (в стороне от озёр и посёлков)
+	var rp := PackedVector2Array()
+	var x := -218.0
+	while x <= 218.0:
+		rp.append(Vector2(x, RAIL_Y0 + (RAIL_Y1 - RAIL_Y0) * (x + 210.0) / 420.0 + sin(x * 0.012) * 8.0))
+		x += 14.0
+	var rbb := Rect2(rp[0], Vector2.ZERO)
+	for q in rp:
+		rbb = rbb.expand(q)
+	out.append({"pts": rp, "bb": rbb.grow(4.0), "track": true, "rail": true})
 	_roads = out
 
 # расстояние до асфальтовых дорог (ROADS; просёлки и тропы — грунт)

@@ -88,11 +88,15 @@ func _ready() -> void:
 	_load()
 	_bunker()
 	_locations()
+	_railway()
+	_children_camp()
 	_hamlet("h_poselok")                  # новый посёлок — первым: ему нужно поле целиком
 	_village()
 	for key in HAMLETS:
 		if key != "h_poselok":
 			_hamlet(key)
+	_gas_station()
+	_dump_and_wreck()
 	_rings()
 	_forest_houses()
 	_quarantine()
@@ -715,8 +719,8 @@ func _road_stuff() -> void:
 	for rd in WorldGen._roads:
 		var pts: PackedVector2Array = rd.pts
 		var track: bool = rd.track
-		if pts.size() < 5:
-			continue                                                  # улицы поселений
+		if pts.size() < 5 or rd.get("rail", false):
+			continue                                                  # улицы поселений, железная дорога
 		# столбы вдоль дороги (на просёлках — реже) и провода между ними
 		var poles: Array = []
 		var acc := 0.0
@@ -875,6 +879,177 @@ func _quarantine() -> void:
 		var sp2 := _at(cp, s0 - 8.0)
 		var spp: Vector2 = sp2[0] + Vector2(-sp2[1].y, sp2[1].x) * 4.0
 		put("sign_quarantine", spp.x, spp.y, rad_to_deg(atan2(-sp2[1].y, sp2[1].x)) + 90.0, "pt", false)
+
+# ---------------- новые места: железная дорога, АЗС с кафе, детский лагерь, свалка, крушение вертолёта ----------------
+func _rail() -> Dictionary:
+	for rd in WorldGen._roads:
+		if rd.get("rail", false):
+			return rd
+	return {}
+
+func _railway() -> void:
+	var rd := _rail()
+	if rd.is_empty():
+		return
+	var pts: PackedVector2Array = rd.pts
+	var L := _road_len(pts)
+	var step := 6.0 * M
+	var s := 0.0
+	var wet: Array = []
+	while s < L:
+		var at := _at(pts, s)
+		var p: Vector2 = at[0]
+		var dir: Vector2 = at[1]
+		var yaw := rad_to_deg(atan2(-dir.y, dir.x))
+		var tw := WorldGen.terrain(p.x, p.y)
+		if tw[1] > 0.02:
+			wet.append(p)
+		else:
+			if not wet.is_empty():                                     # мост через реку
+				var c: Vector2 = (wet[0] + wet[-1]) * 0.5
+				var ya := maxf(_h(wet[0].x - dir.x * 9.0, wet[0].y - dir.y * 9.0), _h(wet[-1].x + dir.x * 9.0, wet[-1].y + dir.y * 9.0))
+				_add("bridge", c.x, c.y, Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), Vector3(c.x * T, ya + 0.15, c.y * T)))
+				wet.clear()
+			if WorldGen.in_map(p.x, p.y, 1.0):
+				put("rail_seg", p.x, p.y, yaw, "pt", false)
+		WorldGen.add_clear(p.x, p.y, 4.0, 4.0, deg_to_rad(yaw))          # полоса отвода без деревьев
+		s += step
+	# переезды: пересечения с дорогами
+	for other in WorldGen._roads:
+		if other.get("rail", false) or other.get("trail", false):
+			continue
+		var op: PackedVector2Array = other.pts
+		for i in op.size() - 1:
+			for j in pts.size() - 1:
+				var hit = Geometry2D.segment_intersects_segment(op[i], op[i + 1], pts[j], pts[j + 1])
+				if hit == null:
+					continue
+				var hp: Vector2 = hit
+				var odir := (op[i + 1] - op[i]).normalized()
+				for sd: float in [-1.0, 1.0]:
+					var cp := hp + odir * sd * 5.5
+					put("rail_crossing", cp.x, cp.y, rad_to_deg(atan2(-odir.y, odir.x)) + (0.0 if sd > 0 else 180.0), "pt", false)
+				_rej["переездов"] = _rej.get("переездов", 0) + 1
+	# брошенный состав: 6 вагонов на путях
+	var s0 := L * 0.62
+	for k in 6:
+		var at2 := _at(pts, s0 + k * 15.0 * M)
+		var p2: Vector2 = at2[0]
+		var d2: Vector2 = at2[1]
+		var wm: String = ["wagon_box_red", "wagon_tank", "wagon_box_green", "wagon_tank", "wagon_box_red", "wagon_box_green"][k]
+		var xf := Transform3D(Basis(Vector3.UP, atan2(-d2.y, d2.x)), Vector3(p2.x * T, _h(p2.x, p2.y) + 0.6, p2.y * T))
+		_add(wm, p2.x, p2.y, xf)
+	# платформа ближе к лагерю
+	var best := 0.0
+	var bd := 1e9
+	var sc := 0.0
+	while sc < L:
+		var pc: Vector2 = _at(pts, sc)[0]
+		if pc.length() < bd:
+			bd = pc.length()
+			best = sc
+		sc += 4.0
+	var ap := _at(pts, best + 14.0)
+	var pp: Vector2 = ap[0] + Vector2(-ap[1].y, ap[1].x) * 3.6
+	put("rail_platform", pp.x, pp.y, rad_to_deg(atan2(-ap[1].y, ap[1].x)), "pt", false)
+
+func _free_rect(c: Vector2, th: float, w: float, d: float) -> bool:
+	return _plot_ok(c, th, w, d, "")
+
+func _gas_station() -> void:
+	var cands := []
+	for fr in [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7]:
+		for r in WorldGen.ROADS:
+			cands.append([r[0], r[1], fr])
+	for cand in cands:
+		var pts := _road_of(cand[0], cand[1])
+		if pts.is_empty():
+			continue
+		var at := _at(pts, _road_len(pts) * float(cand[2]))
+		var p: Vector2 = at[0]
+		var dir: Vector2 = at[1]
+		for sd: float in [1.0, -1.0]:
+			var nrm := Vector2(-dir.y, dir.x) * sd
+			var c := p + nrm * (4.2 + 14.0)
+			var fd := -nrm
+			var th := atan2(fd.x, fd.y)
+			var okg := _free_rect(c, th, 30.0, 28.0)
+			if okg:
+				_plots.append([c, th, 15.0, 14.0])
+				WorldGen.add_clear(c.x, c.y, 17.0, 16.0, th)
+				var gs := _loc(c, th, -4.0, 2.0)
+				put("gas_station", gs.x, gs.y, rad_to_deg(th) + 180.0, "min", false)
+				var cf := _loc(c, th, 10.0, 0.0)
+				put("cafe", cf.x, cf.y, rad_to_deg(th), "min", false)
+				var cp := _loc(c, th, 2.0, -6.0)
+				put("car_sedan_white", cp.x, cp.y, rad_to_deg(th) - 90.0, "", false)
+				_rej["АЗС"] = "%d:%d" % [roundi(c.x), roundi(c.y)]
+				return
+
+func _children_camp() -> void:
+	var h: Dictionary = WorldGen.HAMLETS["h_lager"]
+	var c := Vector2(h.x, h.y)
+	var dir := _road_dir(c)
+	var th := atan2(dir.x, dir.y)
+	var yaw := rad_to_deg(th)
+	WorldGen.add_clear(c.x, c.y, 26.0, 22.0, th)
+	for sd: float in [-1.0, 1.0]:                                      # два корпуса фасадами к линейке
+		var p := _loc(c, th, sd * 13.0, 0.0)
+		put("camp_corpus", p.x, p.y, yaw + 90.0 * sd, "min", false)
+	var din := _loc(c, th, 0.0, -14.0)
+	put("house_brick", din.x, din.y, yaw, "min", false)               # столовая
+	for k in [-1.0, 1.0]:
+		var bp := _loc(c, th, k * 4.0, 6.0)
+		put("bench_log", bp.x, bp.y, yaw)
+	var pole := _loc(c, th, 0.0, 9.0)
+	put("pole_wood", pole.x, pole.y, yaw)                              # флагшток
+	var sg := _loc(c, th, 4.0, 24.0)
+	put("sign_info", sg.x, sg.y, yaw, "pt", false)
+	var rad := 27.0
+	var n := roundi(TAU * rad / (FENCE_LEN["fence_chain"] * M))
+	for i in n:
+		var ang := TAU * (i + 0.5) / n
+		var fp := c + Vector2(cos(ang), sin(ang)) * rad
+		if path_blocked(fp) or i % 9 == 0:
+			continue
+		put("fence_chain_" + ("b" if _rng.randf() < 0.3 else "a"), fp.x, fp.y, -rad_to_deg(ang) - 90.0, "", false)
+	var bus := _loc(c, th, -6.0, 18.0)
+	put("car_bus_yellow", bus.x, bus.y, yaw - 90.0, "", false)
+
+func _dump_and_wreck() -> void:
+	# свалка: в поле подальше от посёлков, у дороги
+	var placed := false
+	var tries := 0
+	while not placed and tries < 3000:
+		tries += 1
+		var p := Vector2(_rng.randf_range(-190, 190), _rng.randf_range(-190, 190))
+		var pd := WorldGen.path_dist(p.x, p.y)
+		if pd < 6.0 or pd > 60.0 or WorldGen.forest_mask(p.x, p.y) > 0.45 or _near_site(p, 14.0):
+			continue
+		if not _free_rect(p, 0.0, 28.0, 24.0):
+			continue
+		WorldGen.add_clear(p.x, p.y, 15.0, 13.0, 0.0)
+		_plots.append([p, 0.0, 14.0, 12.0])
+		for k in 7:
+			var q := p + Vector2(_rng.randf_range(-10, 10), _rng.randf_range(-8, 8))
+			put("dump_pile_a" if k % 2 == 0 else "dump_pile_b", q.x, q.y, _rng.randf() * 360.0, "pt", false)
+		for k in 4:
+			var q2 := p + Vector2(_rng.randf_range(-12, 12), _rng.randf_range(-10, 10))
+			put(["car_sedan_burnt", "car_classic_blue", "car_sedan_green", "car_niva_beige"][k], q2.x, q2.y, _rng.randf() * 360.0, "", false)
+		put("tires", p.x + 9.0, p.y - 6.0, 30.0, "", false)
+		_rej["свалка"] = "%d:%d" % [roundi(p.x), roundi(p.y)]
+		placed = true
+	# вертолёт: в глухом лесу, вдали от дорог
+	tries = 0
+	while tries < 600:
+		tries += 1
+		var p3 := Vector2(_rng.randf_range(-190, 190), _rng.randf_range(-190, 190))
+		if WorldGen.forest_mask(p3.x, p3.y) < 0.6 or WorldGen.path_dist(p3.x, p3.y) < 26.0 or _near_site(p3, 36.0) or WorldGen.terrain(p3.x, p3.y)[1] > 0.0:
+			continue
+		WorldGen.add_clear(p3.x, p3.y, 15.0, 10.0, 0.4)
+		put("heli_wreck", p3.x, p3.y, 23.0, "pt", false)
+		_rej["вертолёт"] = "%d:%d" % [roundi(p3.x), roundi(p3.y)]
+		break
 
 # ---------------- поля: стога, тюки, брошенная техника ----------------
 func _fields() -> void:
