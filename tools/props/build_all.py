@@ -46,6 +46,6 @@ for mod in (houses, vehicles, rural, buildings, locs, locs2):
 bpy.ops.object.select_all(action='DESELECT')
 for o in bpy.data.objects: o.select_set(o.type == 'MESH')
 tris = sum(len(o.data.polygons) for o in bpy.data.objects if o.type == 'MESH')
-bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_image_format='AUTO', export_jpeg_quality=82, export_apply=True, export_vertex_color='ACTIVE', export_tangents=True)
+bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_image_format='AUTO', export_jpeg_quality=82, export_apply=True, export_vertex_color='NAME', export_vertex_color_name='Color', export_all_vertex_colors=False, export_tangents=True)   # 'ACTIVE' в Blender 5.2 пишет пустой белый COLOR_0, краска уходила в COLOR_1 — Godot её не видел
 print('моделей', count, 'полигонов', tris, 'файл', os.path.getsize(OUT) // 1024, 'КБ')
 open(OUT.replace('.glb', '_names.txt'), 'w').write('\n'.join(names))
