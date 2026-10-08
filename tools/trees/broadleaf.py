@@ -56,6 +56,11 @@ BROAD_P = {
 		up=0.6, down=0.7, bw=0.6, l2=True, l2s=0.3, ss=0.18, sz=(0.6, 0.9), roll=(30, 110), tw=0.03, lean=0.06, base=False,
 		leaf=dict(shape=lambda xb: 0.34 * np.sin(np.pi * xb ** 0.85) ** 0.85, pet=0.25, teeth=(30, 0.03, 0, 0), veins=8.0,
 			greens=[(0.27, 0.40, 0.13), (0.30, 0.43, 0.15), (0.25, 0.38, 0.12), (0.31, 0.41, 0.14)]), ls=0.065, lsp=0.03, fruit=True),
+	# черёмуха: многоствольная, 6–9 м, у воды и на опушках; лист эллиптический, заострённый, мелкозубчатый, тёмный
+	"cherry": dict(H0=7.5, r0=0.11, cs=0.3, n1=16, p0=50, p1=32, L0=1.6, L1=2.2, env=lambda u: math.sin(math.pi * min(1.0, u * 0.85 + 0.15)) ** 0.7,
+		up=0.55, down=0.55, bw=0.35, l2=True, l2s=0.5, ss=0.2, sz=(0.6, 0.95), roll=(30, 110), tw=0.03, lean=0.14, base=False, stems=3,
+		leaf=dict(shape=lambda xb: 0.30 * np.sin(np.pi * xb ** 0.8) ** 0.9 * (1.0 - 0.25 * xb ** 3), pet=0.2, teeth=(36, 0.018, 0, 0), veins=9.0,
+			greens=[(0.15, 0.27, 0.08), (0.17, 0.29, 0.09), (0.14, 0.25, 0.07), (0.18, 0.28, 0.10)]), ls=0.07, lsp=0.03),
 }
 
 def trunk_az(H, r0, seg, lean, az, wander, flare=0.45):
@@ -208,6 +213,20 @@ def bark_willow():
 
 def bark_aspen_base():
 	return _fissured((0.34, 0.33, 0.30), (0.06, 0.055, 0.05), 4.0, 0.3)
+
+def bark_cherry():
+	"""Черёмуха: гладкая тёмно-серая кора с поперечными светлыми чечевичками."""
+	h, w = BH, BW
+	n2 = fnoise(h, w, 1.1)
+	col = np.ones((h, w, 3)) * np.array([0.21, 0.19, 0.18]) + n2[..., None] * 0.03
+	ys, xs = np.mgrid[0:h, 0:w]
+	rng = np.random.default_rng(7)
+	lent = np.zeros((h, w))
+	for _ in range(220):
+		cy, cx, L = rng.integers(0, h), rng.integers(0, w), rng.integers(6, 18)
+		lent[max(0, cy - 1):cy + 1, cx:min(w, cx + L)] = 1.0
+	col = col * (1 - lent[..., None] * 0.5) + np.array([0.48, 0.44, 0.38]) * lent[..., None] * 0.5
+	return col, 0.45 + n2 * 0.04 + lent * 0.2
 
 def bark_apple():
 	h, w = BH, BW

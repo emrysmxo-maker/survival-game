@@ -412,6 +412,10 @@ JOBS = {
 	"car_wagon_beige": J("car_wagon_beige", "wagon", P["beige"], 44, broken=0.25, flat=1),
 	"car_police": J("car_police", "sedan", P["white"], 45, broken=0.2, stripes=[(0.55, 0.78, (0.12, 0.28, 0.62))], beacon=((0.6, 0.05, 0.04), (0.1, 0.2, 0.75))),
 	"car_ambulance": J("car_ambulance", "van", P["white"], 46, broken=0.15, stripes=[(0.95, 1.12, (0.75, 0.08, 0.06))], beacon=((0.1, 0.2, 0.75), (0.1, 0.2, 0.75))),
+	# брошенные: сгоревшие и разбитые (стёкла выбиты, колёса спущены, ржавчина)
+	"car_crossover_burnt": J("car_crossover_burnt", "crossover", P["black"], 71, burnt=True, dirt=0.8),
+	"car_hatch_burnt": J("car_hatch_burnt", "hatch", P["black"], 72, burnt=True, dirt=0.8),
+	"car_solaris_wreck": J("car_solaris_wreck", "sedan", P["silver"], 73, broken=0.9, flat=2, rust=0.3, dirt=0.7),
 	"car_truck_blue": lambda: truck("car_truck_blue", P["blue"], 51, "flat"),
 	"car_truck_green": lambda: truck("car_truck_green", P["olive"], 52, "tent"),
 	"car_truck_logs": lambda: truck("car_truck_logs", P["darkgreen"], 53, "logs"),

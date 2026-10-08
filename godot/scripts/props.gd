@@ -15,7 +15,8 @@ const M := 1.0 / WorldGen.T           # тайлов в метре
 const CARS := ["car_sedan_red", "car_sedan_white", "car_solaris_silver", "car_granta_graphite", "car_vesta_black", "car_hatch_white", "car_hatch_red", "car_sedan_blue",
 	"car_duster_brown", "car_crossover_silver", "car_crossover_white", "car_suv_green", "car_wagon_silver", "car_wagon_beige", "car_van_white", "car_van_orange",
 	"car_niva_beige", "car_niva_white", "car_classic_blue", "car_sedan_green", "car_sedan_burnt", "car_sedan_yellow", "car_van_olive",
-	"car_truck_blue", "car_truck_green", "car_bus_yellow", "car_bus_blue", "tractor_blue", "tractor_red"]
+	"car_truck_blue", "car_truck_green", "car_bus_yellow", "car_bus_blue", "tractor_blue", "tractor_red", "car_crossover_burnt", "car_hatch_burnt", "car_solaris_wreck",
+	"car_solaris_wreck", "car_sedan_burnt"]
 const YARD_CARS := ["car_solaris_silver", "car_granta_graphite", "car_duster_brown", "car_crossover_silver", "car_crossover_white", "car_suv_green", "car_wagon_silver",
 	"car_wagon_beige", "car_hatch_white", "car_niva_white", "car_niva_beige", "car_classic_blue", "car_sedan_white", "car_vesta_black"]
 # дома (tools/houses/house.py): длина по фасаду, глубина, вынос крыльца с ступенями — метры
@@ -104,6 +105,8 @@ func _ready() -> void:
 	_towns()                              # мини-города у локаций — после хуторов, по свободным дорогам
 	_gas_station()
 	_roadside()
+	_quarry()
+	_hunting_towers()
 	_dump_and_wreck()
 	_rings()
 	_forest_houses()
@@ -415,7 +418,8 @@ func _plot(c: Vector2, yaw: float, w: float, d: float, house: String, kind: Stri
 	if room > 8.0 * M:
 		for k in (1 + _rng.randi() % 2):
 			var ap := _loc(c, th, -side * (w / 2.0 - (2.5 + k * 5.0) * M), back1 + 6.0 * M + k * 1.5 * M)
-			WorldGen.add_tree(ap.x, ap.y, WorldGen.APPLE[_rng.randi() % WorldGen.APPLE.size()])
+			var sp: String = WorldGen.APPLE[_rng.randi() % WorldGen.APPLE.size()] if _rng.randf() < 0.75 else ("cherry_a" if _rng.randf() < 0.5 else "cherry_b")
+			WorldGen.add_tree(ap.x, ap.y, sp)                      # яблоня, иногда черёмуха
 
 func _diff(before: String) -> String:
 	return str(_rej).replace(before, "")
@@ -1155,6 +1159,47 @@ func _roadside() -> void:
 						break
 				if _rej[item[0]] != "нет места":
 					break
+
+# карьер: самосвалы и трактор на дне, вагончик и бочки у въезда, кучи грунта
+func _quarry() -> void:
+	var q := WorldGen.QUARRY
+	var c := Vector2(q.x, q.y)
+	var items := [["car_truck_blue", 3.0, -2.0, 30.0], ["car_truck_blue", -4.0, 4.0, 200.0], ["tractor_red", 5.0, 5.0, 120.0], ["sawdust", -6.0, -5.0, 0.0], ["sawdust", -8.5, -2.0, 30.0],
+		["sawdust", 7.0, -6.0, 40.0], ["generator_shed", 0.0, 15.0, 0.0], ["barrels_a", 3.0, 16.0, 0.0], ["container_b", -4.0, 16.5, 90.0], ["tires", -7.0, 14.0, 0.0]]
+	for it in items:
+		put(it[0], c.x + it[1], c.y + it[2], it[3])
+	_plots.append([c, 0.0, q.z, q.z])                                 # чужие дома в карьер не встанут
+
+# охотничьи вышки: на опушках, лицом к полю, вдали от посёлков и дорог
+func _hunting_towers() -> void:
+	var got := 0
+	var placed: Array = []
+	var x := -190.0
+	while x <= 190.0 and got < 7:
+		var y := -190.0
+		while y <= 190.0 and got < 7:
+			var p := Vector2(x + 7.0, y + 3.0)
+			var fm := WorldGen.forest_mask(p.x, p.y)
+			if fm > 0.25 and WorldGen.in_map(p.x, p.y, 10.0) and not _near_center(p, 30.0) and WorldGen.path_dist(p.x, p.y) > 10.0:
+				var far := true
+				for o in placed:
+					if p.distance_to(o) < 60.0:
+						far = false
+				# лицом туда, где леса меньше
+				var best := 0.0
+				var bm := 9.0
+				for k in 8:
+					var a := k * TAU / 8.0
+					var m := WorldGen.forest_mask(p.x + cos(a) * 16.0, p.y + sin(a) * 16.0)
+					if m < bm:
+						bm = m
+						best = a
+				if far and bm < 0.12 and put("watch_tower", p.x, p.y, rad_to_deg(atan2(cos(best), sin(best)))):
+					placed.append(p)
+					got += 1
+			y += 11.0
+		x += 11.0
+	_rej["охотничьих вышек"] = got
 
 func _children_camp() -> void:
 	var h: Dictionary = WorldGen.HAMLETS["h_lager"]

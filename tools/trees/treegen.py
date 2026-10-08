@@ -870,6 +870,8 @@ SPECIES = {
 		(512, 512), [("bark_willow", bark_willow), ("bark_twig", bark_twig)], lambda: twig_broad("willow")),
 	"apple": ([("apple_a", 5.5, False), ("apple_b", 4.5, False), ("apple_c", 6.5, False)],
 		(512, 512), [("bark_apple", bark_apple), ("bark_twig", bark_twig)], lambda: twig_broad("apple")),
+	"cherry": ([("cherry_a", 8.0, False), ("cherry_b", 6.5, False)],
+		(512, 512), [("bark_cherry", bark_cherry), ("bark_twig", bark_twig)], lambda: twig_broad("cherry")),
 }
 
 def export(objs, path):
@@ -903,7 +905,7 @@ def main():
 				if Lm.f:
 					leaves.append(Lm.build(nm + "_l", [cm]))
 				lod_t.append("L%d %d" % (lod, Wm.tris() + len(Lm.f) * 2))
-			cat = "dead" if dead else ("sapling" if (H < 6 and sp != "apple") else "tree")
+			cat = "dead" if dead else ("sapling" if (H < 6 and sp not in ("apple", "cherry")) else "tree")
 			kinds[vn] = {"m": sp, "n": vn, "h": round(top, 2), "sc": 1.0, "cat": cat, "yaw": 0, "wood_only": dead, "lods": [vn + "_l1", vn + "_l2"]}
 			if Lm.f:
 				c, rr = Lm.crown

@@ -73,7 +73,7 @@ func _process(dt: float) -> void:
 		f[4] += f[3] * dt
 		c += Vector2(cos(f[4] * 0.13), sin(f[4] * 0.11)) * dt * 1.2                # стая медленно сносится
 		f[0] = c
-		var gh := WorldGen.height_m(c.x, c.y) + float(f[1])
+		var gh: float = WorldGen.height_m(c.x, c.y) + float(f[1])
 		for b in f[5]:
 			if i >= N:
 				break

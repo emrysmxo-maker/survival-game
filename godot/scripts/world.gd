@@ -44,7 +44,7 @@ const SMALL_CATS := ["grass", "flower", "fern", "nettle", "branch", "moss"]
 
 func _ready() -> void:
 	WorldGen.init()
-	_backdrop()
+	_bd_task = WorkerThreadPool.add_task(_backdrop_build)              # подложка карты — в фоне, без задержки старта
 	ground_mat = ShaderMaterial.new()
 	ground_mat.shader = load("res://shaders/ground.gdshader")
 	ground_mat.set_shader_parameter("t_albedo", load("res://assets/ground2/ground_diff_array.jpg"))
@@ -248,6 +248,10 @@ func _crown_mesh(conifer: bool) -> ArrayMesh:
 
 # ---------- чанки ----------
 func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
+	if _bd_task >= 0 and WorkerThreadPool.is_task_completed(_bd_task):
+		WorkerThreadPool.wait_for_task_completion(_bd_task)
+		_bd_task = -1
+		_backdrop_add()
 	player_tile = tile_pos
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))
 	# радиус загрузки — сколько видит камера (не меньше настройки качества); выгрузка — с запасом DROP_MARGIN,
@@ -297,9 +301,12 @@ func update_world(tile_pos: Vector2, _cam: Camera3D) -> void:
 
 # подложка: вся карта одним грубым мешем (шаг 4 тайла) чуть ниже настоящей земли — вдали и при быстром отдалении
 # вместо черноты видна местность (лес, поля, вода); чанки рисуются поверх
-func _backdrop() -> void:
+var _bd_task := -1
+var _bd_mesh: ArrayMesh
+
+func _backdrop_build() -> void:
 	var t0 := Time.get_ticks_msec()
-	var st := 4.0
+	var st := 5.0
 	var r := WorldGen.MAP_RADIUS + 40.0
 	var n := int(r * 2.0 / st) + 1
 	var verts := PackedVector3Array()
@@ -312,14 +319,12 @@ func _backdrop() -> void:
 			var x := -r + i * st
 			var y := -r + j * st
 			var t := WorldGen.terrain(x, y)
-			var h := WorldGen.height_m(x, y)
+			var h: float = t[0] * WorldGen.HK
 			var c := Color(0.44, 0.39, 0.25).lerp(Color(0.36, 0.35, 0.21), WorldGen.vnoise(x, y, 31.0, 5))
 			c = c.lerp(Color(0.14, 0.18, 0.1), clampf(WorldGen.forest_mask(x, y) * 1.6 - 0.3, 0.0, 1.0))
 			var w := WorldGen.water_at(x, y)
 			if w.x > 0.05:
 				c = Color(0.2, 0.32, 0.36)
-			elif WorldGen.path_dist(x, y) < 2.0:
-				c = Color(0.36, 0.34, 0.3)
 			if not WorldGen.in_map(x, y, 0.0):
 				c = c.darkened(0.25)
 			verts[j * n + i] = Vector3(x * WorldGen.T, h - 0.25, y * WorldGen.T)
@@ -342,12 +347,15 @@ func _backdrop() -> void:
 	var st2 := SurfaceTool.new()
 	st2.create_from(m, 0)
 	st2.generate_normals()
+	_bd_mesh = st2.commit()
+	_bd_mesh.surface_set_material(0, mat)
+	print("подложка: ", n * n, " вершин за ", Time.get_ticks_msec() - t0, " мс (фон)")
+
+func _backdrop_add() -> void:
 	var mi := MeshInstance3D.new()
-	mi.mesh = st2.commit()
-	mi.mesh.surface_set_material(0, mat)
+	mi.mesh = _bd_mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-	print("подложка: ", n * n, " вершин за ", Time.get_ticks_msec() - t0, " мс")
 
 func ensure_now(tile_pos: Vector2, r: int) -> void:
 	var c := Vector2i(floori(tile_pos.x / WorldGen.CHUNK), floori(tile_pos.y / WorldGen.CHUNK))

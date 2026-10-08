@@ -35,12 +35,20 @@ const HAMLETS := {
 	"h_cem": {"x": -140.0, "y": -62.0, "r": 8.0, "name": "Старое кладбище"},
 	"h_poselok": {"x": -54.0, "y": -105.0, "r": 12.0, "name": "Посёлок Луговой"},
 	"h_lager": {"x": -100.0, "y": -22.0, "r": 16.0, "name": "Детский лагерь «Берёзка»"},
+	"h_quarry": {"x": -105.0, "y": 50.0, "r": 6.0, "name": "Песчаный карьер"},
 }
 const TRACKS := [["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"],
 	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_cem", "village"],
-	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "h_vyselki"]]
+	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "h_vyselki"], ["h_quarry", "h_lager"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
+# карьер: центр и радиус (тайлы) — террасная выемка ~6 м, каменистое дно
+const QUARRY := Vector3(-105.0, 50.0, 17.0)
+# овраги в лесу: от, до, ручей по дну (1 — есть)
+const RAVINES := [[Vector2(90.0, 120.0), Vector2(135.0, 165.0), 1.0], [Vector2(105.0, -75.0), Vector2(169.0, -75.0), 0.0]]
+static var _rv := PackedFloat32Array()      # отрезки оврагов: x0, y0, x1, y1, ручей
+static var _rv_bb := Rect2()
+
 # озёра: центр, радиус (берег неровный), глубина
 const LAKES := [
 	{"x": 165.0, "y": 45.0, "r": 38.0, "d": 2.6},     # Большое озеро (восток)
@@ -70,7 +78,7 @@ const BIRCH := ["birch_a", "birch_b", "birch_c"]
 const BROAD := ["alder_a", "alder_b", "aspen_b", "birch_b"]
 const OAK := ["oak_a", "oak_b", "oak_c"]
 const ASPEN := ["aspen_a", "aspen_b"]
-const WET := ["alder_a", "alder_b", "willow_a", "willow_b"]        # сырые низины, берега
+const WET := ["alder_a", "alder_b", "willow_a", "willow_b", "cherry_a", "cherry_b"]        # сырые низины, берега (черёмуха — у воды и на опушках)
 const APPLE := ["apple_a", "apple_b", "apple_c"]                   # одичавшие сады (ставятся у дворов — этап расстановки)
 const DEAD := ["pine_dead_a", "spruce_dead_a"]
 const SAP_SMALL := ["spruce_sap_a", "pine_sap_a", "birch_sap_a"]
@@ -184,6 +192,21 @@ static func init() -> void:
 	var zn := PackedFloat32Array()
 	for z in ZONES:
 		zn.append_array([z.x, z.y])
+	var rvs := PackedFloat32Array()
+	var rvbb := Rect2(RAVINES[0][0], Vector2.ZERO)
+	for rr in RAVINES:
+		var a: Vector2 = rr[0]
+		var b: Vector2 = rr[1]
+		var nn := (b - a).normalized().orthogonal()
+		var prev := a
+		for i in range(1, 9):
+			var t := i / 8.0
+			var q := a.lerp(b, t) + nn * sin(t * PI * 2.0) * 5.0 * (1.0 if i < 8 else 0.0)
+			rvs.append_array([prev.x, prev.y, q.x, q.y, rr[2]])
+			rvbb = rvbb.expand(q)
+			prev = q
+	_rv = rvs
+	_rv_bb = rvbb.grow(12.0)
 	_lk = lk
 	_ft = ft
 	_zn = zn
@@ -286,6 +309,20 @@ static func base_height(wx: float, wy: float) -> float:
 static func swamp_at(wx: float, wy: float) -> float:
 	return ss(-95.0, -130.0, wx) * ss(70.0, 100.0, wy) * ss(215.0, 190.0, wy)
 
+# до ближайшего оврага: x — расстояние (тайлы), y — 1, если по дну течёт ручей
+static func ravine_dist(wx: float, wy: float) -> Vector2:
+	var p := Vector2(wx, wy)
+	if not _rv_bb.has_point(p):
+		return Vector2(999.0, 0.0)
+	var best := Vector2(999.0, 0.0)
+	for i in _rv.size() / 5:
+		var a := Vector2(_rv[i * 5], _rv[i * 5 + 1])
+		var b := Vector2(_rv[i * 5 + 2], _rv[i * 5 + 3])
+		var d := p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
+		if d < best.x:
+			best = Vector2(d, _rv[i * 5 + 4])
+	return best
+
 # ---------- всё о месте (x, y) ----------
 # Возвращает массив: [h, water, ravine, swamp, clearing, rocky, path]
 static func terrain(wx: float, wy: float) -> PackedFloat32Array:
@@ -311,6 +348,21 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 			h = maxf(h, lvl + 0.1 - 0.7 * ss(0.15, 0.0, lk.w))
 		h = lerpf(h, lvl - 0.04 - lk.y * _lk[int(lk.z) * 5 + 3], lk.x)          # дно: мелко у берега, глубже к центру
 	var rocky := ss(3.2, 5.2, hb) * 0.85
+	# карьер: террасы, каменистое дно, без леса
+	var qd := Vector2(wx - QUARRY.x, wy - QUARRY.y).length()
+	if qd < QUARRY.z + 6.0:
+		var qk := ss(QUARRY.z, QUARRY.z * 0.3, qd)
+		h -= 8.0 * (roundf(qk * 3.0) / 3.0 * 0.65 + qk * 0.35)
+		rocky = maxf(rocky, ss(QUARRY.z + 1.0, QUARRY.z * 0.8, qd))
+		clearing = maxf(clearing, ss(QUARRY.z + 6.0, QUARRY.z, qd))
+	# овраги (и ручей по дну)
+	var rvd := ravine_dist(wx, wy)
+	if rvd.x < 9.0:
+		var rk := ss(9.0, 1.5, rvd.x)
+		h -= rk * 3.2
+		ravine = maxf(ravine, rk)
+		if rvd.y > 0.5:
+			rwater = maxf(rwater, ss(1.4, 0.7, rvd.x))
 	var pd := path_dist(wx, wy)
 	var ad := asphalt_dist(wx, wy)
 	var path := maxf(ss(2.0, 0.8, pd), ss(3.6, 2.4, ad))
@@ -325,6 +377,9 @@ static func water_at(wx: float, wy: float) -> Vector2:
 	var lk := lake_at(wx, wy)
 	if lk.z >= 0.0:
 		return Vector2(lk.x, lake_level(int(lk.z)))
+	var rvd := ravine_dist(wx, wy)
+	if rvd.y > 0.5 and rvd.x < 2.5:
+		return Vector2(ss(1.6, 0.8, rvd.x), base_height(wx, wy) - 3.2 + 0.45)   # ручей по дну оврага
 	var rd := river_dist(wx, wy)
 	if rd < 5.0:
 		var hb := base_height(wx, wy)
@@ -343,6 +398,9 @@ static func flow_at(wx: float, wy: float) -> Vector2:
 # рисовать ли воду в точке (шире самой воды: кромку обрезает земля, без «зубцов»)
 static func water_draw(wx: float, wy: float) -> bool:
 	if lake_at(wx, wy).w > 0.15:
+		return true
+	var rvd := ravine_dist(wx, wy)
+	if rvd.y > 0.5 and rvd.x < 2.5:
 		return true
 	return river_dist(wx, wy) < 5.0
 
