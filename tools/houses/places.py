@@ -195,6 +195,63 @@ def heli_wreck(name):
 	ob.rotation_euler = (0.25, 0.0, 0.0)                                # завалился на бок
 	return _join(o2, ob, name), None
 
+def rock_cave(name, seed):
+	"""Скальный выход 12×9×5 м: несколько неровных глыб, вход в пещеру (вырезан цилиндром), мох сверху, тёмный зев."""
+	import bmesh
+	from mathutils import Matrix, noise
+	rnd = random.Random(seed)
+	bm = bmesh.new()
+	for (x, y, z, sx, sy, sz) in ((0, 0.6, 2.0, 5.2, 4.0, 3.4), (3.8, 1.6, 1.5, 3.4, 3.0, 2.6), (-4.0, 0.8, 1.3, 3.2, 2.8, 2.2), (1.2, 3.0, 1.2, 3.0, 2.4, 2.0)):
+		M = Matrix.Translation((x, y, z)) @ Matrix.Diagonal((sx, sy, sz, 1.0))
+		bmesh.ops.create_icosphere(bm, subdivisions=4, radius=1.0, matrix=M)
+	for v in bm.verts:
+		n = noise.noise(v.co * 0.45 + Vector((seed, 0, 0))) * 0.9 + noise.noise(v.co * 1.3) * 0.3
+		d = Vector((v.co.x, v.co.y, v.co.z - 1.0)).normalized()
+		v.co += d * n
+		if v.co.z < 0.0:
+			v.co.z = v.co.z * 0.25 - 0.2                                # низ — в землю
+	me = bpy.data.meshes.new(name)
+	bm.to_mesh(me); bm.free()
+	ob = bpy.data.objects.new(name, me)
+	bpy.context.scene.collection.objects.link(ob)
+	# вход в пещеру: вырезать цилиндр спереди (-Y)
+	bpy.ops.mesh.primitive_cylinder_add(vertices=14, radius=1.35, depth=7.0, location=(0.3, -3.5, 1.15), rotation=(math.pi / 2, 0, 0))
+	cut = bpy.context.active_object
+	md = ob.modifiers.new("cave", "BOOLEAN")
+	md.operation = "DIFFERENCE"
+	md.object = cut
+	bpy.context.view_layer.objects.active = ob
+	bpy.ops.object.modifier_apply(modifier=md.name)
+	bpy.data.objects.remove(cut)
+	me = ob.data
+	me.materials.append(mat("concrete"))
+	me.materials.append(mat("dark"))
+	bm = bmesh.new(); bm.from_mesh(me)
+	cl = bm.loops.layers.color.new("Color")
+	uv = bm.loops.layers.uv.new("UVMap")
+	for f in bm.faces:
+		c = f.calc_center_median()
+		inside = abs(c.x - 0.3) < 1.5 and c.y > -2.6 and c.z < 2.4 and f.normal.y > -0.2   # стенки тоннеля
+		f.material_index = 1 if inside else 0
+		for l in f.loops:
+			p = l.vert.co
+			l[uv].uv = (p.x * 0.22 + p.z * 0.11, p.y * 0.22 + p.z * 0.17)
+			g = 0.75 + 0.25 * noise.noise(p * 0.8) + 0.1 * noise.noise(p * 3.1)
+			col = Vector((0.62, 0.60, 0.56)) * g
+			if l.vert.normal.z > 0.75:                                  # мох и лишайник — пятнами на плоских верхах
+				mk = min(1.0, (l.vert.normal.z - 0.75) * 3.0) * max(0.0, noise.noise(p * 0.6 + Vector((3, 1, 0))) + 0.3)
+				col = col.lerp(Vector((0.30, 0.36, 0.20)), min(0.7, mk))
+			if p.z < 0.6:
+				col = col * (0.7 + 0.5 * p.z)                           # низ темнее
+			if inside:
+				col = Vector((0.08, 0.08, 0.08))
+			l[cl] = (col.x, col.y, col.z, 1.0)
+	bm.to_mesh(me); bm.free()
+	me.color_attributes.active_color = me.color_attributes["Color"]
+	for pl in me.polygons:
+		pl.use_smooth = True
+	return ob, None
+
 # ---------------- общественные и придорожные здания: дом + вывеска над входом ----------------
 def signed(name, spec, seed, text, size=0.5, board=(0.92, 0.92, 0.9), tcol=(0.12, 0.2, 0.55)):
 	"""Здание по house() и вывеска на фасаде (-Y) над дверью."""
@@ -302,6 +359,7 @@ JOBS = {
 	"dump_pile_a": lambda: dump_pile("dump_pile_a", 1),
 	"dump_pile_b": lambda: dump_pile("dump_pile_b", 2),
 	"heli_wreck": lambda: heli_wreck("heli_wreck"),
+	"rock_cave": lambda: rock_cave("rock_cave", 5),
 	"house_izba_burnt": lambda: burnt("house_izba_burnt", "house_izba_a", 31),
 	"house_brick_burnt": lambda: burnt("house_brick_burnt", "house_brick_small", 32),
 }

@@ -31,7 +31,7 @@ const FOOT := {"club": 7.0, "barn": 7.5, "barn_long": 13.0, "barracks": 11.0, "s
 	"chapel": 3.0, "silo_conc": 2.4, "silo_metal": 2.4, "water_tower": 2.2, "radio_mast": 1.8, "transmitter": 4.5, "fuel_tank": 3.0}
 const RAD := {"shed_blue": 2.4, "shed_green": 2.4, "open_shed": 3.4, "greenhouse": 2.6, "boat_shed": 4.2, "outhouse": 1.0, "well_a": 1.1, "well_b": 1.1, "tent_army": 2.6, "tent_tan": 2.6,
 	"tarp_shelter": 2.4, "log_pile": 4.3, "lumber_stack": 2.6, "pier": 6.5, "container_g": 3.3, "container_b": 3.3, "container_r": 3.3, "checkpoint": 4.6, "mil_tower": 2.0,
-	"sandbag_nest": 2.8, "watch_tower": 1.8, "generator_shed": 3.0, "sawdust": 2.6, "cellar": 2.2, "haystack": 2.2}
+	"rock_cave": 6.5, "sandbag_nest": 2.8, "watch_tower": 1.8, "generator_shed": 3.0, "sawdust": 2.6, "cellar": 2.2, "haystack": 2.2}
 var _occ: Array = []
 
 # хутора: какие дома (по порядку вдоль улицы) и что вокруг [модель, dx, dy, yaw]
@@ -119,6 +119,7 @@ func _ready() -> void:
 	_gas_station(); step.call("gas")
 	_roadside(); step.call("roadside")
 	_quarry()
+	_rocks()
 	_hunting_towers(); step.call("towers")
 	_dump_and_wreck()
 	_rings()
@@ -970,6 +971,12 @@ func _road_marks() -> void:
 					_add("bridge", c.x, c.y, xf)
 					WorldGen.add_clear(c.x, c.y, 12.0, 5.0, deg_to_rad(yaw))
 					_rej["мостов"] = str(_rej.get("мостов", "")) + "%d:%d " % [roundi(c.x), roundi(c.y)]
+					if not _rej.has("колонна у моста"):                     # брошенная колонна перед первым мостом: пытались уехать
+						var cv := ["car_bus_yellow", "car_van_white", "car_sedan_white", "car_crossover_silver", "car_solaris_wreck", "car_truck_green", "car_hatch_red"]
+						for k in cv.size():
+							var q: Vector2 = a - bd * (14.0 + k * 7.0) + bd.orthogonal() * (1.2 if k % 2 == 0 else -0.6)
+							put(cv[k], q.x, q.y, yaw + _rng.randf_range(-8, 8), "", false)
+						_rej["колонна у моста"] = "%d:%d" % [roundi(a.x), roundi(a.y)]
 					wet_run.clear()
 				if acc <= 0.0 and not river and tw[1] < 0.02 and not _near_site(p, 6.0):
 					put("road_dash", p.x, p.y, rad_to_deg(atan2(-dir.y, dir.x)), "dash", false)
@@ -1222,6 +1229,28 @@ func _quarry() -> void:
 	for it in items:
 		put(it[0], c.x + it[1], c.y + it[2], it[3])
 	_plots.append([c, 0.0, q.z, q.z])                                 # чужие дома в карьер не встанут
+
+# скалы с пещерой: в лесу на северных холмах, вдали от посёлков и дорог
+func _rocks() -> void:
+	var got := 0
+	var where := ""
+	var x := -180.0
+	while x <= 180.0 and got < 2:
+		var y := -205.0
+		while y <= -120.0 and got < 2:
+			var p := Vector2(x, y)
+			if WorldGen.in_map(p.x, p.y, 12.0) and WorldGen.forest_mask(p.x, p.y) > 0.4 and not _near_center(p, 40.0) and WorldGen.path_dist(p.x, p.y) > 18.0:
+				var ok := true
+				for q in where.split(" ", false):
+					var xy := q.split(":")
+					if p.distance_to(Vector2(float(xy[0]), float(xy[1]))) < 120.0:
+						ok = false
+				if ok and put("rock_cave", p.x, p.y, _rng.randf_range(0, 360), "min"):
+					got += 1
+					where += "%d:%d " % [roundi(p.x), roundi(p.y)]
+			y += 17.0
+		x += 31.0
+	_rej["скалы"] = where
 
 # охотничьи вышки: на опушках, лицом к полю, вдали от посёлков и дорог
 func _hunting_towers() -> void:
