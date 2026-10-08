@@ -10,7 +10,12 @@ func _init() -> void:
 	for k in WorldGen.FEATURES: sites[k] = WorldGen.FEATURES[k]
 	for k in WorldGen.HAMLETS: sites[k] = WorldGen.HAMLETS[k]
 	for name in args[1].split(","):
-		var st: Dictionary = sites[name]
+		var st: Dictionary
+		if name.begins_with("@"):                                      # @x:y — произвольная точка
+			var xy := name.substr(1).split(":")
+			st = {"x": float(xy[0]), "y": float(xy[1]), "r": 10.0}
+		else:
+			st = sites[name]
 		var out := {"site": name, "cx": st.x, "cy": st.y, "r": st.r, "h0": WorldGen.height_m(st.x, st.y), "props": [], "trees": []}
 		var lim: float = st.r + float(OS.get_environment("LIM") if OS.get_environment("LIM") != "" else "14")
 		for key in pr._batch:

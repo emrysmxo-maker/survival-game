@@ -85,6 +85,7 @@ func _ready() -> void:
 		if key != "h_poselok":
 			_hamlet(key)
 	_rings()
+	_forest_houses()
 	_road_stuff()
 	_fields()
 	_flush()
@@ -479,6 +480,18 @@ func _hamlet(key: String) -> void:
 			got = _street(c, key, dir, half, 0.0, s.houses, s.kind, w, d, n)
 		if OS.is_debug_build() and OS.has_feature("editor"):
 			pass
+		if got < n:                                                   # не встали вдоль улицы — по кольцу вокруг центра, фасадом к центру
+			for rr: float in [10.0, 18.0, 26.0, 34.0]:
+				for ai in 12:
+					if got >= n:
+						break
+					var ang := ai * TAU / 12.0 + rr * 0.1
+					var pc := c + Vector2(cos(ang), sin(ang)) * (rr + d * 0.5)
+					var fd := (c - pc).normalized()
+					var th2 := atan2(fd.x, fd.y)
+					if _plot_ok(pc, th2, w, d, key):
+						_plot(pc, rad_to_deg(th2), w, d, s.houses[got], s.kind)
+						got += 1
 		_rej["поставлено " + key] = "%d/%d" % [got, n]
 		for p in s.ext:
 			put(p[0], h.x + p[1] * K, h.y + p[2] * K, p[3])
@@ -533,6 +546,81 @@ func _bunker() -> void:
 	for it in items:
 		var p2: Vector2 = L.call(it[1], it[2])
 		put(it[0], p2.x, p2.y, yaw + it[3])
+
+# ---------------- лесные дома: избы, заимки, брошенные дачи в лесу; полянка и тропа к ближайшей дороге ----------------
+const FOREST_HOUSES := ["house_cabin", "house_cabin", "house_izba_b", "house_dacha_c", "house_cabin", "house_banya", "house_izba_c", "house_dacha_d"]
+func _forest_houses() -> void:
+	var cands: Array = []
+	var x := -196.0
+	while x <= 196.0:
+		var y := -196.0
+		while y <= 196.0:
+			var p := Vector2(x + _rng.randf_range(-4, 4), y + _rng.randf_range(-4, 4))
+			if WorldGen.forest_mask(p.x, p.y) > 0.22 and WorldGen.in_map(p.x, p.y, 16.0) and WorldGen.terrain(p.x, p.y)[1] < 0.01:
+				var pd := WorldGen.path_dist(p.x, p.y)
+				if pd > 12.0 and pd < 90.0 and not _near_site(p, 18.0):
+					cands.append(p)
+			y += 9.0
+		x += 9.0
+	# случайный порядок (детерминированный)
+	for i in range(cands.size() - 1, 0, -1):
+		var j := _rng.randi() % (i + 1)
+		var tmp = cands[i]
+		cands[i] = cands[j]
+		cands[j] = tmp
+	var chosen: Array = []
+	var why := {"кандидатов": cands.size()}
+	for p: Vector2 in cands:
+		if chosen.size() >= 18:
+			break
+		var ok := true
+		for q in chosen:
+			if p.distance_to(q) < 36.0:
+				ok = false
+				break
+		if not ok:
+			continue
+		# ближайшая точка дороги — туда смотрит фасад и ведёт тропа
+		var best := Vector2.ZERO
+		var bd := 1e9
+		for rd in WorldGen._roads:
+			var pts: PackedVector2Array = rd.pts
+			for i in pts.size() - 1:
+				var cp := Geometry2D.get_closest_point_to_segment(p, pts[i], pts[i + 1])
+				if p.distance_to(cp) < bd:
+					bd = p.distance_to(cp)
+					best = cp
+		var fd := (best - p).normalized()
+		var th := atan2(fd.x, fd.y)
+		var w := 17.0
+		var d := 20.0
+		if not _plot_ok(p, th, w, d, ""):
+			why[_last.substr(0, 12)] = why.get(_last.substr(0, 12), 0) + 1
+			continue
+		# тропа без воды
+		var gate := _loc(p, th, 0.0, d / 2.0 + 1.0)
+		var trail := PackedVector2Array()
+		var side := Vector2(-fd.y, fd.x) * _rng.randf_range(-6.0, 6.0)
+		var wet := false
+		for k in 7:
+			var u := k / 6.0
+			var q: Vector2 = gate.lerp(best, u) + side * sin(u * PI)
+			if WorldGen.terrain(q.x, q.y)[1] > 0.02:
+				wet = true
+			trail.append(q)
+		if wet:
+			why["вода на тропе"] = why.get("вода на тропе", 0) + 1
+			continue
+		chosen.append(p)
+		why["где"] = why.get("где", "") + "%d:%d " % [roundi(p.x), roundi(p.y)]
+		_plot(p, rad_to_deg(th), w, d, FOREST_HOUSES[chosen.size() % FOREST_HOUSES.size()], "old")
+		WorldGen.add_clear(p.x, p.y, w / 2.0 + 4.0, d / 2.0 + 4.0, th)          # полянка вокруг двора
+		var bb := Rect2(trail[0], Vector2.ZERO)
+		for q in trail:
+			bb = bb.expand(q)
+		WorldGen._roads.append({"pts": trail, "bb": bb.grow(4.0), "track": true, "trail": true})
+	why["поставлено"] = chosen.size()
+	_rej["лесных домов"] = why
 
 func _rings() -> void:
 	for r in RINGS:
