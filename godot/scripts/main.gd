@@ -15,6 +15,8 @@ const LOD2_SIZE := 40.0             # дальше — силуэты
 
 var world
 var props
+var weather
+var ambience
 var daynight
 var settings
 var hud
@@ -35,6 +37,10 @@ func _ready() -> void:
 	add_child(world)
 	props = load("res://scripts/props.gd").new()
 	add_child(props)                                        # дома, машины, заборы, следы карантина
+	var wth = load("res://scripts/weather.gd").new()
+	wth.main = self
+	add_child(wth)                                          # дождь, туман в низинах, ветер, мокрая земля
+	weather = wth
 
 	cam = Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -74,6 +80,13 @@ func _ready() -> void:
 		if a.begins_with("--time="):
 			daynight.t = float(a.substr(7)); daynight.auto = false
 	settings.load_saved()
+	ambience = load("res://scripts/ambience.gd").new()
+	ambience.main = self
+	ambience.on = settings.sound
+	add_child(ambience)                                     # ветер, дождь, птицы, сверчки, вороны
+	var crows = load("res://scripts/crows.gd").new()
+	crows.main = self
+	add_child(crows)                                        # стаи ворон над полями
 	hud._refresh_q()
 	# трава/кусты раздвигаются у ног бойца — бойца нет, точка вдали
 	RenderingServer.global_shader_parameter_set("player_pos", Vector3(1e6, 0.0, 1e6))

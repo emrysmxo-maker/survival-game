@@ -4,6 +4,7 @@ extends CanvasLayer
 
 const VERSION := "G0.14"
 var fps_btn: Button
+var snd_btn: Button
 var _ft: Array = []
 var _ft_sum := 0.0
 var main
@@ -70,6 +71,11 @@ func _ready() -> void:
 	fps_btn.reparent(q_panel)
 	fps_btn.pressed.connect(func():
 		main.settings.set_fps_max(not main.settings.fps_max)
+		_refresh_q())
+	snd_btn = _button("", Vector2.ZERO, Vector2(190, 40), Color(0.12, 0.12, 0.2, 0.95))
+	snd_btn.reparent(q_panel)
+	snd_btn.pressed.connect(func():
+		main.settings.set_sound(not main.settings.sound)
 		_refresh_q())
 	for i in 4:
 		var qb := _button("", Vector2.ZERO, Vector2(190, 40), Color(0.06, 0.09, 0.06, 0.9))
@@ -181,6 +187,8 @@ func _process(dt: float) -> void:
 func _refresh_q() -> void:
 	if fps_btn:
 		fps_btn.text = "Кадры: максимум" if main.settings.fps_max else "Кадры: 60"
+	if snd_btn:
+		snd_btn.text = "Звук: вкл" if main.settings.sound else "Звук: выкл"
 	for i in q_btns.size():
 		q_btns[i].text = ("● " if main.settings.level == i else "   ") + main.settings.NAMES[i]
 

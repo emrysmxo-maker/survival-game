@@ -9,6 +9,7 @@ extends Node
 const NAMES := ["Низкое", "Среднее", "Высокое", "Максимум"]
 const PATH := "user://settings.cfg"
 var level := 2
+var sound := true          # звуки мира (ambience.gd)
 var fps_max := true        # «Кадры: максимум» — без ограничения и без вертикальной синхронизации (сколько выдаст телефон)
 var main
 
@@ -17,6 +18,7 @@ func load_saved() -> void:
 	if cf.load(PATH) == OK:
 		level = clampi(int(cf.get_value("gfx", "level4", 2)), 0, 3)
 		fps_max = bool(cf.get_value("gfx", "fpsmax", true))
+		sound = bool(cf.get_value("snd", "on", true))
 	apply(level)
 
 func apply(l: int) -> void:
@@ -45,8 +47,15 @@ func set_fps_max(on: bool) -> void:
 	apply_fps()
 	_save()
 
+func set_sound(on: bool) -> void:
+	sound = on
+	if main and main.ambience:
+		main.ambience.on = on
+	_save()
+
 func _save() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("gfx", "level4", level)
 	cf.set_value("gfx", "fpsmax", fps_max)
+	cf.set_value("snd", "on", sound)
 	cf.save(PATH)

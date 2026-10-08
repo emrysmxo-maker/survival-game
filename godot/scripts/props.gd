@@ -353,6 +353,7 @@ func _plot(c: Vector2, yaw: float, w: float, d: float, house: String, kind: Stri
 	var hy := d / 2.0 - 3.0 * M - por - hdp / 2.0
 	var hp := _loc(c, th, hx, hy)
 	put(house, hp.x, hp.y, yaw, "", false)
+	WorldGen.add_clear(hp.x, hp.y, hl * 0.5 + 6.5 * M, (hdp + por) * 0.5 + 6.5 * M, th)   # крона лесного дерева не нависает над домом
 	_occ.append([hp, maxf(hl, hdp) * 0.5])
 	if _rng.randf() < 0.3:                                            # надпись краской на фасаде
 		var F := Vector2(sin(th), cos(th))

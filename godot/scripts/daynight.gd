@@ -10,6 +10,7 @@ var sun: DirectionalLight3D
 var moon: DirectionalLight3D
 var env: Environment
 var night := 0.0       # 0 день .. 1 ночь (окна, костёр)
+var cloud := 0.0       # облачность 0..1 (weather.gd): солнце слабее, тени мягче
 
 const C_DAY := Color(1.0, 0.98, 0.94)
 const C_GOLD := Color(1.0, 0.77, 0.55)
@@ -65,12 +66,13 @@ func apply() -> void:
 	var gold := clampf(1.0 - e / 0.35, 0.0, 1.0) * day
 	var col := C_DAY.lerp(C_GOLD, gold * 0.85)
 	sun.light_color = col
-	sun.light_energy = 0.82 * day
+	sun.light_energy = 0.82 * day * (1.0 - 0.55 * cloud)
+	sun.shadow_opacity = 1.0 - 0.6 * cloud
 	sun.visible = day > 0.01
 	moon.light_energy = 0.22 * (1.0 - day)
 	moon.visible = day < 0.99
 	env.ambient_light_color = Color(0.62, 0.66, 0.62).lerp(C_NIGHT, 1.0 - day)
-	env.ambient_light_energy = lerpf(0.3, 0.5, day)
+	env.ambient_light_energy = lerpf(0.3, 0.5, day) * (1.0 + 0.25 * cloud)
 
 func label() -> String:
 	var hh := int(t)

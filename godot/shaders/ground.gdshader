@@ -9,6 +9,7 @@ uniform sampler2DArray t_normal : hint_normal, filter_linear_mipmap_anisotropic,
 uniform float meters_per_texture = 2.6;
 uniform sampler2D macro_tex : filter_linear_mipmap, repeat_enable;
 uniform vec4 morok_c[3];                 // морок: центр x, z (м), радиус (м) — серая, выцветшая земля   // бесшовный шум (Godot NoiseTexture2D): крупные пятна, анти-повтор, лужи
+uniform float rain_wet = 0.0;       // после дождя: земля темнее, лужи в низинках (weather.gd)
 uniform bool detail = true;          // false (Низкое/Среднее): одна выборка на слой, слабые слои пропускаются
 global uniform bool q_ground_normals;
 
@@ -96,6 +97,8 @@ void fragment() {
 	}
 	// лужи на болоте — неровные, по шуму
 	float puddle = swamp * ssf(0.6, 0.7, m11 * 0.7 + m4 * 0.3) * 0.8;
+	c *= 1.0 - rain_wet * 0.28;                                                     // мокрая земля темнее
+	puddle = max(puddle, rain_wet * ssf(0.66, 0.74, m11 * 0.6 + m4 * 0.4) * 0.85);  // дождевые лужи по шуму
 	c = mix(c, c * 0.45 + vec3(0.02, 0.04, 0.04), puddle);
 	// вода
 	float ripple = sin(tile.x * 2.1 + TIME * 1.3) * sin(tile.y * 1.7 - TIME * 1.1) * 0.5 + 0.5;
