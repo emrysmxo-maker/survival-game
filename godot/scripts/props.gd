@@ -244,6 +244,37 @@ func _rad(model: String) -> float:
 		return 2.5
 	return float(RAD.get(model, FOOT.get(model, 3.0))) * K
 
+# ---------------- следы построек (против наложений) ----------------
+const FOOT_SKIP := ["fence", "road_dash", "bridge", "concrete_pad", "rail_", "wire", "sign", "lamp", "pole", "graffiti", "_roof", "dump_pile", "sawdust",
+	"barbed", "jersey", "block_fbs", "radio_mast", "dish", "bench", "campfire", "clothesline", "well_", "outhouse", "watch_tower", "mil_tower"]
+var _foot: Array = []                 # следы поставленных зданий и машин: [центр, угол, полуширина, полуглубина] (тайлы)
+var _fcache := {}
+var _shifting := false
+
+# след модели (повёрнутый прямоугольник по AABB) или [] — если это не здание/машина
+func _footprint(model: String, tx: float, ty: float, th: float) -> Array:
+	if not _fcache.has(model):
+		var ab: AABB = _meshes[model].get_aabb()
+		if _meshes.has(model + "_roof"):
+			ab = ab.merge(_meshes[model + "_roof"].get_aabb())        # свес крыши — тоже след
+		var ok := ab.size.y >= 1.2 and ab.size.x * ab.size.z >= 4.0
+		for sk in FOOT_SKIP:
+			if model.contains(sk):
+				ok = false
+		_fcache[model] = ab if ok else null
+	var ab2 = _fcache[model]
+	if ab2 == null:
+		return []
+	var g := 0.6 if (ab2.size.y > 2.2 and not model.begins_with("car_") and not model.begins_with("tractor")) else -0.1   # между зданиями — проход ~1 м
+	var c3: Vector3 = Basis(Vector3.UP, th) * ab2.get_center() * S
+	return [Vector2(tx + c3.x * M, ty + c3.z * M), th, ab2.size.x * 0.5 * S * M + g, ab2.size.z * 0.5 * S * M + g]
+
+func _foot_free(fp: Array) -> bool:
+	for q in _foot:
+		if (q[0] as Vector2).distance_to(fp[0]) < float(q[2]) + float(q[3]) + float(fp[2]) + float(fp[3]) and _rect_overlap(fp, q):
+			return false
+	return true
+
 # ---------------- установка предмета ----------------
 func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ := true) -> bool:
 	if not _meshes.has(model):
@@ -262,6 +293,30 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 	var yb := Basis(Vector3.UP, th)
 	var y: float
 	var house := HOUSE.has(model)
+	var fp := _footprint(model, tx, ty, deg_to_rad(yaw_deg))
+	if not fp.is_empty() and not _foot_free(fp):
+		if _shifting:
+			return false
+		# место занято — сдвинуть рядом (здание — до 8 тайлов, дом во дворе — до 3), иначе не ставить
+		var lim := 3.0 if house else 8.0
+		_shifting = true
+		var done := false
+		for r: float in [1.5, 3.0, 5.0, 8.0]:
+			if r > lim or done:
+				break
+			for k in 8:
+				var a := k * TAU / 8.0 + r
+				if put(model, tx + cos(a) * r, ty + sin(a) * r, yaw_deg, mode, occ):
+					done = true
+					break
+		_shifting = false
+		if not done:
+			_rej["наложение"] = _rej.get("наложение", 0) + 1
+		return done
+		if occ and not house:
+			for q in _plots:                                          # здание целиком — не во дворе чужого участка
+				if _rect_overlap(fp, q):
+					return false
 	if house and occ and (_near_bunker(Vector2(tx, ty)) or WorldGen.path_dist(tx, ty) < _rad(model) * 0.75 + 1.5):
 		return false                                                    # дом — не на дороге и не у бункера
 	var solid := house or FOOT.has(model) or RAD.has(model) or model.begins_with("car_") or model.begins_with("tractor") or model.begins_with("trailer") or model.begins_with("tent")
@@ -306,6 +361,8 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 	if model.begins_with("pole_"):
 		yb = yb * Basis(Vector3(1, 0, 0), _rng.randf_range(-0.05, 0.05)) * Basis(Vector3(0, 0, 1), _rng.randf_range(-0.05, 0.05))
 	var xf := Transform3D(yb * S, Vector3(tx * T, y, ty * T))
+	if not fp.is_empty():
+		_foot.append(fp)
 	_add(model, tx, ty, xf)
 	if _meshes.has(model + "_roof"):
 		_add(model + "_roof", tx, ty, xf)                             # крыша — отдельный узел (спрячем, когда герой внутри)
@@ -654,10 +711,10 @@ func _village() -> void:
 	_free_put("shop", vc, 11.0, 100.0)
 	_free_put("club", vc, 12.0, 250.0)
 	_free_put("bus_stop", vc, 8.0, 10.0)
-	_free_put("admin", vc, 20.0, 330.0)
-	_free_put("school", vc, 30.0, 180.0)
-	_free_put("fap", vc, 20.0, 40.0)
-	_free_put("fire_station", vc, 26.0, 280.0)
+	for pb in [["admin", 20.0, 330.0], ["school", 30.0, 180.0], ["fap", 20.0, 40.0], ["fire_station", 26.0, 280.0]]:
+		for rr: float in [pb[1], pb[1] + 10.0, pb[1] + 20.0, pb[1] + 32.0]:     # если рядом с площадью занято — дальше от центра
+			if _free_put(pb[0], vc, rr, pb[2]):
+				break
 	WorldGen.add_clear(vc.x, vc.y, 13.0, 13.0, 0.0)                    # площадь
 	var got := 0
 	var dirs := _road_dirs(vc)
