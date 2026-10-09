@@ -681,10 +681,11 @@ hero.parent = rig
 tri = sum(len(p.vertices) - 2 for p in hero.data.polygons)
 print("HERO треугольников %d, вершин %d, костей %d, рост %.2f м" % (tri, len(hero.data.vertices), len(BONES), hero.dimensions.z))
 
-# анимации (ключевые кадры на скелете)
+# анимации — мокап CMU (живой человек), перенос на скелет героя: hero_mocap.py / cmu.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import hero_anims
-hero_anims.make(rig)
+import hero_mocap, json
+CLIPS_INFO = hero_mocap.make(rig)
+json.dump(CLIPS_INFO, open(os.path.join(OUT, "hero_clips.json"), "w"), indent=1, ensure_ascii=False)
 bpy.ops.object.select_all(action="DESELECT")
 hero.select_set(True); rig.select_set(True)
 bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "hero.glb"), use_selection=True, export_format="GLB",
@@ -721,7 +722,7 @@ if os.environ.get("SHOW", "1") == "1":
 		sc.render.resolution_x, sc.render.resolution_y = 500, 700
 		sc.cycles.samples = 16
 		views = []
-		for cl, t in (("WakeUp", 0.0), ("WakeUp", 1.6), ("WakeUp", 2.4), ("WakeUp", 3.8), ("Walk", 0.3), ("Run", 0.2), ("SitChair", 1.0), ("LieLounger", 1.0), ("Phone", 2.0), ("Scared", 0.35), ("ClimbDown", 1.3), ("ClimbDown", 2.6)):
+		for cl, t in (("Sleep", 0.2), ("StandUp", 1.0), ("Stretch", 1.4), ("WashFace", 6.5), ("Walk", 0.3), ("Run", 0.2), ("SitIdle", 1.0), ("SitPhoneRead", 0.4), ("ClimbDown", 0.6), ("LookAround", 3.0)):
 			views.append(("anim_%s_%02d" % (cl, int(t * 10)), (3.0, -3.2, 1.4), (0, 0, 0.7), 40, cl, t))
 	for vw in views:
 		nm, pos, tgt, lens = vw[:4]
