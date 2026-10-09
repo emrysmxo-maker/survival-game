@@ -704,9 +704,34 @@ func _locations() -> void:
 	WorldGen.add_clear(tw.x, tw.y, 20.0, 20.0, 0.0)                     # площадка радиовышки — без леса
 	for key in LOCS:
 		var f: Dictionary = WorldGen.FEATURES[key]
+		var c := Vector2(f.x, f.y)
+		# двор локации развёрнут по въездной дороге (у рыбацкой базы — по воде, у лагеря и деревни — как есть)
+		var th := 0.0
+		if key in ["sawmill", "farm", "tower"]:
+			var rd := _road_dir(c)
+			th = atan2(rd.x, rd.y) + PI
 		for p in LOCS[key]:
-			var k: float = 1.0 if (str(p[0]) == "pier" or str(p[0]).begins_with("boat")) else K
-			put(p[0], f.x + p[1] * k, f.y + p[2] * k, p[3])
+			var nm: String = p[0]
+			var k: float = 1.0 if (nm == "pier" or nm.begins_with("boat")) else K
+			var q := c + Vector2(p[1] * k, p[2] * k).rotated(-th)
+			var yaw: float = p[3] + rad_to_deg(th)
+			if _meshes.has(nm) and ab_big(nm) or FOOT.has(nm):
+				q = _off_road(q, _rad(nm))                            # здание не на дороге: отодвинуть от неё
+			put(nm, q.x, q.y, yaw)
+
+# точка подальше от дороги: шагами по уклону расстояния до дороги, пока до неё не станет r + 2 тайла
+func _off_road(q: Vector2, r: float) -> Vector2:
+	for i in 12:
+		var pd := WorldGen.path_dist(q.x, q.y)
+		if pd >= r + 2.0:
+			break
+		var gx := WorldGen.path_dist(q.x + 1.0, q.y) - WorldGen.path_dist(q.x - 1.0, q.y)
+		var gy := WorldGen.path_dist(q.x, q.y + 1.0) - WorldGen.path_dist(q.x, q.y - 1.0)
+		var g := Vector2(gx, gy)
+		if g.length() < 0.01:
+			g = Vector2(1, 0)
+		q += g.normalized() * 1.5
+	return q
 
 func _towns() -> void:
 	for key in TOWNS:
