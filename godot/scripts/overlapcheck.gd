@@ -39,4 +39,29 @@ func _init() -> void:
 				if n <= 40:
 					print("OVL %s @%d:%d  ×  %s @%d:%d" % [a[4], roundi(a[0].x), roundi(a[0].y), b[4], roundi(b[0].x), roundi(b[0].y)])
 	print("OVL итого пар: ", n, " зданий: ", rects.size())
+	# здания на дороге: точки следа ближе 2 тайлов к осевой дороги/просёлка/рельсов (машины, вагоны, мосты — можно)
+	var nr := 0
+	for a in rects:
+		var nm: String = a[4]
+		if nm.begins_with("car_") or nm.begins_with("tractor") or nm.begins_with("trailer") or nm.begins_with("wagon") or nm.begins_with("bus_stop") or nm.contains("checkpoint"):
+			continue
+		var u := Vector2(cos(a[1]), -sin(a[1]))
+		var v := Vector2(sin(a[1]), cos(a[1]))
+		var hit := 99.0
+		for i in 7:
+			for j in 7:
+				var q: Vector2 = a[0] + u * a[2] * (i / 3.0 - 1.0) + v * a[3] * (j / 3.0 - 1.0)
+				hit = minf(hit, WorldGen.path_dist(q.x, q.y))
+		if hit < 2.0:
+			nr += 1
+			if nr <= 40:
+				var which := ""
+				for ri in WorldGen._roads.size():
+					var rd: Dictionary = WorldGen._roads[ri]
+					var pts: PackedVector2Array = rd.pts
+					for k in pts.size() - 1:
+						if a[0].distance_to(Geometry2D.get_closest_point_to_segment(a[0], pts[k], pts[k + 1])) < a[2] + a[3] + 2.0:
+							which = "дорога №%d (%d точек, %s) от %d:%d" % [ri, pts.size(), "тропа" if rd.get("trail", false) else ("просёлок" if rd.track else "асфальт"), roundi(pts[0].x), roundi(pts[0].y)]
+				print("ROAD %s @%d:%d  до дороги %.1f  %s" % [nm, roundi(a[0].x), roundi(a[0].y), hit, which])
+	print("ROAD итого зданий на дорогах: ", nr)
 	quit()

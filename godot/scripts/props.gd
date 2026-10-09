@@ -269,6 +269,57 @@ func _footprint(model: String, tx: float, ty: float, th: float) -> Array:
 	var c3: Vector3 = Basis(Vector3.UP, th) * ab2.get_center() * S
 	return [Vector2(tx + c3.x * M, ty + c3.z * M), th, ab2.size.x * 0.5 * S * M + g, ab2.size.z * 0.5 * S * M + g]
 
+const ROAD_CLEAR := 2.3               # след здания не ближе к осевой дороги (тайлы): полотно ~1,6 + обочина
+const ROAD_PUSH_MAX := 5.0            # насколько можно отодвинуть здание от дороги
+const ON_ROAD := ["car_", "tractor", "trailer", "wagon", "bus_stop", "boat", "pier", "bridge"]
+var _road_push := false
+func _on_road_ok(model: String) -> bool:                               # true — модель должна стоять вне дороги
+	if model == "boat_shed":
+		return true
+	for k in ON_ROAD:
+		if model.begins_with(k):
+			return false
+	return true
+
+# ближайшая к следу точка дорог (просёлки и рельсы тоже): [расстояние, точка на дороге]
+func _road_hit(fp: Array) -> Array:
+	var u := Vector2(cos(fp[1]), -sin(fp[1]))
+	var v := Vector2(sin(fp[1]), cos(fp[1]))
+	var best := [999.0, Vector2.ZERO]
+	var c: Vector2 = fp[0]
+	var ext: float = float(fp[2]) + float(fp[3]) + ROAD_CLEAR
+	for rd in WorldGen._roads:
+		if not rd.bb.grow(ext).has_point(c):
+			continue
+		var pts: PackedVector2Array = rd.pts
+		for i in 5:
+			for j in 5:
+				var q: Vector2 = c + u * float(fp[2]) * (i / 2.0 - 1.0) + v * float(fp[3]) * (j / 2.0 - 1.0)
+				for k in pts.size() - 1:
+					var cp := Geometry2D.get_closest_point_to_segment(q, pts[k], pts[k + 1])
+					var d := q.distance_to(cp)
+					if d < best[0]:
+						best = [d, cp]
+	return best
+
+# точка дороги не задевает уже поставленные здания и машины
+func _road_pt_free(q: Vector2) -> bool:
+	for f in _foot:
+		var d: Vector2 = q - f[0]
+		if d.length() > float(f[2]) + float(f[3]) + ROAD_CLEAR:
+			continue
+		var lx := d.x * cos(f[1]) - d.y * sin(f[1])
+		var ly := d.x * sin(f[1]) + d.y * cos(f[1])
+		if absf(lx) < float(f[2]) + ROAD_CLEAR - 0.4 and absf(ly) < float(f[3]) + ROAD_CLEAR - 0.4:
+			return false
+	return true
+
+func _clip_street(site: Vector2, dir: Vector2, len: float) -> Vector2:
+	var s := 0.0
+	while s + 1.0 <= len and _road_pt_free(site + dir * (s + 1.0)):
+		s += 1.0
+	return site + dir * s
+
 func ab_big(model: String) -> bool:                                    # здание (не машина/мелочь): сдвигать «куда влезет» нельзя
 	return _meshes[model].get_aabb().size.y > 2.6 and not model.begins_with("car_") and not model.begins_with("tractor")
 
@@ -316,12 +367,25 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 		if not done:
 			_rej["наложение"] = _rej.get("наложение", 0) + 1
 		return done
-		if occ and ab_big(model) and WorldGen.path_dist(fp[0].x, fp[0].y) < maxf(fp[2], fp[3]) + 2.0:
-			return false                                              # дорожная зона: здания не на дороге и не вплотную к ней
-		if occ and not house:
-			for q in _plots:                                          # здание целиком — не во дворе чужого участка
-				if _rect_overlap(fp, q):
-					return false
+	if not fp.is_empty() and _on_road_ok(model):
+		var rh := _road_hit(fp)                                        # след здания задевает дорогу — отодвинуть от неё, иначе не ставить
+		if rh[0] < ROAD_CLEAR:
+			if _road_push:
+				return false
+			var need: float = ROAD_CLEAR - float(rh[0]) + 0.4
+			var away: Vector2 = (fp[0] - rh[1]).normalized()
+			var ok2 := false
+			if need <= ROAD_PUSH_MAX:
+				_road_push = true
+				ok2 = put(model, tx + away.x * need, ty + away.y * need, yaw_deg, mode, occ)
+				_road_push = false
+			if not ok2:
+				_rej["на дороге"] = _rej.get("на дороге", 0) + 1
+			return ok2
+	if occ and not fp.is_empty() and not house and ab_big(model):
+		for q in _plots:                                              # здание целиком — не во дворе чужого участка
+			if _rect_overlap(fp, q):
+				return false
 	if house and occ and (_near_bunker(Vector2(tx, ty)) or WorldGen.path_dist(tx, ty) < _rad(model) * 0.75 + 1.5):
 		return false                                                    # дом — не на дороге и не у бункера
 	var solid := house or FOOT.has(model) or RAD.has(model) or model.begins_with("car_") or model.begins_with("tractor") or model.begins_with("trailer") or model.begins_with("tent")
@@ -599,6 +663,15 @@ func _street(site: Vector2, own: String, dir: Vector2, half_len: float, free_r: 
 			var q := p.lerp(site + dir * along, k)
 			np.append(q)
 			bb = bb.expand(q)
+		var free := true
+		for i in np.size() - 1:                                         # выпрямленная дорога не должна пройти по уже стоящим зданиям
+			if np[i] != rp[i] or np[i + 1] != rp[i + 1]:
+				for t in 4:
+					if not _road_pt_free(np[i].lerp(np[i + 1], t / 4.0)):
+						free = false
+		if not free:
+			_rej["улица: дорогу не выпрямить"] = _rej.get("улица: дорогу не выпрямить", 0) + 1
+			continue
 		rd["pts"] = np
 		rd["bb"] = bb.grow(4.0)
 	var placed := 0
@@ -637,8 +710,8 @@ func _street(site: Vector2, own: String, dir: Vector2, half_len: float, free_r: 
 		return 0
 	var hl := maxf(smax, minf(half_len, 12.0))
 	_zones.append([site, atan2(dir.x, dir.y) + PI / 2.0, hl, 4.2 + d, "жильё"])
-	var a := site - dir * (hl + 3.0)
-	var b := site + dir * (hl + 3.0)
+	var a := _clip_street(site, -dir, hl + 3.0)                       # улица кончается перед чужим зданием (не идёт сквозь него)
+	var b := _clip_street(site, dir, hl + 3.0)
 	var pts := PackedVector2Array([a, site, b])
 	WorldGen._roads.append({"pts": pts, "bb": Rect2(a, Vector2.ZERO).expand(b).grow(4.0), "track": true})
 	for e: float in [-1.0, 1.0]:                                       # знак «населённый пункт» на въездах
@@ -710,12 +783,25 @@ func _locations() -> void:
 		if key in ["sawmill", "farm", "tower"]:
 			var rd := _road_dir(c)
 			th = atan2(rd.x, rd.y) + PI
+		elif key == "camp":                                                # в лагере сходятся дороги: поворот, при котором палатки между ними
+			var best := 999
+			for i in 24:
+				var t := i * TAU / 24.0
+				var hits := 0
+				for p in LOCS[key]:
+					var fp := _footprint(p[0], c.x + (Vector2(p[1] * K, p[2] * K).rotated(-t)).x, c.y + (Vector2(p[1] * K, p[2] * K).rotated(-t)).y, deg_to_rad(p[3]) + t)
+					if not fp.is_empty() and _on_road_ok(p[0]) and _road_hit(fp)[0] < ROAD_CLEAR:
+						hits += 1
+				if hits < best:
+					best = hits
+					th = t
+			_rej["лагерь: поворот, задели дорогу"] = "%d° %d" % [roundi(rad_to_deg(th)), best]
 		for p in LOCS[key]:
 			var nm: String = p[0]
 			var k: float = 1.0 if (nm == "pier" or nm.begins_with("boat")) else K
 			var q := c + Vector2(p[1] * k, p[2] * k).rotated(-th)
 			var yaw: float = p[3] + rad_to_deg(th)
-			if _meshes.has(nm) and ab_big(nm) or FOOT.has(nm):
+			if _meshes.has(nm) and (ab_big(nm) or FOOT.has(nm) or nm.begins_with("tent") or nm.begins_with("tarp")):
 				q = _off_road(q, _rad(nm))                            # здание не на дороге: отодвинуть от неё
 			put(nm, q.x, q.y, yaw)
 
@@ -949,6 +1035,13 @@ func _forest_houses() -> void:
 			trail.append(q)
 		if wet:
 			why["вода на тропе"] = why.get("вода на тропе", 0) + 1
+			continue
+		var through := false
+		for q in trail:
+			if not _road_pt_free(q):
+				through = true
+		if through:
+			why["тропа через дом"] = why.get("тропа через дом", 0) + 1
 			continue
 		chosen.append(p)
 		why["где"] = why.get("где", "") + "%d:%d " % [roundi(p.x), roundi(p.y)]
