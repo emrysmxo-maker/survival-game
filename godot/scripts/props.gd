@@ -36,7 +36,6 @@ var _occ: Array = []
 
 # хутора: какие дома (по порядку вдоль улицы) и что вокруг [модель, dx, dy, yaw]
 const HAMLETS := {
-	"h_vyselki": {"houses": ["house_izba_a", "house_dacha_d", "house_cabin", "house_izba_c"], "kind": "old", "ext": [["haystack", -11, 6, 0], ["pole_wood", 0, -9, 0]]},
 	"h_zarechye": {"houses": ["house_brick_small", "house_izba_c", "house_dacha_c", "house_new_b"], "kind": "old", "ext": [["woodpile", -11, 6, 0]]},
 	"h_bereza": {"houses": ["house_izba_a", "house_izba_b", "house_cabin", "house_brick"], "kind": "old", "ext": [["haystack", 9, -5, 0]]},
 	"h_ranger": {"houses": ["house_izba_c"], "kind": "old", "ext": [["watch_tower", -7, -4, 0], ["car_van_olive", -6, 5, 40]]},
@@ -247,6 +246,7 @@ func _rad(model: String) -> float:
 # ---------------- следы построек (против наложений) ----------------
 const FOOT_SKIP := ["fence", "road_dash", "bridge", "concrete_pad", "rail_", "wire", "sign", "lamp", "pole", "graffiti", "_roof", "dump_pile", "sawdust",
 	"barbed", "jersey", "block_fbs", "radio_mast", "dish", "bench", "campfire", "clothesline", "well_", "outhouse", "watch_tower", "mil_tower"]
+var _zones: Array = []               # зоны: [центр, угол, полудлина, полуширина, тип] — для карты зон
 var _foot: Array = []                 # следы поставленных зданий и машин: [центр, угол, полуширина, полуглубина] (тайлы)
 var _fcache := {}
 var _shifting := false
@@ -268,6 +268,9 @@ func _footprint(model: String, tx: float, ty: float, th: float) -> Array:
 	var g := 0.6 if (ab2.size.y > 2.2 and not model.begins_with("car_") and not model.begins_with("tractor")) else -0.1   # между зданиями — проход ~1 м
 	var c3: Vector3 = Basis(Vector3.UP, th) * ab2.get_center() * S
 	return [Vector2(tx + c3.x * M, ty + c3.z * M), th, ab2.size.x * 0.5 * S * M + g, ab2.size.z * 0.5 * S * M + g]
+
+func ab_big(model: String) -> bool:                                    # здание (не машина/мелочь): сдвигать «куда влезет» нельзя
+	return _meshes[model].get_aabb().size.y > 2.6 and not model.begins_with("car_") and not model.begins_with("tractor")
 
 func _foot_free(fp: Array) -> bool:
 	for q in _foot:
@@ -298,7 +301,7 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 		if _shifting:
 			return false
 		# место занято — сдвинуть рядом (здание — до 8 тайлов, дом во дворе — до 3), иначе не ставить
-		var lim := 3.0 if house else 8.0
+		var lim := 0.0 if (house or ab_big(model)) else 3.0
 		_shifting = true
 		var done := false
 		for r: float in [1.5, 3.0, 5.0, 8.0]:
@@ -313,6 +316,8 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 		if not done:
 			_rej["наложение"] = _rej.get("наложение", 0) + 1
 		return done
+		if occ and ab_big(model) and WorldGen.path_dist(fp[0].x, fp[0].y) < maxf(fp[2], fp[3]) + 2.0:
+			return false                                              # дорожная зона: здания не на дороге и не вплотную к ней
 		if occ and not house:
 			for q in _plots:                                          # здание целиком — не во дворе чужого участка
 				if _rect_overlap(fp, q):
@@ -363,6 +368,8 @@ func put(model: String, tx: float, ty: float, yaw_deg: float, mode := "", occ :=
 	var xf := Transform3D(yb * S, Vector3(tx * T, y, ty * T))
 	if not fp.is_empty():
 		_foot.append(fp)
+		if model.begins_with("car_") or model.begins_with("tractor"):
+			WorldGen.add_clear(fp[0].x, fp[0].y, fp[2] + 1.5, fp[3] + 1.5, fp[1])   # дерево не растёт сквозь машину
 	_add(model, tx, ty, xf)
 	if _meshes.has(model + "_roof"):
 		_add(model + "_roof", tx, ty, xf)                             # крыша — отдельный узел (спрячем, когда герой внутри)
@@ -599,41 +606,37 @@ func _street(site: Vector2, own: String, dir: Vector2, half_len: float, free_r: 
 	var step := w + 1.5 * M
 	var nrm0 := Vector2(-dir.y, dir.x)
 	var want := mini(cap, houses.size()) if cap < 999 else houses.size()
-	# места: от центра наружу, по обе стороны; каждое пробует сдвиги вдоль улицы; улица тянется до 1,8 × half_len
+	# места — ровной сеткой от центра наружу, по обе стороны; без сдвигов: занято — место пустует
 	var slots: Array = []
+	var s_start := (free_r if free_r > 0.0 else 0.0) + step * 0.5      # первый участок — сразу за площадью
 	var k := 0
-	while (k + 0.5) * step < half_len * 1.8:
+	while s_start + (k + 0.5) * step <= half_len + 0.01:
 		for e: float in [1.0, -1.0]:
-			slots.append(e * (k + 0.5) * step)
+			slots.append(e * (s_start + k * step))
 		k += 1
-	var used: Array = []
 	var smax := 0.0
 	for s0: float in slots:
 		if placed >= want:
 			break
-		if free_r > 0.0 and absf(s0) < free_r + w * 0.5:
-			continue                                               # площадь в центре
 		for sd: float in [1.0, -1.0]:
 			if placed >= want:
 				break
 			var nrm := nrm0 * sd
 			var fdir := -nrm                                       # фасад — к улице
 			var th := atan2(fdir.x, fdir.y)
-			for js: float in [0.0, 0.3, -0.3, 0.6]:
-				var s := s0 + js * step
-				var c := site + dir * s + nrm * (4.2 + d / 2.0)
-				var okp := _plot_ok(c, th, w, d, own)
-				if OS.get_environment("PLOTDBG") == own:
-					print("PLOT %s s=%.0f sd=%d c=(%.0f,%.0f) %s" % [own, s, sd, c.x, c.y, "ok" if okp else _last.substr(0, 40)])
-				if okp:
-					_plot(c, rad_to_deg(th), w, d, houses[hi % houses.size()], kind)
-					hi += 1
-					placed += 1
-					smax = maxf(smax, absf(s) + w * 0.5)
-					break
+			var c := site + dir * s0 + nrm * (4.2 + d / 2.0)
+			var okp := _plot_ok(c, th, w, d, own)
+			if OS.get_environment("PLOTDBG") == own:
+				print("PLOT %s s=%.0f sd=%d c=(%.0f,%.0f) %s" % [own, s0, sd, c.x, c.y, "ok" if okp else _last.substr(0, 40)])
+			if okp:
+				_plot(c, rad_to_deg(th), w, d, houses[hi % houses.size()], kind)
+				hi += 1
+				placed += 1
+				smax = maxf(smax, absf(s0) + w * 0.5)
 	if placed == 0:
 		return 0
 	var hl := maxf(smax, minf(half_len, 12.0))
+	_zones.append([site, atan2(dir.x, dir.y) + PI / 2.0, hl, 4.2 + d, "жильё"])
 	var a := site - dir * (hl + 3.0)
 	var b := site + dir * (hl + 3.0)
 	var pts := PackedVector2Array([a, site, b])
@@ -648,6 +651,40 @@ func _street(site: Vector2, own: String, dir: Vector2, half_len: float, free_r: 
 		put("lamp_post", lp.x, lp.y, rad_to_deg(atan2(-bd.y, bd.x)), "pt", false)
 		ls += 30.0
 	return placed
+
+# сколько участков встанет вдоль улицы (без постройки)
+func _street_count(site: Vector2, own: String, dir: Vector2, half_len: float, free_r: float, w: float, d: float) -> int:
+	var step := w + 1.5 * M
+	var nrm0 := Vector2(-dir.y, dir.x)
+	var n := 0
+	var k := 0
+	var s_start := (free_r if free_r > 0.0 else 0.0) + step * 0.5
+	while s_start + (k + 0.5) * step <= half_len + 0.01:
+		for e: float in [1.0, -1.0]:
+			var s0 := e * (s_start + k * step)
+			for sd: float in [1.0, -1.0]:
+				var nrm := nrm0 * sd
+				if _plot_ok(site + dir * s0 + nrm * (4.2 + d / 2.0), atan2(-nrm.x, -nrm.y), w, d, own):
+					n += 1
+		k += 1
+	return n
+
+# общественное здание фасадом к улице: s — место вдоль улицы, sd — сторона; отступ от оси улицы по глубине здания
+func _front_put(model: String, site: Vector2, dir: Vector2, s: float, sd: float) -> bool:
+	if not _meshes.has(model):
+		return false
+	var ab: AABB = _meshes[model].get_aabb()
+	var nrm := Vector2(-dir.y, dir.x) * sd
+	var fdir := -nrm
+	var th := atan2(fdir.x, fdir.y)
+	var c := site + dir * s + nrm * (5.5 + ab.size.z * 0.5 * M)
+	if put(model, c.x, c.y, rad_to_deg(th), "min"):
+		var wz := ab.size.x * 0.5 * M + 1.5
+		var dz := ab.size.z * 0.5 * M + 2.0
+		_plots.append([c, th, wz, dz])                                # участок здания — дома не встанут поверх
+		WorldGen.add_clear(c.x, c.y, wz + 2.0, dz + 2.0, th)
+		return true
+	return false
 
 # крупная постройка — на кольцо вокруг центра, смещая по углу, пока не найдётся место вне дороги (фасадом к центру)
 func _free_put(model: String, site: Vector2, r: float, ang0: float, yaw_extra := 0.0) -> bool:
@@ -681,9 +718,11 @@ func _towns() -> void:
 		var d := 28.0
 		var got := 0
 		var first := true
+		var streets := 0
+		var used_dirs: Array = []
 		var tries: Array = []
-		for ex_off: float in [0.0, 18.0, 36.0]:                        # дальше от локации — если рядом занято (вода, дачи)
-			for dv: Vector2 in _road_dirs(c):
+		for dv: Vector2 in _road_dirs(c):                              # улица — вдоль одной дороги из локации (первой, где встанет)
+			for ex_off: float in [0.0, 18.0, 36.0]:
 				tries.append([dv, ex_off])
 		for tr in tries:                                               # по очереди вдоль каждой дороги, пока не встанут все дома
 			if got >= n:
@@ -692,11 +731,18 @@ func _towns() -> void:
 			var site: Vector2 = c + dir * (f.r * K + float(t.off) + float(tr[1]))
 			var rest: Array = t.houses.slice(got)
 			var half: float = ceilf(rest.size() / 2.0) * (w + 1.5 * M) * 0.5 + w * 0.5 + 2.0
+			if streets >= 2:
+				break                                                      # не больше двух улиц, каждая вдоль своей дороги
+			if used_dirs.has(dir):
+				continue
 			var g := _street(site, key, dir, half, 0.0, rest, t.kind, w, d, rest.size())
-			if g > 0 and first:
-				for ex in t.extra:
-					_free_put(ex, site, half + 8.0, rad_to_deg(dir.angle()) + 90.0)
+			if g > 0:
+				if first:
+					for ex in t.extra:
+						_front_put(ex, site, dir, half + 8.0, 1.0)
 				first = false
+				streets += 1
+				used_dirs.append(dir)
 			got += g
 		_rej["город " + key] = "%d/%d" % [got, n]
 
@@ -708,23 +754,26 @@ func _near_bunker(p: Vector2) -> bool:
 func _village() -> void:
 	var v: Dictionary = WorldGen.FEATURES["village"]
 	var vc := Vector2(v.x, v.y)
-	_free_put("shop", vc, 11.0, 100.0)
-	_free_put("club", vc, 12.0, 250.0)
-	_free_put("bus_stop", vc, 8.0, 10.0)
-	for pb in [["admin", 20.0, 330.0], ["school", 30.0, 180.0], ["fap", 20.0, 40.0], ["fire_station", 26.0, 280.0]]:
-		for rr: float in [pb[1], pb[1] + 10.0, pb[1] + 20.0, pb[1] + 32.0]:     # если рядом с площадью занято — дальше от центра
-			if _free_put(pb[0], vc, rr, pb[2]):
-				break
-	WorldGen.add_clear(vc.x, vc.y, 13.0, 13.0, 0.0)                    # площадь
-	var got := 0
 	var dirs := _road_dirs(vc)
-	if dirs.size() < 2:
-		dirs.append((dirs[0] if dirs.size() > 0 else Vector2(1, 0)).orthogonal())
-	for dv: Vector2 in dirs:                                           # улица вдоль каждой дороги из деревни
-		if got >= VILLAGE_HOUSES.size():
-			break
+	var d1: Vector2 = dirs[0] if dirs.size() > 0 else Vector2(1, 0)
+	var d2 := d1.orthogonal()                                          # поперечная — строго под прямым углом
+	var th := atan2(d1.x, d1.y)
+	WorldGen.add_clear(vc.x, vc.y, 14.0, 14.0, th)                     # площадь
+	_zones.append([vc, th, 14.0, 14.0, "площадь"])
+	# у площади: на главной улице — администрация и школа, на поперечной — ФАП, пожарная, магазин, клуб
+	var sq := 16.0
+	_front_put("admin", vc, d1, sq + 9.0, 1.0)
+	_front_put("school", vc, d1, sq + 16.0, -1.0)
+	_front_put("fap", vc, d2, sq + 7.0, 1.0)
+	_front_put("fire_station", vc, d2, sq + 9.0, -1.0)
+	_front_put("shop", vc, d2, -(sq + 6.0), 1.0)
+	_front_put("club", vc, d2, -(sq + 8.0), -1.0)
+	var bs := vc + d1 * 6.0 + d1.orthogonal() * 7.5
+	put("bus_stop", bs.x, bs.y, rad_to_deg(atan2(-d1.orthogonal().x, -d1.orthogonal().y)))
+	var got := _street(vc, "village", d1, 115.0, sq, VILLAGE_HOUSES, "old", 19.0, 30.0, VILLAGE_HOUSES.size())
+	if got < VILLAGE_HOUSES.size():
 		var rest: Array = VILLAGE_HOUSES.slice(got)
-		got += _street(vc, "village", dv, 66.0, 12.0, rest, "old", 19.0, 30.0, rest.size())
+		got += _street(vc, "village", d2, 95.0, 4.2 + 30.0, rest, "old", 19.0, 30.0, rest.size())   # поперечная — за дворами главной улицы
 	_rej["поставлено village"] = got
 
 func _hamlet(key: String) -> void:
@@ -736,29 +785,25 @@ func _hamlet(key: String) -> void:
 		var w := 15.0 if s.kind == "dacha" else (22.0 if s.kind == "new" else 19.0)
 		var d := 20.0 if s.kind == "dacha" else (28.0 if s.kind == "new" else 30.0)
 		var got := 0
-		var dirs := _road_dirs(c)
-		if dirs.size() < 2:
-			dirs.append((dirs[0] if dirs.size() > 0 else Vector2(1, 0)).orthogonal())
-		for dir: Vector2 in dirs:                                       # улица вдоль каждой дороги, пока не встанут все дома
-			if got >= n:
-				break
+		# главная улица — вдоль той дороги, где встаёт больше домов (проба без постройки); большой посёлок — ещё поперечная
+		var rd0 := _road_dirs(c)
+		if rd0.is_empty():
+			rd0 = [Vector2(1, 0)]
+		var per_street: int = n if n <= 6 else ceili(n / 2.0)
+		var half: float = (10.0 if n > 6 else 0.0) + (ceilf(per_street / 4.0) + 1.0) * (w + 1.5 * M)   # ровно под дома + одно запасное место
+		var best: Vector2 = rd0[0]
+		var bn := -1
+		for dv: Vector2 in rd0 + rd0.map(func(x): return x.orthogonal()):
+			var cnt := _street_count(c, key, dv, half, 10.0 if n > 6 else 0.0, w, d)
+			if cnt > bn:
+				bn = cnt
+				best = dv
+		got = _street(c, key, best, half, 10.0 if n > 6 else 0.0, s.houses, s.kind, w, d, n)
+		if got < n and n > 6:
 			var rest: Array = s.houses.slice(got)
-			var half: float = ceilf(rest.size() / 2.0) * (w + 1.5 * M) * 0.5 + w * 0.5 + 2.0
-			got += _street(c, key, dir, half, 10.0 if n > 6 else 0.0, rest, s.kind, w, d, rest.size())
+			got += _street(c, key, best.orthogonal(), half, 10.0, rest, s.kind, w, d, rest.size())
 		if OS.is_debug_build() and OS.has_feature("editor"):
 			pass
-		if got < n:                                                   # не встали вдоль улицы — по кольцу вокруг центра, фасадом к центру
-			for rr: float in [10.0, 18.0, 26.0, 34.0]:
-				for ai in 12:
-					if got >= n:
-						break
-					var ang := ai * TAU / 12.0 + rr * 0.1
-					var pc := c + Vector2(cos(ang), sin(ang)) * (rr + d * 0.5)
-					var fd := (c - pc).normalized()
-					var th2 := atan2(fd.x, fd.y)
-					if _plot_ok(pc, th2, w, d, key):
-						_plot(pc, rad_to_deg(th2), w, d, s.houses[got], s.kind)
-						got += 1
 		_rej["поставлено " + key] = "%d/%d" % [got, n]
 		for p in s.ext:
 			put(p[0], h.x + p[1] * K, h.y + p[2] * K, p[3])
@@ -1026,13 +1071,17 @@ func _road_marks() -> void:
 					var yaw := rad_to_deg(atan2(-bd.y, bd.x))
 					var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), Vector3(c.x * T, ya + 0.15, c.y * T))
 					_add("bridge", c.x, c.y, xf)
-					WorldGen.add_clear(c.x, c.y, 12.0, 5.0, deg_to_rad(yaw))
+					WorldGen.add_clear(c.x, c.y, 17.0, 7.0, deg_to_rad(yaw))
 					_rej["мостов"] = str(_rej.get("мостов", "")) + "%d:%d " % [roundi(c.x), roundi(c.y)]
 					if not _rej.has("колонна у моста"):                     # брошенная колонна перед первым мостом: пытались уехать
 						var cv := ["car_bus_yellow", "car_van_white", "car_sedan_white", "car_crossover_silver", "car_solaris_wreck", "car_truck_green", "car_hatch_red"]
+						var dist := 12.0
 						for k in cv.size():
-							var q: Vector2 = a - bd * (14.0 + k * 7.0) + bd.orthogonal() * (1.2 if k % 2 == 0 else -0.6)
-							put(cv[k], q.x, q.y, yaw + _rng.randf_range(-8, 8), "", false)
+							var ln: float = _meshes[cv[k]].get_aabb().size.x * M if _meshes.has(cv[k]) else 6.0
+							dist += ln * 0.5
+							var q: Vector2 = a - bd * dist + bd.orthogonal() * (1.2 if k % 2 == 0 else -0.6)
+							put(cv[k], q.x, q.y, yaw + _rng.randf_range(-6, 6), "", false)
+							dist += ln * 0.5 + 2.5                              # промежуток ~2 м между машинами
 						_rej["колонна у моста"] = "%d:%d" % [roundi(a.x), roundi(a.y)]
 					wet_run.clear()
 				if acc <= 0.0 and not river and tw[1] < 0.02 and not _near_site(p, 6.0):
@@ -1169,6 +1218,9 @@ func _railway() -> void:
 		var wm: String = ["wagon_box_red", "wagon_tank", "wagon_box_green", "wagon_tank", "wagon_box_red", "wagon_box_green"][k]
 		var xf := Transform3D(Basis(Vector3.UP, atan2(-d2.y, d2.x)), Vector3(p2.x * T, _h(p2.x, p2.y) + 0.6, p2.y * T))
 		_add(wm, p2.x, p2.y, xf)
+		var wfp := _footprint(wm, p2.x, p2.y, atan2(-d2.y, d2.x))
+		if not wfp.is_empty():
+			_foot.append(wfp)                                         # вагоны — тоже занятое место
 	# платформа ближе к лагерю
 	var best := 0.0
 	var bd := 1e9
@@ -1281,8 +1333,8 @@ func _roadside() -> void:
 func _quarry() -> void:
 	var q := WorldGen.QUARRY
 	var c := Vector2(q.x, q.y)
-	var items := [["car_truck_blue", 3.0, -2.0, 30.0], ["car_truck_blue", -4.0, 4.0, 200.0], ["tractor_red", 5.0, 5.0, 120.0], ["sawdust", -6.0, -5.0, 0.0], ["sawdust", -8.5, -2.0, 30.0],
-		["sawdust", 7.0, -6.0, 40.0], ["generator_shed", 0.0, 15.0, 0.0], ["barrels_a", 3.0, 16.0, 0.0], ["container_b", -4.0, 16.5, 90.0], ["tires", -7.0, 14.0, 0.0]]
+	var items := [["car_truck_blue", 3.0, 1.0, 30.0], ["car_truck_blue", -5.0, 5.0, 200.0], ["tractor_red", 6.0, 7.0, 120.0], ["sawdust", -7.0, -6.0, 0.0], ["sawdust", -10.0, -2.0, 30.0],
+		["sawdust", 1.0, -9.0, 40.0], ["generator_shed", 0.0, 15.0, 0.0], ["barrels_a", 3.0, 16.0, 0.0], ["container_b", -4.0, 16.5, 90.0], ["tires", -7.0, 14.0, 0.0]]
 	for it in items:
 		put(it[0], c.x + it[1], c.y + it[2], it[3])
 	_plots.append([c, 0.0, q.z, q.z])                                 # чужие дома в карьер не встанут

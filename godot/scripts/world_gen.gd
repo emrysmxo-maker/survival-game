@@ -26,7 +26,6 @@ const FEATURES := {
 const LANDMARKS := ["camp", "village", "sawmill", "lakebase", "farm", "bunker", "tower"]
 # хутора, дачи, кордоны: малые поляны с постройками (расстановка — scripts/props.gd); ровная земля, леса нет, к каждому ведёт просёлок
 const HAMLETS := {
-	"h_vyselki": {"x": -85.0, "y": -60.0, "r": 12.0, "name": "Выселки"},
 	"h_zarechye": {"x": -45.0, "y": 118.0, "r": 12.0, "name": "Заречье"},
 	"h_dachi": {"x": 70.0, "y": 25.0, "r": 14.0, "name": "Дачный посёлок"},
 	"h_bereza": {"x": 140.0, "y": -25.0, "r": 11.0, "name": "Берёзовка"},
@@ -37,9 +36,9 @@ const HAMLETS := {
 	"h_lager": {"x": -100.0, "y": -22.0, "r": 16.0, "name": "Детский лагерь «Берёзка»"},
 	"h_quarry": {"x": -105.0, "y": 50.0, "r": 6.0, "name": "Песчаный карьер"},
 }
-const TRACKS := [["h_vyselki", "village"], ["h_zarechye", "farm"], ["h_dachi", "camp"],
+const TRACKS := [["h_zarechye", "farm"], ["h_dachi", "camp"],
 	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_cem", "village"],
-	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "h_vyselki"], ["h_quarry", "h_lager"]]
+	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "village"], ["h_quarry", "h_lager"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
 # карьер: центр и радиус (тайлы) — террасная выемка ~6 м, каменистое дно
@@ -353,7 +352,7 @@ static func terrain(wx: float, wy: float) -> PackedFloat32Array:
 	var qd := Vector2(wx - QUARRY.x, wy - QUARRY.y).length()
 	if qd < QUARRY.z + 6.0:
 		var qk := ss(QUARRY.z, QUARRY.z * 0.3, qd)
-		h -= 8.0 * (roundf(qk * 3.0) / 3.0 * 0.65 + qk * 0.35)
+		h -= 8.0 * qk                                                  # ровные откосы (ступени выходили зубцами на сетке рельефа)
 		rocky = maxf(rocky, ss(QUARRY.z + 1.0, QUARRY.z * 0.8, qd))
 		clearing = maxf(clearing, ss(QUARRY.z + 6.0, QUARRY.z, qd))
 	# овраги (и ручей по дну)
