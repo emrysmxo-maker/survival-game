@@ -1728,7 +1728,6 @@ func _lab() -> void:
 	var th := atan2(fd.x, fd.y)
 	var yaw := rad_to_deg(th)
 	WorldGen.add_clear(c.x, c.y, 50.0, 40.0, th)
-	_plots.append([c, th, 44.0, 34.0])
 	var L := func(lx: float, ly: float) -> Vector2:
 		return _loc(c, th, lx, ly)
 	var items := [["lab_main", 0.0, 0.0, 0.0], ["lab_wing", 0.0, -22.0, 0.0], ["lab_stack", 30.0, -16.0, 0.0], ["lab_tank", 32.0, 6.0, 0.0], ["lab_tank", 32.0, -5.0, 0.0],
@@ -1745,4 +1744,5 @@ func _lab() -> void:
 	_fence_line(a2, b2, "fence_mil", 0.1)
 	_fence_line(a2, a, "fence_mil", 0.1)
 	_fence_line(b2, b, "fence_mil", 0.1)
+	_plots.append([c, th, 44.0, 34.0])                                 # территория института — чужие дворы сюда не встают
 	_rej["лаборатория"] = "%d:%d" % [roundi(c.x), roundi(c.y)]

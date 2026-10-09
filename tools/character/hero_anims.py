@@ -107,11 +107,11 @@ def make(rig):
 	# просыпается: сел (ноги вперёд) → сел на край (ноги вниз) → встал
 	sit_up = pose(Hips=[("X", -10)], LeftUpLeg=[("X", -80)], RightUpLeg=[("X", -80)], LeftLeg=[("X", 5)], RightLeg=[("X", 5)],
 		Spine=[("X", 12)], LeftArm=[("Y", 10), ("X", -15)], RightArm=[("Y", -10), ("X", -15)], LeftForeArm=[("X", -40)], RightForeArm=[("X", -60)],
-		Head=[("X", 8)], hips=(0, 0.25, -0.5))
+		Head=[("X", 8)], hips=(0, 0.25, -0.84))
 	stretch = pose(Hips=[("X", -10)], LeftUpLeg=[("X", -80)], RightUpLeg=[("X", -80)], Spine=[("X", -5)], Spine2=[("X", -8)],
-		LeftArm=[("Y", -80), ("X", -40)], RightArm=[("Y", 80), ("X", -40)], LeftForeArm=[("X", -20)], RightForeArm=[("X", -20)], Head=[("X", -15)], hips=(0, 0.25, -0.5))
+		LeftArm=[("Y", -80), ("X", -40)], RightArm=[("Y", 80), ("X", -40)], LeftForeArm=[("X", -20)], RightForeArm=[("X", -20)], Head=[("X", -15)], hips=(0, 0.25, -0.84))
 	edge = pose(LeftUpLeg=[("X", -85)], RightUpLeg=[("X", -85)], LeftLeg=[("X", 85)], RightLeg=[("X", 85)], Spine=[("X", 15)],
-		LeftArm=[("X", -20)], RightArm=[("X", -20)], LeftForeArm=[("X", -30)], RightForeArm=[("X", -30)], hips=(0, 0.1, -0.45))
+		LeftArm=[("X", -20)], RightArm=[("X", -20)], LeftForeArm=[("X", -30)], RightForeArm=[("X", -30)], hips=(0, 0.1, -0.8))
 	clip(rig, "WakeUp", [(0, lie), (0.6, lie), (1.6, sit_up), (2.4, stretch), (3.2, sit_up), (3.8, edge), (4.6, pose(Spine=[("X", 25)], LeftUpLeg=[("X", -40)], RightUpLeg=[("X", -40)], LeftLeg=[("X", 50)], RightLeg=[("X", 50)], hips=(0, 0.05, -0.2))), (5.4, stand)])
 	# сидит на стуле, руки на бёдрах, смотрит вдаль
 	sit = pose(LeftUpLeg=[("X", -88)], RightUpLeg=[("X", -88)], LeftLeg=[("X", 88)], RightLeg=[("X", 88)], Spine=[("X", -4)],

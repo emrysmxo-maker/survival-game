@@ -227,6 +227,8 @@ func _say(text: String) -> void:
 
 func _shot(a: Vector3, b: Vector3, la: Vector3, lb: Vector3, length: float) -> void:
 	cam_a = a; cam_b = b; look_a = la; look_b = lb; cam_t = 0.0; cam_len = maxf(length, 0.01)
+	main.focus = Vector2(lb.x, lb.z) / T                       # мир (лес, трава) подгружается у кадра, а не у точки игры
+	main.world.ensure_now(main.focus, 2)
 	_cam_update()
 
 func _cam_update() -> void:
@@ -288,7 +290,26 @@ func _fly(model: String, from: Vector3, dir: Vector3, speed: float, rotor := fal
 	air.append([n, speed, dir.normalized(), rotor])
 
 # ---------- сценарий ----------
+var _env: Environment
+var _bg_keep := [0, Color.BLACK]
+var _cam_size_keep := 18.0
 func _run() -> void:
+	var wes: Array = main.find_children("*", "WorldEnvironment", true, false)
+	if not wes.is_empty():                                     # небо (в игре камера смотрит сверху и неба не видит)
+		_env = (wes[0] as WorldEnvironment).environment
+		_bg_keep = [_env.background_mode, _env.background_color]
+		var sky := Sky.new()
+		var sm := ProceduralSkyMaterial.new()
+		sm.sky_top_color = Color(0.32, 0.5, 0.78)
+		sm.sky_horizon_color = Color(0.72, 0.78, 0.84)
+		sm.ground_horizon_color = Color(0.6, 0.62, 0.6)
+		sm.ground_bottom_color = Color(0.3, 0.3, 0.28)
+		sky.sky_material = sm
+		_env.sky = sky
+		_env.background_mode = Environment.BG_SKY
+	_cam_size_keep = main.cam_size
+	main.cam_size = 38.0                                       # шире радиус подгрузки чанков
+	main.camctl.visible = false
 	main.daynight.auto = false
 	var t_keep: float = main.daynight.t
 	main.daynight.t = 8.0
@@ -305,8 +326,9 @@ func _run() -> void:
 	_place(bed, hy + 1.12, atan2(-u.x, -u.y))
 	_play("Lie", 0.0)
 	var head := w3(bed, hy + 1.3)
-	_shot(head + Vector3(u.x * T, 0, u.y * T) * 3.0 + up * 2.6 + Vector3(f.x, 0, f.y) * 1.5, head + Vector3(u.x * T, 0, u.y * T) * 2.0 + up * 2.0 + Vector3(f.x, 0, f.y) * 2.2,
-		head, head - Vector3(u.x, 0, u.y) * 0.4, 6.0)
+	var U3 := Vector3(u.x, 0, u.y)
+	var F3 := Vector3(f.x, 0, f.y)
+	_shot(w3(S.pt.call(1.0, 1.0), hy + 2.75), w3(S.pt.call(1.4, 1.5), hy + 2.45), head - U3 * 0.6, head + U3 * 0.4, 6.0)   # из угла спальни у двери
 	_say("Обычное утро. Дом у озера.")
 	await _fade(0.0, 1.5)
 	await _wait(0.8)
@@ -321,7 +343,7 @@ func _run() -> void:
 	var cp := w3(ch, hy + 0.6)
 	var ld := Vector3(lakedir.x, 0, lakedir.y)
 	var side := Vector3(u.x, 0, u.y)
-	_shot(cp - ld * 2.6 + side * 1.2 + up * 1.9, cp - ld * 2.2 - side * 1.0 + up * 1.7, cp + ld * 25.0, cp + ld * 25.0 - side * 4.0, 6.5)
+	_shot(cp + side * 2.3 + ld * 0.5 + up * 1.6, cp + side * 1.6 + ld * 1.2 + up * 1.4, cp + up * 0.8 - side * 0.5, cp + ld * 20.0 - side * 4.0, 6.5)
 	_say("Тихо. Только вода и птицы.")
 	await _fade(0.0, 0.8)
 	await _wait(5.2)
@@ -466,6 +488,11 @@ func _run() -> void:
 	_say("")
 	main.daynight.t = t_keep
 	main.daynight.auto = true
+	if _env:
+		_env.background_mode = _bg_keep[0]
+		_env.background_color = _bg_keep[1]
+	main.cam_size = _cam_size_keep
+	main.camctl.visible = true
 	_show_roofs()
 	main.cam.make_current()
 	main.teleport(out_p)
