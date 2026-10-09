@@ -51,7 +51,7 @@ func _init() -> void:
 		for i in 7:
 			for j in 7:
 				var q: Vector2 = a[0] + u * a[2] * (i / 3.0 - 1.0) + v * a[3] * (j / 3.0 - 1.0)
-				hit = minf(hit, WorldGen.path_dist(q.x, q.y))
+				hit = minf(hit, minf(WorldGen.path_dist(q.x, q.y), WorldGen.asphalt_dist(q.x, q.y) - 1.4))   # асфальт виден до ~3,4 тайла
 		if hit < 2.0:
 			nr += 1
 			if nr <= 40:
@@ -64,4 +64,26 @@ func _init() -> void:
 							which = "дорога №%d (%d точек, %s) от %d:%d" % [ri, pts.size(), "тропа" if rd.get("trail", false) else ("просёлок" if rd.track else "асфальт"), roundi(pts[0].x), roundi(pts[0].y)]
 				print("ROAD %s @%d:%d  до дороги %.1f  %s" % [nm, roundi(a[0].x), roundi(a[0].y), hit, which])
 	print("ROAD итого зданий на дорогах: ", nr)
+	# заборы и ворота сквозь здания и машины
+	var nf := 0
+	var fby := {}
+	for key in pr._batch:
+		var b: Dictionary = pr._batch[key]
+		var nm: String = b.model
+		if not (nm.begins_with("fence") or nm.begins_with("gate")):
+			continue
+		var ab: AABB = pr._meshes[nm].get_aabb()
+		for xf: Transform3D in b.xf:
+			var c := xf * ab.get_center()
+			var ax := xf.basis.x
+			var fr := [Vector2(c.x, c.z) / WorldGen.T, atan2(-ax.z, ax.x), ab.size.x * 0.5 / WorldGen.T - 0.1, maxf(ab.size.z * 0.5 / WorldGen.T - 0.1, 0.05)]
+			for a in rects:
+				if a[0].distance_to(fr[0]) > a[2] + a[3] + fr[2] + fr[3]:
+					continue
+				if pr._rect_overlap(a, fr):
+					nf += 1
+					fby[nm + " × " + a[4]] = fby.get(nm + " × " + a[4], 0) + 1
+					if nf <= 40:
+						print("FENCE %s @%d:%d  сквозь  %s @%d:%d" % [nm, roundi(fr[0].x), roundi(fr[0].y), a[4], roundi(a[0].x), roundi(a[0].y)])
+	print("FENCE итого: ", nf, " ", fby)
 	quit()

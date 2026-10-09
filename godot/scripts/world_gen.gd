@@ -40,6 +40,8 @@ const TRACKS := [["h_zarechye", "farm"], ["h_dachi", "camp"],
 	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_cem", "village"],
 	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "village"], ["h_quarry", "h_lager"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
+# у этих локаций дорога заканчивается у края двора (тайлы от центра) — двор свободен от асфальта
+const ROAD_END := {"camp": 15.0, "sawmill": 19.0, "farm": 36.0, "lakebase": 21.0, "tower": 13.0}
 const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
 # карьер: центр и радиус (тайлы) — террасная выемка ~6 м, каменистое дно
 const QUARRY := Vector3(-105.0, 50.0, 17.0)
@@ -231,6 +233,12 @@ static func init() -> void:
 						q = lc + (q - lc).normalized() * rr
 			pts.append(q)
 		seed += 1
+		if ROAD_END.has(r[0]):                                     # дорога кончается у въезда во двор, а не в центре
+			pts = _trim_start(pts, pa, ROAD_END[r[0]])
+		if ROAD_END.has(r[1]):
+			pts.reverse()
+			pts = _trim_start(pts, pb, ROAD_END[r[1]])
+			pts.reverse()
 		var bb := Rect2(pts[0], Vector2.ZERO)
 		for p in pts:
 			bb = bb.expand(p)
@@ -246,6 +254,23 @@ static func init() -> void:
 		rbb = rbb.expand(q)
 	out.append({"pts": rp, "bb": rbb.grow(4.0), "track": true, "rail": true})
 	_roads = out
+
+# убрать начало дороги ближе re к центру места; первая точка — ровно на re
+static func _trim_start(pts: PackedVector2Array, c: Vector2, re: float) -> PackedVector2Array:
+	var i := 0
+	while i < pts.size() - 2 and pts[i + 1].distance_to(c) < re:
+		i += 1
+	var a := pts[i]
+	var b := pts[i + 1]
+	var t := 0.0
+	for k in 20:                                                    # точка на отрезке a–b на расстоянии re от центра
+		var tt := (k + 1) / 20.0
+		if a.lerp(b, tt).distance_to(c) >= re:
+			t = tt
+			break
+	var out := PackedVector2Array([a.lerp(b, t)])
+	out.append_array(pts.slice(i + 1))
+	return out
 
 # расстояние до асфальтовых дорог (ROADS; просёлки и тропы — грунт)
 static func asphalt_dist(wx: float, wy: float) -> float:

@@ -351,6 +351,192 @@ def hip_roof(hb, R, x0, x1, y0, y1, ze, rise, m, col, ov=0.5, th=0.05):
 		hb.cyl(mat("metal_paint"), ((a[0] + b[0]) / 2, a[1] + (0.06 if a[1] < 0 else -0.06) * -1, zl - 0.06), 0.06, abs(b[0] - a[0]), "X", 8, col=R.get("guttercol", (0.6, 0.6, 0.6)))
 
 # ---------------- дом целиком ----------------
+
+# ---------------- мебель: вдоль стен, проходы свободны; дом брошен в спешке ----------------
+WOODS = [(0.42, 0.30, 0.20), (0.55, 0.40, 0.26), (0.30, 0.22, 0.16), (0.62, 0.52, 0.38)]
+FABRICS = [(0.55, 0.22, 0.18), (0.30, 0.38, 0.52), (0.45, 0.48, 0.32), (0.62, 0.55, 0.42), (0.40, 0.30, 0.42), (0.70, 0.62, 0.50)]
+class _Pose:
+	def __init__(s, hb, x, y, z, th):
+		s.hb, s.x, s.y, s.z, s.th = hb, x, y, z, th
+	def p(s, lx, ly, lz):
+		c, sn = math.cos(s.th), math.sin(s.th)
+		return (s.x + lx * c - ly * sn, s.y + lx * sn + ly * c, s.z + lz)
+	def box(s, m, lc, size, col=(1, 1, 1), rot=(0, 0, 0)):
+		s.hb.box(mat(m), s.p(*lc), size, col, rot=(rot[0], rot[1], rot[2] + s.th))
+	def cyl(s, m, lc, r, h, axis="Z", seg=10, col=(1, 1, 1)):
+		s.hb.cyl(mat(m), s.p(*lc), r, h, axis, seg, col=col)
+
+# предмет строится в своей системе: ширина вдоль X, спиной к стене (−Y), лицом в +Y, пол z=0
+def f_wardrobe(P, rnd, w, d, mess):
+	wc = rnd.choice(WOODS)
+	P.box("wood_raw", (0, 0, 0.95), (w, d, 1.9), wc)
+	if mess and rnd.random() < 0.7:                                   # дверцы распахнуты
+		for sx in (-1, 1):
+			a = rnd.uniform(0.6, 1.4)
+			P.box("wood_raw", (sx * (w / 2 - math.cos(a) * w / 4), d / 2 + math.sin(a) * w / 4, 0.95), (w / 2, 0.03, 1.8), wc, rot=(0, 0, -sx * a))
+		P.box("dark", (0, d / 2 - 0.01, 0.95), (w - 0.06, 0.01, 1.8))
+	else:
+		P.box("wood_raw", (0, d / 2 + 0.005, 0.95), (0.01, 0.01, 1.8), (0.2, 0.2, 0.2))
+		for sx in (-1, 1):
+			P.box("metal", (sx * 0.05, d / 2 + 0.02, 1.0), (0.02, 0.02, 0.15))
+def f_bed(P, rnd, w, d, mess):
+	wc = rnd.choice(WOODS)
+	P.box("wood_raw", (0, 0, 0.2), (w, d, 0.3), wc)
+	P.box("wood_raw", (-w / 2 + 0.03, 0, 0.45), (0.06, d, 0.9), wc)                     # спинка у изголовья
+	P.box("fabric", (0.05, 0, 0.42), (w - 0.15, d - 0.06, 0.16), (0.85, 0.83, 0.78))      # матрас
+	P.box("fabric", (-w / 2 + 0.3, 0, 0.55), (0.35, d * 0.7, 0.12), (0.9, 0.9, 0.88))     # подушка
+	bc = rnd.choice(FABRICS)
+	if mess:
+		P.box("fabric", (0.35, 0.1, 0.53), (w * 0.55, d * 0.9, 0.08), bc, rot=(0.15, 0.1, rnd.uniform(-0.4, 0.4)))   # одеяло скомкано
+		P.box("fabric", (w * 0.25, d / 2 + 0.25, 0.04), (0.6, 0.5, 0.05), bc, rot=(0, 0, 0.5))                       # сползло на пол
+		if rnd.random() < 0.6:                                         # раскрытый чемодан на кровати
+			cc = rnd.choice([(0.25, 0.25, 0.3), (0.5, 0.18, 0.15), (0.3, 0.4, 0.55)])
+			P.box("fabric", (0.2, -0.05, 0.58), (0.65, 0.42, 0.12), cc, rot=(0, 0, 0.3))
+			P.box("fabric", (0.2, -0.32, 0.8), (0.65, 0.05, 0.42), cc, rot=(0.35, 0, 0.3))
+			for k in range(3):
+				P.box("fabric", (0.2 + rnd.uniform(-0.2, 0.2), rnd.uniform(-0.1, 0.1), 0.66), (0.25, 0.2, 0.03), rnd.choice(FABRICS), rot=(0, 0, rnd.uniform(0, 3)))
+	else:
+		P.box("fabric", (0.35, 0, 0.52), (w * 0.62, d - 0.02, 0.06), bc)
+def f_sofa(P, rnd, w, d, mess):
+	fc = rnd.choice(FABRICS)
+	P.box("fabric", (0, 0.05, 0.22), (w, d - 0.1, 0.4), fc)
+	P.box("fabric", (0, -d / 2 + 0.12, 0.55), (w, 0.22, 0.75), fc)
+	for sx in (-1, 1):
+		P.box("fabric", (sx * (w / 2 - 0.1), 0.05, 0.42), (0.2, d - 0.1, 0.55), fc)
+	for k in range(2):
+		P.box("fabric", (-w / 4 + k * w / 2, 0.0, 0.5), (w * 0.4, d * 0.55, 0.14), fc, rot=(0, 0, rnd.uniform(-0.1, 0.1)))
+	if mess:
+		P.box("fabric", (rnd.uniform(-0.5, 0.5), d / 2 + 0.3, 0.07), (0.45, 0.45, 0.14), fc, rot=(0.3, 0.2, rnd.uniform(0, 3)))  # подушка на полу
+def f_sideboard(P, rnd, w, d, mess):                                  # «стенка»/сервант
+	wc = rnd.choice(WOODS)
+	P.box("wood_raw", (0, 0, 0.42), (w, d, 0.84), wc)
+	P.box("wood_raw", (0, -d / 2 + 0.17, 1.35), (w, 0.32, 1.0), wc)
+	P.box("glass", (0, -d / 2 + 0.34, 1.35), (w * 0.9, 0.01, 0.85))
+	for k in range(int(w / 0.3)):
+		P.box("fabric", (-w / 2 + 0.2 + k * 0.3, -d / 2 + 0.15, 1.12), (0.05, 0.2, 0.28), rnd.choice(FABRICS))   # книги
+	if mess:
+		for k in range(2):                                             # выдвинутые и брошенные ящики
+			P.box("wood_raw", (rnd.uniform(-w / 3, w / 3), d / 2 + 0.35 + k * 0.2, 0.08), (0.5, 0.4, 0.15), wc, rot=(0, 0, rnd.uniform(-0.6, 0.6)))
+def f_fridge(P, rnd, w, d, mess):
+	P.box("metal_paint", (0, 0, 0.8), (w, d, 1.6), (0.95, 0.95, 0.93))
+	P.box("frame", (0, d / 2 + 0.005, 1.15), (w - 0.04, 0.01, 0.01))
+	if mess:
+		a = rnd.uniform(0.5, 1.4)
+		P.box("metal_paint", (-w / 2 + math.cos(a) * w / 2, d / 2 + math.sin(a) * w / 2, 0.55), (w, 0.05, 1.05), (0.95, 0.95, 0.93), rot=(0, 0, a))
+		P.box("dark", (0, d / 2 - 0.02, 0.55), (w - 0.06, 0.01, 1.0))
+	P.box("metal", (w / 2 - 0.06, d / 2 + 0.03, 1.0), (0.03, 0.03, 0.3))
+def f_kitchen(P, rnd, w, d, mess):                                    # тумба с мойкой и плита
+	wc = rnd.choice(WOODS)
+	P.box("wood_raw", (-0.3, 0, 0.42), (w - 0.6, d, 0.84), (0.9, 0.9, 0.88))
+	P.box("metal", (-0.3, 0, 0.86), (w - 0.6, d, 0.04))
+	P.box("metal", (-0.5, 0.0, 0.85), (0.45, 0.35, 0.05), (0.6, 0.6, 0.6))
+	P.box("metal_paint", (w / 2 - 0.3, 0, 0.43), (0.55, d, 0.86), (0.92, 0.92, 0.9))  # плита
+	for k in range(4):
+		P.cyl("frame", (w / 2 - 0.42 + (k % 2) * 0.24, -0.12 + (k // 2) * 0.24, 0.87), 0.08, 0.01, "Z", 10)
+	P.box("wood_raw", (-0.3, -d / 2 + 0.17, 1.7), (w - 0.6, 0.32, 0.6), wc)        # навесной шкаф
+	if mess:
+		for k in range(rnd.randint(2, 4)):                             # посуда на полу
+			P.cyl("metal_paint", (rnd.uniform(-w / 2, w / 2), d / 2 + rnd.uniform(0.2, 0.7), 0.01), rnd.uniform(0.08, 0.12), 0.02, "Z", 10, col=(0.95, 0.95, 0.92))
+def f_tv(P, rnd, w, d, mess):
+	wc = rnd.choice(WOODS)
+	P.box("wood_raw", (0, 0, 0.3), (w, d, 0.6), wc)
+	if mess and rnd.random() < 0.5:
+		P.box("metal_paint", (0.2, d / 2 + 0.45, 0.25), (0.6, 0.5, 0.5), (0.18, 0.18, 0.18), rot=(1.5, 0, 0.4))   # телевизор упал
+	else:
+		P.box("metal_paint", (0, 0, 0.85), (0.6, 0.48, 0.5), (0.18, 0.18, 0.18))
+		P.box("glass", (0, 0.245, 0.86), (0.46, 0.01, 0.36))
+def f_table(P, rnd, mess):
+	wc = rnd.choice(WOODS)
+	P.box("wood_raw", (0, 0, 0.74), (1.2, 0.8, 0.04), wc)
+	for sx in (-1, 1):
+		for sy in (-1, 1):
+			P.box("wood_raw", (sx * 0.54, sy * 0.34, 0.37), (0.05, 0.05, 0.72), wc)
+	P.box("fabric", (0, 0, 0.765), (1.0, 0.6, 0.01), rnd.choice(FABRICS))      # скатерть
+	for k, (cx, cy, a) in enumerate(((-0.3, -0.62, 0), (0.3, 0.62, math.pi), (-0.85, 0.0, math.pi / 2))):
+		if mess and rnd.random() < 0.5:                                  # стул опрокинут
+			ca = a + rnd.uniform(-0.8, 0.8)
+			P.box("wood_raw", (cx * 1.4, cy * 1.4, 0.22), (0.42, 0.42, 0.04), wc, rot=(1.45, 0, ca))
+			P.box("wood_raw", (cx * 1.4 + 0.1, cy * 1.4, 0.04), (0.42, 0.8, 0.04), wc, rot=(0, 0, ca))
+		else:
+			_chair(P, cx, cy, a, wc)
+	if mess:
+		P.cyl("glass", (0.2, 0.1, 0.8), 0.04, 0.12, "Z", 8)
+		P.box("fabric", (-0.2, -0.1, 0.77), (0.2, 0.28, 0.01), (0.92, 0.92, 0.88))
+def _chair(P, cx, cy, a, wc):
+	c, sn = math.cos(a), math.sin(a)
+	def q(lx, ly):
+		return (cx + lx * c - ly * sn, cy + lx * sn + ly * c)
+	P.box("wood_raw", (*q(0, 0), 0.45), (0.42, 0.42, 0.04), wc, rot=(0, 0, a))
+	P.box("wood_raw", (*q(0, -0.2), 0.7), (0.4, 0.04, 0.5), wc, rot=(0, 0, a))
+	for sx in (-1, 1):
+		for sy in (-1, 1):
+			P.box("wood_raw", (*q(sx * 0.18, sy * 0.18), 0.22), (0.04, 0.04, 0.44), wc, rot=(0, 0, a))
+
+def furnish(hb, rnd, x0, x1, y0, y1, z0, blocked, windows, items, mess):
+	"""Расставить предметы вдоль стен комнаты (x0..x1, y0..y1 — внутренний контур). blocked — занятые прямоугольники
+	(x0, y0, x1, y1): проёмы, печь, перегородки. windows — по стене ('f','b','l','r') список (центр, ширина)."""
+	occ = list(blocked)
+	def free(r):
+		for b in occ:
+			if r[0] < b[2] and b[0] < r[2] and r[1] < b[3] and b[1] < r[3]:
+				return False
+		return x0 - 0.01 <= r[0] and r[2] <= x1 + 0.01 and y0 - 0.01 <= r[1] and r[3] <= y1 + 0.01
+	placed = 0
+	for (fn, w, d, tall) in items:
+		for _ in range(40):
+			wall = rnd.choice("fblr")
+			if wall in "fb":
+				pos = rnd.uniform(x0 + w / 2, x1 - w / 2)
+				yy = y0 + d / 2 if wall == "f" else y1 - d / 2
+				r = (pos - w / 2, yy - d / 2, pos + w / 2, yy + d / 2)
+				th = 0.0 if wall == "f" else math.pi
+				cx, cy = pos, yy
+			else:
+				pos = rnd.uniform(y0 + w / 2, y1 - w / 2)
+				xx = x0 + d / 2 if wall == "l" else x1 - d / 2
+				r = (xx - d / 2, pos - w / 2, xx + d / 2, pos + w / 2)
+				th = -math.pi / 2 if wall == "l" else math.pi / 2
+				cx, cy = xx, pos
+			if tall and any(abs(pos - wc_) < (w + ww) / 2 + 0.05 for (wc_, ww) in windows.get(wall, [])):
+				continue
+			rg = (r[0] - (0.0 if wall != "r" else 0.6), r[1] - (0.0 if wall != "b" else 0.6), r[2] + (0.0 if wall != "l" else 0.6), r[3] + (0.0 if wall != "f" else 0.6))
+			if not free(r):
+				continue
+			occ.append(rg)                                              # перед предметом — проход
+			fn(_Pose(hb, cx, cy, z0, th), rnd, w, d, mess)
+			placed += 1
+			break
+	# стол со стульями — посреди свободного места
+	for _ in range(40):
+		cx, cy = rnd.uniform(x0 + 1.1, x1 - 1.1), rnd.uniform(y0 + 1.1, y1 - 1.1)
+		r = (cx - 1.0, cy - 1.0, cx + 1.0, cy + 1.0)
+		if (x1 - x0) > 2.4 and (y1 - y0) > 2.4 and free(r):
+			occ.append(r)
+			f_table(_Pose(hb, cx, cy, z0, rnd.choice((0.0, math.pi / 2))), rnd, mess)
+			break
+	# ковёр и мусор на полу: бумаги, одежда, бутылки
+	cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+	hb.box(mat("fabric"), (cx, cy, z0 + 0.045), (min(2.0, (x1 - x0) * 0.6), min(1.4, (y1 - y0) * 0.6), 0.01), rnd.choice(FABRICS))
+	if mess:
+		for k in range(rnd.randint(5, 10)):
+			px, py = rnd.uniform(x0 + 0.2, x1 - 0.2), rnd.uniform(y0 + 0.2, y1 - 0.2)
+			kind = rnd.random()
+			if kind < 0.5:
+				hb.box(mat("fabric"), (px, py, z0 + 0.052), (0.21, 0.3, 0.004), (0.9, 0.9, 0.86), rot=(0, 0, rnd.uniform(0, 3)))
+			elif kind < 0.8:
+				hb.box(mat("fabric"), (px, py, z0 + 0.07), (rnd.uniform(0.3, 0.6), rnd.uniform(0.25, 0.45), 0.04), rnd.choice(FABRICS), rot=(0, 0, rnd.uniform(0, 3)))
+			else:
+				hb.cyl(mat("glass"), (px, py, z0 + 0.09), 0.035, 0.28, "X", 8, col=(0.4, 0.6, 0.4))
+	return placed
+
+def room_items(rnd, kind, area):
+	big = area > 14
+	if kind == "kitchen":
+		return [(f_kitchen, 2.0, 0.6, False), (f_fridge, 0.6, 0.62, True)] + ([(f_sideboard, 1.2, 0.45, True)] if big else [])
+	if kind == "bed":
+		return [(f_bed, 2.0, 0.95, False), (f_wardrobe, 1.0, 0.58, True)] + ([(f_bed, 1.9, 0.85, False)] if big and rnd.random() < 0.5 else [])
+	return [(f_sofa, 1.9, 0.85, False), (f_sideboard, 1.6, 0.45, True), (f_tv, 1.0, 0.45, False)] + ([(f_wardrobe, 1.0, 0.58, True)] if big else [])
+
 def house(name, spec, seed):
 	"""spec: L, D, wall (материал), wcol, t, h, plinth, roof ('gable'/'hip'), rmat, rcol, pitch, floor, inner,
 	front/back/left/right — окна [(pos, w, h)], door (pos, w), porch, chimney (x, y), stove, rooms [перегородки], extras."""
@@ -421,6 +607,47 @@ def house(name, spec, seed):
 					window(hb, style, (x0, pp, z0 + zb + hh / 2), "y", -1, w2, hh, rnd, 0)
 				else:
 					window(hb, style, (x1, pp, z0 + zb + hh / 2), "y", 1, w2, hh, rnd, 0)
+		# мебель по комнатам (кроме бани)
+		if S.get("furnish", True):
+			ix0, ix1, iy0, iy1 = x0 + t + 0.03, x1 - t - 0.03, y0 + t + 0.03, y1 - t - 0.03
+			rects = [(ix0, iy0, ix1, iy1)]
+			blocked = []
+			for (ax_, pos, a, b, dp) in S.get("rooms", []):
+				c_ = pos + 0.06
+				nr = []
+				for R in rects:
+					if ax_ == "y" and R[0] + 0.5 < c_ < R[2] - 0.5 and a <= R[1] + 0.4 and b >= R[3] - 0.4:
+						nr += [(R[0], R[1], c_ - 0.07, R[3]), (c_ + 0.07, R[1], R[2], R[3])]
+					elif ax_ == "x" and R[1] + 0.5 < c_ < R[3] - 0.5 and a <= R[0] + 0.4 and b >= R[2] - 0.4:
+						nr += [(R[0], R[1], R[2], c_ - 0.07), (R[0], c_ + 0.07, R[2], R[3])]
+					else:
+						nr.append(R)
+				rects = nr
+				if dp is not None:                                    # у двери в перегородке — проход
+					blocked.append((c_ - 0.9, dp - 0.6, c_ + 0.9, dp + 0.6) if ax_ == "y" else (dp - 0.6, c_ - 0.9, dp + 0.6, c_ + 0.9))
+				blocked.append((min(a, b), c_ - 0.08, max(a, b), c_ + 0.08) if ax_ == "x" else (c_ - 0.08, min(a, b), c_ + 0.08, max(a, b)))
+			if fl == 0:
+				blocked.append((dpos - 0.75, y0, dpos + 0.75, y0 + t + 1.4))     # вход
+				if S.get("stove"):
+					sx_, sy_ = S["stove"]
+					blocked.append((sx_ - 0.95, sy_ - 1.15, sx_ + 0.95, sy_ + 1.15))
+				if floors > 1:
+					blocked.append((-1.6, y0, -0.4, y0 + t + 4.2))        # лестница
+			else:
+				blocked.append((-1.4, y0, 0.2, y1))                      # проём лестницы
+			wins = {"f": [(pp, w2) for (pp, w2, zb_, zt_) in front if zb_ > 0.01], "b": [(pp, w2) for (pp, w2, zb_, zt_) in back],
+				"l": [(pp, w2) for (pp, w2, zb_, zt_) in left], "r": [(pp, w2) for (pp, w2, zb_, zt_) in right]}
+			rects.sort(key=lambda R: -(R[2] - R[0]) * (R[3] - R[1]))
+			kinds = (["living", "bed", "kitchen", "bed"] if fl == 0 else ["bed", "living", "bed"])
+			for ri, R in enumerate(rects):
+				area = (R[2] - R[0]) * (R[3] - R[1])
+				if area < 3.0:
+					continue
+				k = kinds[ri % len(kinds)]
+				items = room_items(rnd, k, area)
+				if len(rects) == 1:                                     # одна комната — всё в ней
+					items = room_items(rnd, "kitchen", area)[:2] + room_items(rnd, "bed", area)[:2] + room_items(rnd, "living", area)[:2]
+				furnish(hb, rnd, R[0], R[2], R[1], R[3], z0 + 0.04, blocked, wins, items, S.get("mess", True))
 		if fl < floors - 1:                                           # перекрытие между этажами (с проёмом под лестницу)
 			hb.box(mat("concrete"), (L / 4, 0, z0 + h + slab / 2), (L / 2 - t, D - 2 * t, slab), (0.8, 0.8, 0.8))
 			hb.box(mat("concrete"), (-L / 4 - 0.6, 0, z0 + h + slab / 2), (L / 2 - t - 1.2, D - 2 * t, slab), (0.8, 0.8, 0.8))
@@ -555,7 +782,7 @@ TYPES = {
 		door=(-1.5, 0.85), porch=dict(w=1.4, d=1.1, roof=True), chimney=(0.8, 0.6), stove=(0.9, 0.9), state="broken"),
 	"house_banya": dict(L=4.6, D=4.0, wall="logs", t=0.22, h=2.2, plinth=0.4, plinth_mat="concrete", roof="gable", rmat="slate", rcol=(0.78, 0.74, 0.68), pitch=30,
 		inner="paint_wall", icol=(0.7, 0.6, 0.48), floor="floor_wood", lining=False, front=[], back=W(0.6, w=0.6, h=0.5), left=[], right=W(0.0, w=0.6, h=0.5),
-		door=(-1.2, 0.8), chimney=(0.9, 0.6), stove=(1.1, 0.8), rooms=[("y", -0.4, -1.75, 1.75, 0.0)], state="ok"),
+		door=(-1.2, 0.8), chimney=(0.9, 0.6), stove=(1.1, 0.8), rooms=[("y", -0.4, -1.75, 1.75, 0.0)], state="ok", furnish=False),
 }
 
 # ---------------- заборы и площадки ----------------

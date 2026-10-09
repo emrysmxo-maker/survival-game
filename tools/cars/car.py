@@ -14,7 +14,7 @@ H.FLAT.update({
 	"car_glass": ((0.05, 0.065, 0.075), 0.04, 0.7), "plastic": ((0.05, 0.05, 0.052), 0.7, 0.0),
 	"tire": ((0.035, 0.035, 0.035), 0.95, 0.0), "rim": ((0.62, 0.63, 0.64), 0.3, 0.9), "chrome": ((0.85, 0.85, 0.85), 0.15, 1.0),
 	"headlight": ((0.80, 0.82, 0.84), 0.05, 0.6), "taillight": ((0.60, 0.05, 0.04), 0.2, 0.1), "plate": ((0.93, 0.93, 0.9), 0.5, 0.0),
-	"interior": ((0.07, 0.07, 0.075), 0.9, 0.0), "canvas": ((0.33, 0.36, 0.24), 0.95, 0.0), "frame": ((0.08, 0.08, 0.08), 0.6, 0.4),
+	"interior": ((0.07, 0.07, 0.075), 0.9, 0.0), "seam": ((0.025, 0.025, 0.025), 0.85, 0.0), "brake": ((0.30, 0.29, 0.28), 0.5, 0.7), "canvas": ((0.33, 0.36, 0.24), 0.95, 0.0), "frame": ((0.08, 0.08, 0.08), 0.6, 0.4),
 })
 SMOOTH = {"paint", "paint_matte", "car_glass", "tire"}
 
@@ -40,7 +40,10 @@ def body(hb, S, paint_col, rnd):
 	ra = S["wheel_r"] + 0.07                                          # колёсные арки: низ кузова поднимается дугой над колесом
 	NX = 72
 	xs = sorted(set([L * (0.5 - 0.5 * math.cos(math.pi * i / NX)) for i in range(NX + 1)] +
-		[ax + ra * math.sin(math.pi * (k / 10.0 - 0.5)) for ax in S["axles"] for k in range(11)]))    # гуще у торцов и над колёсами
+		[ax + ra * math.sin(math.pi * (k / 10.0 - 0.5)) for ax in S["axles"] for k in range(11)] +    # гуще у торцов и над колёсами
+		[x + d for x in S.get("seams", []) + S.get("tseams", []) for d in (-0.011, 0.011)] +            # щели дверей, капота, багажника
+		[x + d for x in S.get("bpil", []) for d in (-0.05, 0.05)] +
+		[x for od in ([S["open_door"]] if S.get("open_door") else []) for x in od[1:3]]))
 	NX = len(xs) - 1
 	def zt(x):
 		return interp(S["top"], x / L)
@@ -72,9 +75,26 @@ def body(hb, S, paint_col, rnd):
 	G = S["glass"]
 	lights = S.get("lights", {})
 	broken = S.get("broken", 0.0)
+	seams, tseams, bpil = S.get("seams", []), S.get("tseams", []), S.get("bpil", [])
+	od = S.get("open_door")
+	sg = [g for g in G if g[2] == "side"]
 	def classify(c, n):
 		x, y, z = c.x, abs(c.y), c.z
 		t = zt(x)
+		# открытая дверь: проём (видно салон)
+		if od and c.y * od[0] > 0 and od[1] < x < od[2] and abs(n.y) > 0.3 and zb(x) + 0.03 < z < t - 0.03:
+			return "hole", None
+		# центральная стойка — чёрная
+		if z > belt + 0.03 and z < t - 0.025 and abs(n.y) > 0.35 and any(abs(x - xb) < 0.05 for xb in bpil):
+			return "plastic", None
+		# молдинг по низу окон
+		if sg and abs(n.y) > 0.2 and belt - 0.004 < z < belt + 0.032 and sg[0][0] < x < sg[0][1]:
+			return "plastic", None
+		# щели дверей (бока) и капота/багажника (верх)
+		if abs(n.y) > 0.35 and zb(x) + 0.04 < z < belt + 0.01 and any(abs(x - xs_) < 0.011 for xs_ in seams):
+			return "seam", None
+		if n.z > 0.5 and y < hw(x) * 0.93 and any(abs(x - xs_) < 0.011 for xs_ in tseams):
+			return "seam", None
 		# стёкла
 		if z > belt + 0.03 and z < t - 0.025:
 			if n.z < 0.92:
@@ -168,18 +188,35 @@ def body(hb, S, paint_col, rnd):
 			pass
 	return zt, hw
 
-def wheel(hb, x, y, z, r, w=0.21, flat=False, rim="rim", rim_k=0.62, burnt=False):
+def wheel(hb, x, y, z, r, w=0.21, flat=False, rim="rim", rim_k=0.66, burnt=False, spokes=5):
+	"""Колесо: шина с закруглённой боковиной и протектором, литой диск со спицами (между спицами — тормозной диск и тьма)."""
 	if flat:
 		z -= r * 0.13
-	if not burnt:
-		hb.cyl(mat("tire"), (x, y, z), r, w, "Y", 24)
-		hb.cyl(mat("tire"), (x, y, z), r * 0.93, w + 0.03, "Y", 24)    # закруглённая боковина
 	s = 1 if y > 0 else -1
-	hb.cyl(mat(rim), (x, y + s * (w / 2 + 0.008), z), r * rim_k, 0.03, "Y", 16, col=(0.45, 0.4, 0.35) if burnt else (1, 1, 1))
-	hb.cyl(mat("plastic"), (x, y + s * (w / 2 + 0.016), z), r * rim_k * 0.28, 0.02, "Y", 10)
-	for k in range(5):                                                  # спицы-окна диска
+	if not burnt:
+		hb.cyl(mat("tire"), (x, y, z), r, w * 0.82, "Y", 28)
+		hb.cyl(mat("tire"), (x, y, z), r * 0.965, w, "Y", 28)                # боковина шире протектора
+		for k in range(14):                                                  # грунтозацепы протектора
+			a = k * 2 * math.pi / 14
+			hb.box(mat("tire"), (x + math.cos(a) * r, y, z + math.sin(a) * r), (0.05, w * 0.7, 0.03), (0.8, 0.8, 0.8), rot=(0, math.pi / 2 - a, 0))
+	rr = r * rim_k
+	yo = y + s * (w / 2 - 0.02)
+	cr = (0.45, 0.4, 0.35) if burnt else (1, 1, 1)
+	hb.cyl(mat("frame"), (x, yo - s * 0.03, z), rr * 0.97, 0.02, "Y", 20)       # тьма за спицами
+	hb.cyl(mat("brake"), (x, yo - s * 0.05, z), rr * 0.72, 0.03, "Y", 16, col=cr)
+	# обод: кольцо из сегментов
+	for k in range(16):
+		a0, a1 = k * 2 * math.pi / 16, (k + 1) * 2 * math.pi / 16
+		hb.beam(mat(rim), (x + math.cos(a0) * rr, yo, z + math.sin(a0) * rr), (x + math.cos(a1) * rr, yo, z + math.sin(a1) * rr), 0.045, 0.06, col=cr)
+	for k in range(spokes):                                              # спицы
+		a = k * 2 * math.pi / spokes + 0.3
+		p1 = (x + math.cos(a) * rr * 0.95, yo + s * 0.005, z + math.sin(a) * rr * 0.95)
+		hb.beam(mat(rim), (x + math.cos(a) * rr * 0.22, yo + s * 0.02, z + math.sin(a) * rr * 0.22), p1, 0.055, 0.03, col=cr)
+	hb.cyl(mat(rim), (x, yo + s * 0.02, z), rr * 0.26, 0.04, "Y", 12, col=cr)  # ступица
+	hb.cyl(mat("plastic"), (x, yo + s * 0.04, z), rr * 0.12, 0.01, "Y", 8)
+	for k in range(5):                                                   # гайки
 		a = k * 2 * math.pi / 5
-		hb.cyl(mat("plastic"), (x + math.cos(a) * r * rim_k * 0.6, y + s * (w / 2 + 0.02), z + math.sin(a) * r * rim_k * 0.6), r * rim_k * 0.18, 0.012, "Y", 8)
+		hb.cyl(mat("chrome"), (x + math.cos(a) * rr * 0.17, yo + s * 0.042, z + math.sin(a) * rr * 0.17), 0.012, 0.012, "Y", 6)
 
 def finish(hb, name):
 	ob = hb.build(name)
@@ -231,10 +268,37 @@ CARS = {
 		lights={"head": (0.85, 1.05, 0.75, 1.15), "tail": (1.0, 1.3, 0.95, 1.18), "grille": (0.7, 1.2, 0.0, 0.6), "rplate": (0.55, 0.7)}),
 }
 
-def car(name, kind, paint, seed, broken=0.0, flat=0, dirt=0.35, stripes=None, rust=0.0, burnt=False, beacon=None, roofrack=False):
+DOORS = {"sedan": 4, "hatch": 4, "crossover": 4, "suv": 4, "classic": 4, "niva": 2, "wagon": 4, "van": 1, "buhanka": 1, "bus": 0}
+def car(name, kind, paint, seed, broken=0.0, flat=0, dirt=0.35, stripes=None, rust=0.0, burnt=False, beacon=None, roofrack=False, door_open=False, luggage=False):
 	rnd = random.Random(seed)
 	S = dict(CARS[kind])
 	S["broken"] = 1.0 if burnt else broken
+	# двери: щели, центральная стойка, ручки; капот и багажник — щели сверху
+	r0, axl = S["wheel_r"], S["axles"]
+	fg = [g for g in S["glass"] if g[2] == "front"]
+	rg = [g for g in S["glass"] if g[2] == "rear"]
+	nd = DOORS[kind]
+	xf = axl[1] - r0 - 0.12                                                # передний край передней двери (нос в +X)
+	doors = []
+	if nd == 4:
+		xr = axl[0] + r0 + 0.12
+		xb = (xf + xr) / 2 + 0.06
+		doors = [(xb, xf), (xr, xb)]
+		S["bpil"] = [xb]
+	elif nd == 2:
+		doors = [(xf - 1.2, xf)]
+		S["bpil"] = [xf - 1.2]
+	elif nd == 1 and fg:
+		doors = [(fg[0][0] - 0.95, fg[0][0] - 0.05)]
+	S["seams"] = sorted(set([d[0] for d in doors] + [d[1] for d in doors]))
+	ts = []
+	if fg and kind not in ("van", "bus", "buhanka"):
+		ts.append(fg[0][1] + 0.05)                                        # задний край капота — у основания лобового
+	if rg and kind in ("sedan", "classic"):
+		ts.append(rg[0][0] - 0.06)                                        # крышка багажника
+	S["tseams"] = ts
+	if door_open and doors:
+		S["open_door"] = (1 if rnd.random() < 0.5 else -1, doors[0][0] + 0.02, doors[0][1] - 0.02)
 	if stripes:
 		S["stripes"] = stripes
 	hb = HB(keep_winding=True)
@@ -259,17 +323,68 @@ def car(name, kind, paint, seed, broken=0.0, flat=0, dirt=0.35, stripes=None, ru
 	if kind == "bus":                                                     # сдвоенные задние
 		for sy in (-1, 1):
 			wheel(hb, S["axles"][0], sy * (tw - 0.3), r, r, 0.28, burnt=burnt)
-	# зеркала
-	xm = [g for g in S["glass"] if g[2] == "front"]
-	if xm:
-		xa = xm[0][1] - 0.15 if kind not in ("bus",) else L - 0.2
-		zm = S["belt"] + 0.12
+	# ручки дверей
+	for (d0, d1) in doors:
+		xh = d0 + 0.22
 		for sy in (-1, 1):
-			hb.box(mat("plastic" if kind in ("crossover", "suv", "van") else "paint"), (xa, sy * (hw(xa) + 0.1), zm), (0.12, 0.16, 0.12), col)
+			if S.get("open_door") and sy == S["open_door"][0] and (d0, d1) == doors[0]:
+				continue
+			hb.box(mat("chrome" if kind in ("sedan", "classic") else "plastic"), (xh, sy * (W / 2 + 0.008), S["belt"] - 0.09), (0.19, 0.03, 0.035), (1, 1, 1))
+	# открытая дверь: створка повёрнута наружу на петлях у переднего края
+	if S.get("open_door"):
+		sgn, d0, d1 = S["open_door"]
+		dl = d1 - d0
+		a = math.radians(rnd.uniform(40, 65))
+		hx, hy = d1, sgn * (W / 2 - 0.02)
+		dx, dy = -math.cos(a), sgn * math.sin(a)
+		zb0 = S["clear"] + 0.12
+		zt0 = S["belt"]
+		cx, cy = hx + dx * dl / 2, hy + dy * dl / 2
+		hb.box(mat("paint"), (cx, cy, (zb0 + zt0) / 2), (dl, 0.07, zt0 - zb0), col, rot=(0, 0, -sgn * a))
+		hb.box(mat("interior"), (cx - sgn * 0.0, cy - sgn * 0.035 * math.cos(a), (zb0 + zt0) / 2), (dl * 0.92, 0.02, (zt0 - zb0) * 0.85), (1, 1, 1), rot=(0, 0, -sgn * a))
+		gz = zt(d1 - 0.3) - 0.04
+		if gz > zt0 + 0.15:                                               # рамка окна двери
+			hb.box(mat("car_glass"), (cx, cy, (zt0 + gz) / 2), (dl * 0.85, 0.02, gz - zt0), (1, 1, 1), rot=(0, 0, -sgn * a))
+	# зеркала: ножка + корпус
+	if fg:
+		xm_ = fg[0][0] + 0.02 if kind not in ("bus",) else L - 0.2
+		zm = S["belt"] + 0.1
+		for sy in (-1, 1):
+			yy = sy * (hw(xm_) + 0.02)
+			hb.box(mat("plastic"), (xm_, yy + sy * 0.06, zm - 0.02), (0.07, 0.12, 0.03), (1, 1, 1))
+			hb.box(mat("plastic" if kind in ("crossover", "suv", "van", "niva", "buhanka") else "paint"), (xm_ - 0.03, yy + sy * 0.17, zm + 0.02), (0.1, 0.17, 0.12), col)
+			hb.box(mat("car_glass"), (xm_ - 0.085, yy + sy * 0.17, zm + 0.02), (0.01, 0.14, 0.09), (1, 1, 1))
+		# дворники у основания лобового стекла
+		xw = fg[0][1] - 0.04
+		zw = zt(xw) + 0.02
+		for sy in (-0.45, 0.15):
+			hb.beam(mat("plastic"), (xw, sy * W / 2 + 0.25, zw), (xw - 0.12, sy * W / 2 - 0.25, zw + 0.08), 0.02, 0.015)
+	# низ: решётка-воздухозаборник, противотуманки, выхлоп, антенна, днище
+	if kind not in ("bus",):
+		hb.box(mat("plastic"), (L - 0.02, 0, S["clear"] + 0.16), (0.05, W * 0.5, 0.1), (0.6, 0.6, 0.6))
+		for sy in (-1, 1):
+			hb.cyl(mat("headlight"), (L - 0.02, sy * W * 0.34, S["clear"] + 0.17), 0.045, 0.03, "X", 10)
+	hb.cyl(mat("chrome"), (0.04, -W * 0.3, S["clear"] + 0.06), 0.03, 0.1, "X", 8, col=(0.5, 0.45, 0.4))
+	hb.box(mat("frame"), (L / 2, 0, S["clear"] + 0.04), (L * 0.8, W * 0.8, 0.04))
+	if kind in ("sedan", "hatch", "crossover", "classic", "niva"):
+		xa_ = L * 0.3
+		hb.beam(mat("plastic"), (xa_, 0, zt(xa_)), (xa_ - 0.15, 0, zt(xa_) + 0.18), 0.025, 0.012)
+	# колёсные ниши — тёмные
+	for axx in axl:
+		for sy in (-1, 1):
+			hb.cyl(mat("frame"), (axx, sy * (W / 2 - 0.36), r0), r0 + 0.07, 0.3, "Y", 16)
 	# багажник на крыше / маячки
-	if roofrack:
+	if roofrack or luggage:
 		for sy in (-1, 1):
 			hb.box(mat("plastic"), (L * 0.42, sy * (W / 2 - 0.25), zt(L * 0.42) + 0.04), (L * 0.42, 0.04, 0.05), (1, 1, 1))
+	if luggage:                                                           # вещи на крыше: уезжали в спешке
+		zr = zt(L * 0.42) + 0.07
+		for k in range(rnd.randint(2, 4)):
+			bx = L * 0.42 + rnd.uniform(-0.5, 0.5)
+			by = rnd.uniform(-0.35, 0.35)
+			sz = (rnd.uniform(0.4, 0.7), rnd.uniform(0.3, 0.5), rnd.uniform(0.18, 0.3))
+			bc = rnd.choice([(0.25, 0.42, 0.75), (0.72, 0.2, 0.15), (0.75, 0.68, 0.5), (0.3, 0.55, 0.3), (0.85, 0.55, 0.15)])
+			hb.box(mat("canvas"), (bx, by, zr + sz[2] / 2), sz, bc, rot=(0, 0, rnd.uniform(-0.4, 0.4)))
 	if beacon:
 		xb = L * 0.6 if kind != "van" else L * 0.75
 		hb.box(mat("plastic"), (xb, 0, zt(xb) + 0.05), (0.25, 1.0, 0.06), (1, 1, 1))
@@ -386,9 +501,9 @@ JOBS = {
 	# старые имена (используются в расстановке) — новые реалистичные машины
 	"car_sedan_red": J("car_sedan_red", "sedan", P["darkred"], 11, broken=0.2, flat=1),
 	"car_sedan_blue": J("car_sedan_blue", "hatch", P["navy"], 12, broken=0.1),
-	"car_sedan_white": J("car_sedan_white", "sedan", P["white"], 13, broken=0.3, flat=1),
+	"car_sedan_white": J("car_sedan_white", "sedan", P["white"], 13, broken=0.3, flat=1, door_open=True),
 	"car_sedan_burnt": J("car_sedan_burnt", "classic", P["black"], 14, burnt=True, dirt=0.8),
-	"car_sedan_green": J("car_sedan_green", "classic", P["darkgreen"], 15, broken=0.4, flat=1, rust=0.25),
+	"car_sedan_green": J("car_sedan_green", "classic", P["darkgreen"], 15, broken=0.4, flat=1, rust=0.25, luggage=True),
 	"car_sedan_yellow": J("car_sedan_yellow", "sedan", P["taxi"], 16, broken=0.15),
 	"car_van_olive": J("car_van_olive", "buhanka", P["olive"], 17, broken=0.3, rust=0.2, dirt=0.5),
 	"car_van_white": J("car_van_white", "van", P["white"], 18, broken=0.1),
@@ -397,25 +512,25 @@ JOBS = {
 	"car_bus_blue": J("car_bus_blue", "bus", P["white"], 21, broken=0.25, stripes=[(1.0, 1.25, (0.2, 0.35, 0.6))]),
 	# новые
 	"car_solaris_silver": J("car_solaris_silver", "sedan", P["silver"], 31, broken=0.1),
-	"car_granta_graphite": J("car_granta_graphite", "sedan", P["graphite"], 32, broken=0.2, flat=1),
+	"car_granta_graphite": J("car_granta_graphite", "sedan", P["graphite"], 32, broken=0.2, flat=1, door_open=True),
 	"car_vesta_black": J("car_vesta_black", "sedan", P["black"], 33, broken=0.05),
-	"car_hatch_white": J("car_hatch_white", "hatch", P["white"], 34, broken=0.2),
+	"car_hatch_white": J("car_hatch_white", "hatch", P["white"], 34, broken=0.2, door_open=True),
 	"car_hatch_red": J("car_hatch_red", "hatch", P["red"], 35, broken=0.1, flat=1),
 	"car_duster_brown": J("car_duster_brown", "crossover", P["brown"], 36, broken=0.1, roofrack=True),
 	"car_crossover_silver": J("car_crossover_silver", "crossover", P["silver"], 37, broken=0.05),
-	"car_crossover_white": J("car_crossover_white", "crossover", P["white"], 38, broken=0.15, flat=1),
+	"car_crossover_white": J("car_crossover_white", "crossover", P["white"], 38, broken=0.15, flat=1, luggage=True, door_open=True),
 	"car_suv_green": J("car_suv_green", "suv", P["darkgreen"], 39, broken=0.1, roofrack=True),
-	"car_niva_beige": J("car_niva_beige", "niva", P["beige"], 40, broken=0.3, rust=0.3),
+	"car_niva_beige": J("car_niva_beige", "niva", P["beige"], 40, broken=0.3, rust=0.3, door_open=True),
 	"car_niva_white": J("car_niva_white", "niva", P["white"], 41, broken=0.2, rust=0.15),
-	"car_classic_blue": J("car_classic_blue", "classic", P["blue"], 42, broken=0.5, flat=1, rust=0.35),
+	"car_classic_blue": J("car_classic_blue", "classic", P["blue"], 42, broken=0.5, flat=1, rust=0.35, luggage=True),
 	"car_wagon_silver": J("car_wagon_silver", "wagon", P["silver"], 43, broken=0.1),
-	"car_wagon_beige": J("car_wagon_beige", "wagon", P["beige"], 44, broken=0.25, flat=1),
-	"car_police": J("car_police", "sedan", P["white"], 45, broken=0.2, stripes=[(0.55, 0.78, (0.12, 0.28, 0.62))], beacon=((0.6, 0.05, 0.04), (0.1, 0.2, 0.75))),
+	"car_wagon_beige": J("car_wagon_beige", "wagon", P["beige"], 44, broken=0.25, flat=1, luggage=True, door_open=True),
+	"car_police": J("car_police", "sedan", P["white"], 45, broken=0.2, stripes=[(0.55, 0.78, (0.12, 0.28, 0.62))], beacon=((0.6, 0.05, 0.04), (0.1, 0.2, 0.75)), door_open=True),
 	"car_ambulance": J("car_ambulance", "van", P["white"], 46, broken=0.15, stripes=[(0.95, 1.12, (0.75, 0.08, 0.06))], beacon=((0.1, 0.2, 0.75), (0.1, 0.2, 0.75))),
 	# брошенные: сгоревшие и разбитые (стёкла выбиты, колёса спущены, ржавчина)
 	"car_crossover_burnt": J("car_crossover_burnt", "crossover", P["black"], 71, burnt=True, dirt=0.8),
 	"car_hatch_burnt": J("car_hatch_burnt", "hatch", P["black"], 72, burnt=True, dirt=0.8),
-	"car_solaris_wreck": J("car_solaris_wreck", "sedan", P["silver"], 73, broken=0.9, flat=2, rust=0.3, dirt=0.7),
+	"car_solaris_wreck": J("car_solaris_wreck", "sedan", P["silver"], 73, broken=0.9, flat=2, rust=0.3, dirt=0.7, door_open=True),
 	"car_truck_blue": lambda: truck("car_truck_blue", P["blue"], 51, "flat"),
 	"car_truck_green": lambda: truck("car_truck_green", P["olive"], 52, "tent"),
 	"car_truck_logs": lambda: truck("car_truck_logs", P["darkgreen"], 53, "logs"),
