@@ -22,8 +22,9 @@ const FEATURES := {
 	"farm": {"x": 25.0, "y": 150.0, "r": 22.0, "name": "Колхоз «Рассвет»"},
 	"bunker": {"x": -150.0, "y": 125.0, "r": 22.0, "name": "Военный бункер"},
 	"tower": {"x": -35.0, "y": -178.0, "r": 18.0, "name": "Радиовышка"},
+	"lab": {"x": 175.0, "y": -150.0, "r": 26.0, "name": "НИИ «Вектор-7»"},
 }
-const LANDMARKS := ["camp", "village", "sawmill", "lakebase", "farm", "bunker", "tower"]
+const LANDMARKS := ["camp", "village", "sawmill", "lakebase", "farm", "bunker", "tower", "lab"]
 # хутора, дачи, кордоны: малые поляны с постройками (расстановка — scripts/props.gd); ровная земля, леса нет, к каждому ведёт просёлок
 const HAMLETS := {
 	"h_zarechye": {"x": -45.0, "y": 118.0, "r": 12.0, "name": "Заречье"},
@@ -35,14 +36,15 @@ const HAMLETS := {
 	"h_poselok": {"x": -54.0, "y": -105.0, "r": 12.0, "name": "Посёлок Луговой"},
 	"h_lager": {"x": -100.0, "y": -22.0, "r": 16.0, "name": "Детский лагерь «Берёзка»"},
 	"h_quarry": {"x": -105.0, "y": 50.0, "r": 6.0, "name": "Песчаный карьер"},
+	"h_hero": {"x": 197.0, "y": 7.0, "r": 13.0, "name": "Дом у озера"},
 }
 const TRACKS := [["h_zarechye", "farm"], ["h_dachi", "camp"],
 	["h_bereza", "lakebase"], ["h_ranger", "camp"], ["h_hunter", "tower"], ["h_cem", "village"],
-	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "village"], ["h_quarry", "h_lager"]]
+	["h_poselok", "village"], ["h_poselok", "h_ranger"], ["h_lager", "village"], ["h_quarry", "h_lager"], ["h_hero", "h_bereza"]]
 # дороги между локациями (ведут от лагеря, плюс объездные)
 # у этих локаций дорога заканчивается у края двора (тайлы от центра) — двор свободен от асфальта
-const ROAD_END := {"camp": 15.0, "sawmill": 19.0, "farm": 36.0, "lakebase": 21.0, "tower": 13.0}
-const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"]]
+const ROAD_END := {"camp": 15.0, "sawmill": 19.0, "farm": 36.0, "lakebase": 21.0, "tower": 13.0, "lab": 30.0, "h_hero": 15.0}
+const ROADS := [["camp", "village"], ["camp", "sawmill"], ["camp", "lakebase"], ["camp", "farm"], ["camp", "bunker"], ["village", "tower"], ["sawmill", "tower"], ["farm", "lakebase"], ["farm", "bunker"], ["sawmill", "lab"]]
 # карьер: центр и радиус (тайлы) — террасная выемка ~6 м, каменистое дно
 const QUARRY := Vector3(-105.0, 50.0, 17.0)
 # овраги в лесу: от, до, ручей по дну (1 — есть)

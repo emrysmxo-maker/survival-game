@@ -11,6 +11,7 @@ import house as house2                      # реалистичные дома 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'cars'))
 import car as cars2                         # реалистичные машины (tools/cars)
 import places as places2                    # новые места (tools/houses/places.py)
+import story as story2                      # сюжет: дом героя, сарай с люком, лаборатория, авиация (tools/houses/story.py)
 reset()
 count = 0
 names = []
@@ -24,6 +25,14 @@ for nm, fn in house2.JOBS.items():
         roof.name = nm + '_roof'
         names.append(nm + '_roof')
 for nm, fn in places2.JOBS.items():
+    if only and nm not in only.split(','): continue
+    shell, roof = fn()
+    shell.name = nm
+    names.append(nm); count += 1
+    if roof is not None:
+        roof.name = nm + '_roof'
+        names.append(nm + '_roof')
+for nm, fn in story2.JOBS.items():
     if only and nm not in only.split(','): continue
     shell, roof = fn()
     shell.name = nm

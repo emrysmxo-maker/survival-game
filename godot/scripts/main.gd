@@ -93,11 +93,32 @@ func _ready() -> void:
 	teleport(focus)
 	if OS.get_cmdline_user_args().has("--bigmap"):
 		hud._open_big()
+	var args := OS.get_cmdline_user_args()
+	if args.has("--intro") or (not FileAccess.file_exists("user://intro_done") and not _has_prefix(args, "--shot=") and not args.has("--nointro")):
+		start_intro.call_deferred()                         # заставка «как всё началось» — при первом входе
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--shot="):                        # снимки без телефона (scripts/shot.gd)
 			var sh = load("res://scripts/shot.gd").new()
 			sh.main = self
 			add_child(sh)
+
+func _has_prefix(args: PackedStringArray, pre: String) -> bool:
+	for a in args:
+		if a.begins_with(pre):
+			return true
+	return false
+
+var intro = null
+func start_intro() -> void:
+	if intro != null or props.story.is_empty() or not ResourceLoader.exists("res://assets/character/hero.glb"):
+		return
+	intro = load("res://scripts/intro.gd").new()
+	intro.main = self
+	add_child(intro)
+	hud.visible = false
+	intro.finished.connect(func():
+		intro = null
+		hud.visible = true)
 
 func teleport(t: Vector2) -> void:
 	var lim := WorldGen.MAP_RADIUS - 5.0

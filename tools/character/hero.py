@@ -97,6 +97,7 @@ def is_arm(p):
 
 # ---------------- одежда ----------------
 BV = None
+BOUND = {}
 def body_bvh():
 	bm = bmesh.new(); bm.from_mesh(body.data); bm.normal_update()
 	t = BVHTree.FromBMesh(bm)
@@ -109,6 +110,15 @@ def cloth(name, pred, gap, smooth=8, fac=0.5, thick=0.004, flat_sole=False):
 	dl = [f for f in bm.faces if not pred(f.calc_center_median())]
 	bmesh.ops.delete(bm, geom=dl, context="FACES")
 	bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+	bnd = [v for v in bm.verts if v.is_boundary]
+	for _ in range(12):                                              # край ткани ровный (выбор граней даёт зубцы)
+		new = {}
+		for v in bnd:
+			nb = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
+			if len(nb) == 2:
+				new[v] = v.co * 0.4 + (nb[0].co + nb[1].co) * 0.3
+		for v, c in new.items():
+			v.co = c
 	inner = [v for v in bm.verts if not v.is_boundary]
 	for _ in range(smooth):                                          # ткань натянута поверх мышц: сгладить и вытолкнуть наружу, повторить
 		bmesh.ops.smooth_vert(bm, verts=inner, factor=fac, use_axis_x=True, use_axis_y=True, use_axis_z=True)
@@ -137,6 +147,8 @@ def cloth(name, pred, gap, smooth=8, fac=0.5, thick=0.004, flat_sole=False):
 		for v in bm.verts:
 			if v.co.z < 0.018:
 				v.co.z = 0.0
+	BOUND[name] = [(e.verts[0].co.copy(), e.verts[1].co.copy(), (e.link_faces[0].calc_center_median() - (e.verts[0].co + e.verts[1].co) / 2).normalized())
+		for e in bm.edges if e.is_boundary and e.link_faces]                                    # края — для окантовок
 	if thick:
 		bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=thick)
 		for v in bm.verts:                                             # вырожденная нормаль (пах, подмышка) — вершину на место
@@ -172,10 +184,28 @@ def jeans_pred(p):
 def shoe_pred(p):
 	return p.z < 0.13 * S and abs(p.x) > 0.08 * S
 
+# ---------------- обычная фигура: мышцы мягче (объём сохраняется), небольшой живот ----------------
+def soften_body():
+	bm = bmesh.new(); bm.from_mesh(body.data)
+	vs = [v for v in bm.verts if 0.14 * S < v.co.z < 1.43 * S and not (abs(v.co.x) > 0.33 * S and v.co.z < 0.95 * S)]   # без головы, кистей, стоп
+	for _ in range(4):
+		bmesh.ops.smooth_laplacian_vert(bm, verts=vs, lambda_factor=0.35, lambda_border=0.0, use_x=True, use_y=True, use_z=True, preserve_volume=True)
+	for v in bm.verts:
+		p = v.co
+		if abs(p.x) < 0.16 * S and 0.93 * S < p.z < 1.24 * S and p.y < 0.0:          # живот чуть вперёд
+			k = math.sin(math.pi * (p.z - 0.93 * S) / (0.31 * S)) * max(0.0, 1 - abs(p.x) / (0.16 * S)) ** 0.7
+			p.y -= 0.018 * S * k
+		if abs(p.x) > 0.04 * S and 0.93 * S < p.z < 1.10 * S and p.y > -0.04 * S and abs(p.x) < 0.18 * S:   # бока мягче
+			k = math.sin(math.pi * (p.z - 0.93 * S) / (0.17 * S))
+			p.x += math.copysign(0.006 * S * k, p.x)
+	bm.normal_update()
+	bm.to_mesh(body.data); bm.free()
+soften_body()
 BV = body_bvh()
 shirt = cloth("shirt", shirt_pred, lambda p: (0.02 + 0.012 * max(0.0, min(1.0, (1.25 * S - p.z) / (0.3 * S)))) * S, smooth=30, fac=0.6, thick=0.004)
 jeans = cloth("jeans", jeans_pred, lambda p: (0.014 + 0.018 * max(0.0, min(1.0, (0.62 * S - p.z) / (0.3 * S)))) * S, smooth=14, fac=0.5, thick=0.004)   # прямые: ниже колена свободнее
 SOLES = []
+LACES = []
 def shoe(sx):
 	"""Кроссовок по контуру стопы: сечения поперёк стопы (ширина и верх по сетке ноги + запас, сглажено), плоская подошва."""
 	pts = [v.co.copy() for v in body.data.vertices if v.co.z < 0.13 * S and v.co.x * sx > 0.08 * S]
@@ -240,6 +270,23 @@ def shoe(sx):
 	sm = bpy.data.meshes.new("sole"); sb.to_mesh(sm); sb.free()
 	so = bpy.data.objects.new("sole", sm); scn.collection.objects.link(so)
 	SOLES.append(so)
+	# шнурки поперёк подъёма, язычок, задник
+	lb = bmesh.new()
+	rot = Matrix((side.to_3d(), ax.to_3d(), Vector((0, 0, 1)))).transposed().to_4x4()
+	for i in range(5, 11):
+		c, mid, hw, k = sect(i, 0.012 * S)
+		top = (TOP[i] + 0.012 * S) * max(k, 0.5)
+		pc = c + side * mid + Vector((0, 0, top + 0.002 * S))
+		bmesh.ops.create_cube(lb, size=1.0, matrix=Matrix.Translation(pc) @ rot @ Matrix.Diagonal((hw * 0.9, 0.006 * S, 0.004 * S, 1)))
+	c, mid, hw, k = sect(11, 0.012 * S)
+	pc = c + side * mid + Vector((0, 0, (TOP[11] + 0.02 * S)))
+	bmesh.ops.create_cube(lb, size=1.0, matrix=Matrix.Translation(pc) @ rot @ Matrix.Diagonal((hw * 0.8, 0.05 * S, 0.006 * S, 1)))  # язычок
+	c, mid, hw, k = sect(0, 0.012 * S)
+	pc = c + side * mid + Vector((0, 0, TOP[0] + 0.01 * S))
+	bmesh.ops.create_cube(lb, size=1.0, matrix=Matrix.Translation(pc) @ rot @ Matrix.Diagonal((0.03 * S, 0.012 * S, 0.035 * S, 1)))  # задник
+	lm = bpy.data.meshes.new("laces"); lb.to_mesh(lm); lb.free()
+	lo_ = bpy.data.objects.new("laces", lm); scn.collection.objects.link(lo_)
+	LACES.append(lo_)
 	me = bpy.data.meshes.new("shoe"); bm.to_mesh(me); bm.free()
 	o = bpy.data.objects.new("shoe", me); scn.collection.objects.link(o)
 	for p in me.polygons:
@@ -247,6 +294,87 @@ def shoe(sx):
 	return o
 shoes = shoe(1)
 shoes2 = shoe(-1)
+
+# ---------------- складки ткани ----------------
+def noise3(p, f):
+	return (math.sin(p.x * f * 1.3 + p.z * f * 0.7) * math.sin(p.y * f * 1.1 - p.z * f * 0.9) + math.sin(p.z * f * 2.1 + p.x * f * 0.5) * 0.5) / 1.5
+
+def wrinkle(o, fn):
+	me = o.data
+	me.calc_normals_split() if hasattr(me, "calc_normals_split") else None
+	for v in me.vertices:
+		d = fn(v.co)
+		if d:
+			v.co += v.normal * d
+
+def shirt_folds(p):
+	d = 0.0
+	if p.z < 1.0 * S:                                                    # низ навыпуск — волна
+		d += 0.004 * S * math.sin(p.x * 60 + p.y * 40) * (1.0 * S - p.z) / (0.12 * S)
+	if 1.25 * S < p.z < 1.38 * S and 0.11 * S < abs(p.x) < 0.2 * S:      # подмышки — тянущиеся складки
+		d += 0.003 * S * math.sin((p.z + abs(p.x)) * 160)
+	d += 0.0015 * S * noise3(p, 45)
+	return d
+def jeans_folds(p):
+	d = 0.0
+	if p.z < 0.24 * S:                                                   # гармошка над кроссовками
+		d += 0.005 * S * math.sin(p.z * 260 + math.atan2(p.y, p.x) * 2) * (0.24 * S - p.z) / (0.14 * S)
+	if 0.44 * S < p.z < 0.58 * S and p.y > 0.0:                          # под коленом
+		d += 0.0035 * S * math.sin(p.z * 220)
+	if 0.80 * S < p.z < 0.9 * S and abs(p.x) < 0.1 * S and p.y < 0.0:   # «усы» у паха
+		d += 0.003 * S * math.sin((p.z - abs(p.x) * 0.8) * 300)
+	d += 0.0012 * S * noise3(p, 50)
+	return d
+wrinkle(shirt, shirt_folds)
+wrinkle(jeans, jeans_folds)
+
+# ---------------- окантовки: ворот, рукава, низ футболки, пояс и подгиб джинсов ----------------
+def hems(src, name, r, only=None, w=0.012):
+	"""Окантовка: полоса вдоль открытого края ткани, на r поверх, шириной w внутрь ткани (двусторонняя)."""
+	bm = bmesh.new()
+	for a_, b_, din in BOUND[src.name]:
+		if only and not (only(a_) and only(b_)):
+			continue
+		m_ = (a_ + b_) / 2
+		q, n, _, _ = BV.find_nearest(m_)
+		n = n if q is not None else Vector((0, 0, 1))
+		off = n * r
+		vs = [bm.verts.new(a_ + off), bm.verts.new(b_ + off), bm.verts.new(b_ + off + din * w * S), bm.verts.new(a_ + off + din * w * S)]
+		bm.faces.new(vs)
+	bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0005)
+	bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.002)
+	me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+	o = bpy.data.objects.new(name, me); scn.collection.objects.link(o)
+	for p in o.data.polygons:
+		p.use_smooth = True
+	return o
+# окантовки полосой выглядели «рюшами» — края ткани сглажены, отдельной окантовки нет
+# пояс джинсов и ремень
+def belt():
+	bm = bmesh.new()
+	ring = []
+	z = 0.975 * S
+	for k in range(48):
+		a = k / 48 * 2 * math.pi
+		d = Vector((math.cos(a), math.sin(a), 0))
+		lo, hi = Vector((0, 0, z)), d * 0.21 * S + Vector((0, 0, z))
+		hit = BV.ray_cast(hi, -d, 0.25 * S)
+		r = (hit[0] - Vector((0, 0, z))).length if hit[0] else 0.15 * S
+		ring.append(Vector((0, 0, z)) + d * (r + 0.016 * S))
+	vs = [[bm.verts.new(p + Vector((0, 0, dz))) for p in ring] for dz in (-0.018 * S, 0.018 * S)]
+	for k in range(48):
+		k2 = (k + 1) % 48
+		bm.faces.new([vs[0][k], vs[0][k2], vs[1][k2], vs[1][k]])
+	bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.004 * S)
+	me = bpy.data.meshes.new("belt"); bm.to_mesh(me); bm.free()
+	o = bpy.data.objects.new("belt", me); scn.collection.objects.link(o)
+	# пряжка
+	bk = bmesh.new()
+	bmesh.ops.create_cube(bk, size=1.0, matrix=Matrix.Translation(ring[36] + Vector((0, -0.004 * S, 0))) @ Matrix.Diagonal((0.05 * S, 0.008 * S, 0.04 * S, 1)))
+	bm2 = bpy.data.meshes.new("buckle"); bk.to_mesh(bm2); bk.free()
+	b2 = bpy.data.objects.new("buckle", bm2); scn.collection.objects.link(b2)
+	return o, b2
+belt_o, buckle = belt()
 
 # ---------------- волосы ----------------
 def hair_pred(p):
@@ -342,6 +470,10 @@ _unused = (lambda p, n: (0.93, 0.93, 0.91) if p.z < 0.028 * S else ((0.92, 0.92,
 paint(shoes, shoe_col, mat("shoe", 0.65))
 for so in SOLES:
 	paint(so, lambda p, n: (0.92, 0.92, 0.9), mat("sole", 0.8))
+for lc in LACES:
+	paint(lc, lambda p, n: (0.9, 0.9, 0.88), mat("laces", 0.9))
+paint(belt_o, lambda p, n: (0.22, 0.14, 0.09), mat("leather", 0.5))
+paint(buckle, lambda p, n: (0.62, 0.6, 0.56), mat("metal", 0.3))
 
 # ---------------- скелет и веса ----------------
 arm_d = bpy.data.armatures.new("hero_rig")
@@ -369,7 +501,7 @@ used = set(x.group for v in body.data.vertices for x in v.groups if x.weight > 0
 empty = [g.name for g in body.vertex_groups if g.index not in used]
 print("HERO группы без весов (выборка):", empty)
 # одежда, волосы, глаза — веса с ближайшего места тела
-for o in [shirt, jeans, shoes, shoes2] + SOLES + [bpy.data.objects["eye_L"], bpy.data.objects["eye_R"]]:
+for o in [shirt, jeans, shoes, shoes2, belt_o, buckle] + SOLES + LACES + [bpy.data.objects["eye_L"], bpy.data.objects["eye_R"]]:
 	for (n, a, b, par) in BONES:
 		o.vertex_groups.new(name=n)
 	dt = o.modifiers.new("dt", "DATA_TRANSFER")
@@ -392,6 +524,147 @@ for _ in range(3):
 bmesh.ops.delete(bm, geom=list(cov - ring), context="FACES")
 bm.to_mesh(body.data); bm.free()
 
+# ---------------- текстуры: процедурный узор → картинка (цвет + нормали) ----------------
+TEX_OUT = os.path.join(OUT, "tex")
+os.makedirs(TEX_OUT, exist_ok=True)
+scn.render.engine = "CYCLES"; scn.cycles.device = "CPU"; scn.cycles.samples = 4
+scn.render.bake.margin = 6
+
+def nd(nt, t, x=0, **kw):
+	n = nt.nodes.new(t)
+	for k, v in kw.items():
+		if k in n.inputs:
+			n.inputs[k].default_value = v
+		else:
+			setattr(n, k, v)
+	return n
+def mathn(nt, op, a, b):
+	n = nt.nodes.new("ShaderNodeMath"); n.operation = op
+	for i, v in enumerate((a, b)):
+		if isinstance(v, (int, float)):
+			n.inputs[i].default_value = v
+		else:
+			nt.links.new(v, n.inputs[i])
+	return n.outputs[0]
+def mixc(nt, a, b, f, mode="MIX"):
+	n = nt.nodes.new("ShaderNodeMix"); n.data_type = "RGBA"; n.blend_type = mode
+	for sock, v in ((n.inputs[6], a), (n.inputs[7], b), (n.inputs[0], f)):
+		if isinstance(v, (int, float)) or isinstance(v, tuple):
+			sock.default_value = v if not isinstance(v, tuple) else v + ((1.0,) if len(v) == 3 else ())
+		else:
+			nt.links.new(v, sock)
+	return n.outputs[2]
+
+def noise(nt, co, scale, detail=6.0, rough=0.6):
+	n = nd(nt, "ShaderNodeTexNoise", Scale=scale, Detail=detail, Roughness=rough)
+	nt.links.new(co, n.inputs["Vector"])
+	return n.outputs["Fac"]
+def wave(nt, co, scale, direction="X", kind="BANDS", dist=0.0):
+	n = nt.nodes.new("ShaderNodeTexWave"); n.wave_type = kind
+	if kind == "BANDS":
+		n.bands_direction = direction
+	n.inputs["Scale"].default_value = scale; n.inputs["Distortion"].default_value = dist
+	nt.links.new(co, n.inputs["Vector"])
+	return n.outputs["Fac"]
+
+# узоры: (цвет, высота) по цвету вершин vc и координатам co (метры)
+def pat_skin(nt, vc, co):
+	n1 = noise(nt, co, 90.0); n2 = noise(nt, co, 600.0, 3.0); n3 = noise(nt, co, 12.0, 2.0)
+	c = mixc(nt, vc, (0.55, 0.30, 0.26), mathn(nt, "MULTIPLY", n3, 0.18), "MIX")           # пятна красноты
+	c = mixc(nt, c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, 0.18), 0.91), 1.0, "MULTIPLY")
+	h = mathn(nt, "ADD", mathn(nt, "MULTIPLY", n2, 0.7), mathn(nt, "MULTIPLY", n1, 0.3))
+	return c, h, 0.12
+def pat_cotton(nt, vc, co):
+	rib = wave(nt, co, 900.0, "X"); n1 = noise(nt, co, 40.0, 4.0); n2 = noise(nt, co, 900.0, 2.0)
+	c = mixc(nt, vc, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, 0.14), 0.9), 1.0, "MULTIPLY")
+	c = mixc(nt, c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", rib, 0.08), 0.95), 1.0, "MULTIPLY")
+	return c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", rib, 0.6), mathn(nt, "MULTIPLY", n2, 0.4)), 0.35
+def pat_denim(nt, vc, co):
+	tw = wave(nt, co, 700.0, "DIAGONAL"); n1 = noise(nt, co, 1500.0, 2.0); n2 = noise(nt, co, 25.0, 4.0)
+	light = mixc(nt, vc, (0.62, 0.68, 0.78), 0.35)
+	c = mixc(nt, vc, light, mathn(nt, "MULTIPLY", mathn(nt, "ADD", tw, n1), 0.18))
+	c = mixc(nt, c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n2, 0.16), 0.9), 1.0, "MULTIPLY")
+	return c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", tw, 0.7), mathn(nt, "MULTIPLY", n1, 0.3)), 0.45
+def pat_mesh(nt, vc, co):
+	v = nd(nt, "ShaderNodeTexVoronoi", Scale=700.0); nt.links.new(co, v.inputs["Vector"])
+	d = v.outputs["Distance"]; n1 = noise(nt, co, 60.0, 3.0)
+	c = mixc(nt, vc, mathn(nt, "ADD", mathn(nt, "MULTIPLY", d, 0.35), 0.8), 1.0, "MULTIPLY")
+	c = mixc(nt, c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, 0.12), 0.92), 1.0, "MULTIPLY")
+	return c, d, 0.35
+def pat_plain(scale, k, bumpk):
+	def f(nt, vc, co):
+		n1 = noise(nt, co, scale, 4.0)
+		c = mixc(nt, vc, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, k), 1.0 - k * 0.5), 1.0, "MULTIPLY")
+		return c, n1, bumpk
+	return f
+def pat_leather(nt, vc, co):
+	v = nd(nt, "ShaderNodeTexVoronoi", Scale=900.0); nt.links.new(co, v.inputs["Vector"])
+	n1 = noise(nt, co, 50.0, 4.0)
+	c = mixc(nt, vc, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, 0.3), 0.85), 1.0, "MULTIPLY")
+	return c, v.outputs["Distance"], 0.2
+
+def bake_part(o, name, size, pat, rough, metal=0.0, sss=0.0, reuv=True):
+	bpy.context.view_layer.objects.active = o
+	for x in bpy.context.view_layer.objects:
+		x.select_set(x == o)
+	if reuv or not o.data.uv_layers:
+		if not o.data.uv_layers:
+			o.data.uv_layers.new(name="UVMap")
+		bpy.ops.object.mode_set(mode="EDIT")
+		bpy.ops.mesh.select_all(action="SELECT")
+		bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.01)
+		bpy.ops.object.mode_set(mode="OBJECT")
+	m = bpy.data.materials.new(name + "_bake"); m.use_nodes = True
+	nt = m.node_tree
+	bsdf = nt.nodes["Principled BSDF"]
+	vc = nd(nt, "ShaderNodeVertexColor", layer_name="Color")
+	tc = nt.nodes.new("ShaderNodeTexCoord")
+	col, h, bk = pat(nt, vc.outputs["Color"], tc.outputs["Object"])
+	nt.links.new(col, bsdf.inputs["Base Color"])
+	bump = nd(nt, "ShaderNodeBump", Strength=bk, Distance=0.002)
+	nt.links.new(h, bump.inputs["Height"]); nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+	ic = bpy.data.images.new(name + "_c", size, size); ic.colorspace_settings.name = "sRGB"
+	inn = bpy.data.images.new(name + "_n", size, size); inn.colorspace_settings.name = "Non-Color"
+	tn = nt.nodes.new("ShaderNodeTexImage"); tn.image = ic
+	o.data.materials.clear(); o.data.materials.append(m)
+	nt.nodes.active = tn
+	bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=6)
+	tn.image = inn
+	bpy.ops.object.bake(type="NORMAL", normal_space="TANGENT", margin=6)
+	for im in (ic, inn):
+		im.filepath_raw = os.path.join(TEX_OUT, im.name + ".png"); im.file_format = "PNG"; im.save()
+	# итоговый материал: картинки
+	f = bpy.data.materials.new(name); f.use_nodes = True
+	ft = f.node_tree; fb = ft.nodes["Principled BSDF"]
+	t1 = ft.nodes.new("ShaderNodeTexImage"); t1.image = ic
+	t2 = ft.nodes.new("ShaderNodeTexImage"); t2.image = inn
+	nm = ft.nodes.new("ShaderNodeNormalMap")
+	ft.links.new(t1.outputs["Color"], fb.inputs["Base Color"])
+	ft.links.new(t2.outputs["Color"], nm.inputs["Color"]); ft.links.new(nm.outputs["Normal"], fb.inputs["Normal"])
+	fb.inputs["Roughness"].default_value = rough
+	fb.inputs["Metallic"].default_value = metal
+	if sss:
+		fb.inputs["Subsurface Weight"].default_value = sss
+		fb.inputs["Subsurface Radius"].default_value = (1.0, 0.35, 0.2)
+		fb.inputs["Subsurface Scale"].default_value = 0.008
+	o.data.materials.clear(); o.data.materials.append(f)
+	print("BAKE", name, size)
+
+if os.environ.get("BAKE", "1") == "1":
+	bake_part(body, "hero_skin", int(os.environ.get("SKIN_TEX", "2048")), pat_skin, 0.48, sss=0.2, reuv=True)
+	bake_part(shirt, "hero_shirt", 1024, pat_cotton, 0.95)
+	bake_part(jeans, "hero_jeans", 1024, pat_denim, 0.9)
+	for i, o in enumerate([shoes, shoes2]):
+		bake_part(o, "hero_shoe%d" % i, 512, pat_mesh, 0.7)
+	for i, o in enumerate(SOLES):
+		bake_part(o, "hero_sole%d" % i, 128, pat_plain(300.0, 0.1, 0.3), 0.8)
+	for i, o in enumerate(LACES):
+		bake_part(o, "hero_laces%d" % i, 128, pat_plain(800.0, 0.15, 0.4), 0.9)
+	bake_part(belt_o, "hero_belt", 256, pat_leather, 0.45)
+	bake_part(buckle, "hero_buckle", 64, pat_plain(200.0, 0.1, 0.1), 0.3, metal=0.9)
+	for e in ("eye_L", "eye_R"):
+		bake_part(bpy.data.objects[e], "hero_" + e, 128, pat_plain(3000.0, 0.05, 0.05), 0.05, reuv=False)
+
 # всё в один объект
 for b in body.modifiers:
 	if b.type == "ARMATURE":
@@ -408,11 +681,15 @@ hero.parent = rig
 tri = sum(len(p.vertices) - 2 for p in hero.data.polygons)
 print("HERO треугольников %d, вершин %d, костей %d, рост %.2f м" % (tri, len(hero.data.vertices), len(BONES), hero.dimensions.z))
 
-# проверка позы: согнуть руку и ногу (только для рендера «pose»)
+# анимации (ключевые кадры на скелете)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hero_anims
+hero_anims.make(rig)
 bpy.ops.object.select_all(action="DESELECT")
 hero.select_set(True); rig.select_set(True)
 bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "hero.glb"), use_selection=True, export_format="GLB",
-	export_vertex_color="NAME", export_vertex_color_name="Color", export_all_vertex_colors=False, export_skins=True, export_animations=False)
+	export_vertex_color="NONE", export_image_format="JPEG", export_jpeg_quality=85, export_skins=True, export_animations=True,
+	export_animation_mode="NLA_TRACKS", export_force_sampling=True, export_frame_step=1)
 
 if os.environ.get("SHOW", "1") == "1":
 	sc = scn
@@ -440,7 +717,20 @@ if os.environ.get("SHOW", "1") == "1":
 		pb["RightUpLeg"].rotation_mode = "XYZ"; pb["RightUpLeg"].rotation_euler = (-0.8, 0, 0)
 		pb["RightLeg"].rotation_mode = "XYZ"; pb["RightLeg"].rotation_euler = (1.0, 0, 0)
 		views = [("pose", (2.6, -3.0, 1.2), (0, 0, 0.92), 50)]
-	for nm, pos, tgt, lens in views:
+	if os.environ.get("ANIMSHOW") == "1":                             # кадры клипов: клип, секунда
+		sc.render.resolution_x, sc.render.resolution_y = 500, 700
+		sc.cycles.samples = 16
+		views = []
+		for cl, t in (("WakeUp", 0.0), ("WakeUp", 1.6), ("WakeUp", 2.4), ("WakeUp", 3.8), ("Walk", 0.3), ("Run", 0.2), ("SitChair", 1.0), ("LieLounger", 1.0), ("Phone", 2.0), ("Scared", 0.35), ("ClimbDown", 1.3), ("ClimbDown", 2.6)):
+			views.append(("anim_%s_%02d" % (cl, int(t * 10)), (3.0, -3.2, 1.4), (0, 0, 0.7), 40, cl, t))
+	for vw in views:
+		nm, pos, tgt, lens = vw[:4]
+		if len(vw) > 4:
+			act = bpy.data.actions[vw[4]]
+			rig.animation_data.action = act
+			for tr in rig.animation_data.nla_tracks:
+				tr.mute = True
+			sc.frame_set(int(round(vw[5] * 30)) + 1)
 		cam.location = Vector(pos)
 		cam.rotation_euler = (Vector(tgt) - cam.location).to_track_quat("-Z", "Y").to_euler()
 		cam.data.lens = lens

@@ -14,6 +14,7 @@
 #   trees [породы]             — пересобрать деревья → godot/assets/models + kinds.json + импорт
 #   treeshow <варианты> [human|game] — рендер готовых деревьев → $OUT/trees.png
 #   shot <x:y[:cam[:yaw[:elev[:time]]]]/x:y...> [кадров] — снимки игры (программный Vulkan) → $OUT/shots/*.png
+#   intro                      — заставка «как всё началось» → $OUT/intro/intro_NN.jpg (кадр каждые 2 с)
 #   blender <файл.py из репо> [аргументы]  — любой свой скрипт Blender (bpy)
 #   godot <файл.gd из репо> [аргументы]    — любой свой скрипт Godot (extends SceneTree), headless
 set -eo pipefail
@@ -67,6 +68,12 @@ PY
 			--rendering-driver vulkan --rendering-method mobile --resolution 1600x720 res://main.tscn -- --updurl=http://127.0.0.1:1/ \
 			--shot="$OUT/shots" "--views=${1:-4:6}" --shots="${2:-1}" 2>&1 | grep -E "SHOT|DRAW|SCRIPT ERROR|Parse Error|ERROR: res:" || true
 		ls "$OUT/shots" ;;
+	intro)
+		imp; rm -rf "$OUT/intro"; mkdir -p "$OUT/intro"
+		VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json timeout "${GT:-1800}" xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$REPO/godot" \
+			--rendering-driver vulkan --rendering-method mobile --resolution 1280x720 res://main.tscn -- --updurl=http://127.0.0.1:1/ \
+			--intro --introshot="$OUT/intro" 2>&1 | grep -E "SCRIPT ERROR|ERROR: res:|Parse Error" || true
+		ls "$OUT/intro" | wc -l ;;
 	blender|godot)
 		f=$(realpath -m "$REPO/$1"); shift
 		case "$f" in "$REPO"/*) ;; *) echo "файл должен быть в репозитории"; exit 2 ;; esac

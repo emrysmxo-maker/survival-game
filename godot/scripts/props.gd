@@ -96,6 +96,7 @@ func _ready() -> void:
 		tm["_t"] = now
 	_load(); step.call("load")
 	var ck := _cache_key()
+	_story_pts()                                                      # точки заставки — всегда (и при кэше)
 	if _cache_read(ck):                                               # расстановка уже посчитана этой сборкой — только прочитать
 		_flush(); step.call("cache")
 		tm.erase("_t")
@@ -103,6 +104,7 @@ func _ready() -> void:
 		_after_ready(t0)
 		return
 	_bunker(); step.call("bunker")
+	_hero_home(); _lab(); step.call("story")
 	_locations(); step.call("locations")
 	_railway(); step.call("railway")
 	_children_camp(); step.call("lager")
@@ -226,6 +228,7 @@ func _flush() -> void:
 			mm.set_instance_transform(i, b.xf[i])
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
+		mi.name = key.replace(".", "_")                                    # «модель|клетка» — по имени находит заставка (крыша дома героя)
 		add_child(mi)
 
 func _h(x: float, y: float) -> float:
@@ -664,7 +667,7 @@ func _at(pts: PackedVector2Array, s: float) -> Array:
 # дорога «начинается у места», если её конец ближе этого (у локаций с обрезанными дорогами — у края двора)
 func _end_r(site: Vector2) -> float:
 	for key in WorldGen.ROAD_END:
-		var f: Dictionary = WorldGen.FEATURES[key]
+		var f: Dictionary = WorldGen.site(key)
 		if site.distance_to(Vector2(f.x, f.y)) < 1.0:
 			return float(WorldGen.ROAD_END[key]) + 4.0
 	return 4.0
@@ -1663,3 +1666,83 @@ func _fields() -> void:
 			placed.append(p)
 			if m == "haystack" and _rng.randf() < 0.6:
 				put("haystack", p.x + 6.0, p.y + 2.5, 0.0)
+
+
+# ---------------- сюжет: хутор героя у Большого озера и лаборатория ----------------
+var story := {}                       # точки заставки (тайлы, углы; высоты — метры над землёй)
+func _story_pts() -> void:
+	var h: Dictionary = WorldGen.HAMLETS["h_hero"]
+	var c := Vector2(h.x, h.y)
+	var lake := Vector2(WorldGen.LAKES[0].x, WorldGen.LAKES[0].y)
+	var f := (c - lake).normalized()                                  # фасад — от озера, веранда — к озеру
+	var th := atan2(f.x, f.y)
+	story = {"c": c, "th": th, "f": f, "u": Vector2(cos(th), -sin(th))}
+	# точки в метрах модели дома (Blender: +X вправо, +Y назад к озеру) → тайлы
+	var P := func(bx: float, by: float) -> Vector2:
+		return c + Vector2(cos(th), -sin(th)) * bx * M - f * by * M
+	story.pt = P
+	story.bed = P.call(3.3, 3.25)                                     # голова на подушке, ноги к −X
+	story.bed_feet = P.call(1.7, 3.25)
+	story.door = P.call(-3.4, -5.6)                                   # у крыльца снаружи
+	story.chair = P.call(1.5, 5.6)
+	story.table = P.call(2.6, 5.6)
+	story.lounger = P.call(-2.6, 8.9)
+	story.shed = P.call(9.0, -1.0)
+	story.shed_door = P.call(9.0 - 0.9, -1.0 - 2.6)
+	story.hatch = P.call(9.0 + 0.7, -1.0 + 0.35)
+	story.lid = P.call(9.0 + 0.7, -1.0 - 0.1)                         # петля крышки
+	story.car = P.call(-6.0, -9.0)
+	story.boat = P.call(3.0, 15.0)
+	var lb: Dictionary = WorldGen.FEATURES["lab"]
+	story.lab = Vector2(lb.x, lb.y)
+	story.house_y = _min_y("hero_house", c.x, c.y)                   # высота основания дома (как ставит put «min»), пол — +0,6 м
+	story.shed_y = _min_y("hero_shed", story.shed.x, story.shed.y)
+
+func _min_y(model: String, tx: float, ty: float) -> float:
+	var rad := _rad(model) * 0.8
+	var y := _h(tx, ty)
+	for k in 4:
+		var a := k * PI / 2.0 + 0.7
+		y = minf(y, _h(tx + cos(a) * rad, ty + sin(a) * rad))
+	return y - 0.12
+
+func _hero_home() -> void:
+	var c: Vector2 = story.c
+	var th: float = story.th
+	var yaw := rad_to_deg(th)
+	WorldGen.add_clear(c.x, c.y, 26.0, 26.0, th)
+	put("hero_house", c.x, c.y, yaw, "min", false)
+	_plots.append([c, th, 9.0, 12.0])
+	put("lounger", story.lounger.x, story.lounger.y, yaw, "pt", false)
+	put("hero_shed", story.shed.x, story.shed.y, yaw, "min", false)
+	put("car_duster_brown", story.car.x, story.car.y, yaw + 80.0, "", false)
+	put("boat_row_wood", story.boat.x, story.boat.y, yaw + 70.0, "pt", false)
+	var wp: Vector2 = story.pt.call(-6.0, -1.0)
+	put("woodpile", wp.x, wp.y, yaw + 90.0, "", false)
+	_rej["дом героя"] = "%d:%d" % [roundi(c.x), roundi(c.y)]
+
+func _lab() -> void:
+	var f: Dictionary = WorldGen.FEATURES["lab"]
+	var c := Vector2(f.x, f.y)
+	var fd := _road_dir(c)                                            # фасад — к въездной дороге
+	var th := atan2(fd.x, fd.y)
+	var yaw := rad_to_deg(th)
+	WorldGen.add_clear(c.x, c.y, 50.0, 40.0, th)
+	_plots.append([c, th, 44.0, 34.0])
+	var L := func(lx: float, ly: float) -> Vector2:
+		return _loc(c, th, lx, ly)
+	var items := [["lab_main", 0.0, 0.0, 0.0], ["lab_wing", 0.0, -22.0, 0.0], ["lab_stack", 30.0, -16.0, 0.0], ["lab_tank", 32.0, 6.0, 0.0], ["lab_tank", 32.0, -5.0, 0.0],
+		["checkpoint", 0.0, 24.0, 0.0], ["lab_sign", 9.0, 27.0, 0.0], ["lab_sign", -9.0, 27.0, 0.0], ["mil_tower", 40.0, 21.0, 0.0], ["mil_tower", -40.0, 21.0, 0.0],
+		["mil_tower", 40.0, -31.0, 0.0], ["mil_tower", -40.0, -31.0, 0.0], ["car_truck_green", 14.0, 15.0, 90.0], ["car_police", -12.0, 17.0, 70.0],
+		["car_ambulance", -20.0, 12.0, 100.0], ["tent_med", -30.0, 9.0, 0.0], ["tent_med", -30.0, -2.0, 0.0], ["barrels_a", 22.0, -12.0, 0.0], ["crates", -24.0, -14.0, 0.0]]
+	for it in items:
+		var q: Vector2 = L.call(it[1], it[2])
+		put(it[0], q.x, q.y, yaw + float(it[3]), "", false)
+	# бетонный забор по периметру, ворота у дороги
+	var a: Vector2 = L.call(-42.0, 24.0); var b: Vector2 = L.call(42.0, 24.0)
+	var a2: Vector2 = L.call(-42.0, -33.0); var b2: Vector2 = L.call(42.0, -33.0)
+	_fence_line(a, b, "fence_mil", 0.1, 42.0 - 6.0, 42.0 + 6.0)
+	_fence_line(a2, b2, "fence_mil", 0.1)
+	_fence_line(a2, a, "fence_mil", 0.1)
+	_fence_line(b2, b, "fence_mil", 0.1)
+	_rej["лаборатория"] = "%d:%d" % [roundi(c.x), roundi(c.y)]
