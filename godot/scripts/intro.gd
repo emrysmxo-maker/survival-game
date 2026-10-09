@@ -1,12 +1,11 @@
 extends Node3D
-# Заставка «Как всё началось» (~2,5 мин, медленно). Утро в доме у озера: герой спит, сидит на краю кровати, встаёт,
-# потягивается, идёт на кухню умыться, смотрит в окно на озеро, выходит на улицу, садится на стул на веранде,
-# достаёт телефон и читает новости — утечка в НИИ «Вектор-7», власти просят не выходить из домов. Сирена —
-# он бежит к сараю, в деревне паника (жители бегут по домам, вертолёт, истребители), спускается по лестнице в бункер.
-# «Прошёл месяц…» — поднимается по лестнице, выходит: тишина, никого.
-# Движения героя — мокап живого человека (CMU), клипы и их числа — tools/character/hero_mocap.py → hero.glb.
-# Точки — props.story (props.gd), модели — props.glb. Запуск: при первом входе в игру, «▶ Заставка» (⚙), --intro.
-# Проверка без телефона: --intro --introshot=<папка>  → кадр каждые 2 с в JPG, в конце игра закрывается.
+# Заставка «Как всё началось» — 3D-комикс. Каждый кадр снимается в самой игре (дом у озера, сарай, деревня — те же
+# модели, свет и тени) с героем в неподвижной выверенной позе (поза — кадр клипа мокапа из hero.glb), затем кадры
+# раскладываются по страницам: рамки, плашки рассказчика, облачка, звуки буквами; кадр появляется с наездом камеры.
+# Сюжет: суббота, дом у озера → будильник → сел на кровати → потянулся → умылся → окно → веранда, телефон: утечка
+# в НИИ «Вектор-7» → сирена → бегом к сараю → паника в деревне, вертолёт → люк, лестница вниз → «Прошёл месяц…» →
+# люк открывается, выходит: тишина, никого. Тап — следующий кадр, «Пропустить» — в игру.
+# Запуск: первый вход, ⚙ «▶ Заставка», --intro. Проверка: --intro --introshot=<папка> → снимок каждой готовой страницы.
 signal finished
 var main
 var props
@@ -16,50 +15,43 @@ var anim: AnimationPlayer
 var skel: Skeleton3D
 var phone_mi: MeshInstance3D
 var lid: Node3D
-var cam: Camera3D
-var ui: CanvasLayer
-var fade: ColorRect
-var sub: Label
-var title: Label
-var phone_ui: PanelContainer
-var news: VBoxContainer
-var skip_btn: Button
 var npcs: Array = []
-var air: Array = []                    # [узел, скорость (м/с), направление, вращать_винт]
-var hidden: Array = []                  # спрятанные крыши
+var air: Array = []
+var hidden: Array = []
+var vp: SubViewport
+var cur_tr: TextureRect                 # живой кадр (показывает экран съёмки)
+var live_a := Vector3.ZERO
+var live_b := Vector3.ZERO
+var live_look := Vector3.ZERO
+var live_t := 0.0
+var pcam: Camera3D
+var fill: OmniLight3D
+var ui: CanvasLayer
+var page: Control
+var fade: ColorRect
+var skip_btn: Button
 var skipping := false
-var jump_to := ""                       # --introfrom=<метка>: всё до метки проматывается мгновенно (проверка кадрами)
-var cam_a := Vector3.ZERO
-var cam_b := Vector3.ZERO
-var look_a := Vector3.ZERO
-var look_b := Vector3.ZERO
-var cam_t := 0.0
-var cam_len := 1.0
-var follow := false                     # камера идёт за героем: смещение follow_off, взгляд — на грудь
-var follow_off := Vector3.ZERO
+var tapped := false
 var shot_dir := ""
-var shot_n := 0
-var t_all := 0.0
+var page_n := 0
 var _rng := RandomNumberGenerator.new()
-# звук: сирена, вертолёт, самолёты, будильник, вода — синтез
+# звук — синтез
 var _pb: AudioStreamGeneratorPlayback
 var siren := 0.0
 var heli_v := 0.0
-var jet_v := 0.0
 var alarm_v := 0.0
 var water_v := 0.0
-var _ph := [0.0, 0.0, 0.0]
+var _ph := [0.0, 0.0]
 var _lp := 0.0
 var _wl := 0.0
 var _st := 0.0
 const RATE := 16000.0
 const T := WorldGen.T
-# числа клипов (hero_clips.json из hero.py): скорость шага м/с, сдвиг таза в конце клипа (м, вперёд +), вертикаль лестницы
-const SPEED := {"Walk": 1.518, "WalkSlow": 1.002, "Run": 3.761}
-const MOVE := {"StandUp": 0.433, "SitDown": -0.376}
-const CLIMB_DOWN_V := 0.228
-const CLIMB_UP_V := 0.12
-const SLEEP_HIPS := Vector3(0.0, 0.0, 0.193)         # таз и голова в первом кадре Sleep (Blender, м) — из hero_clips.json
+const PAPER := Color(0.95, 0.93, 0.88)
+const INK := Color(0.06, 0.06, 0.07)
+const CAPTION := Color(1.0, 0.92, 0.55)
+const MOVE_STAND := 0.433                       # StandUp: таз уходит вперёд (hero_clips.json)
+const SLEEP_HIPS := Vector3(0.0, 0.0, 0.193)   # первый кадр Sleep: таз и голова (Blender, м)
 const SLEEP_HEAD := Vector3(0.334, 0.467, 0.218)
 
 func _ready() -> void:
@@ -70,13 +62,10 @@ func _ready() -> void:
 		if a.begins_with("--introshot="):
 			shot_dir = a.substr(12)
 			DirAccess.make_dir_recursive_absolute(shot_dir)
-		if a.begins_with("--introfrom="):
-			jump_to = a.substr(12)
-			skipping = true
 	_build()
 	_run()
 
-# ---------- построение ----------
+# ---------- геометрия места ----------
 func w3(p: Vector2, y: float) -> Vector3:
 	return Vector3(p.x * T, y, p.y * T)
 func gh(p: Vector2) -> float:
@@ -87,35 +76,81 @@ func L(x: float, y: float) -> Vector2:                 # точка дома (м
 	return S.pt.call(x, y)
 func SL(x: float, y: float) -> Vector2:                # точка сарая
 	return S.pt.call(9.0 + x, -1.0 + y)
-func ld(dx: float, dy: float) -> Vector2:              # направление в осях дома → тайлы
+func ld(dx: float, dy: float) -> Vector2:              # направление в осях дома (тайлы)
 	return (S.u as Vector2) * dx - (S.f as Vector2) * dy
-func ld3(dx: float, dy: float) -> Vector3:             # то же в метрах мира
-	var v := ld(dx, dy)
-	return Vector3(v.x, 0, v.y)
-func local(p: Vector2) -> Vector2:                     # тайлы → метры модели дома
-	var d: Vector2 = (p - (S.c as Vector2)) * T
-	return Vector2(d.dot(S.u), -d.dot(S.f))
-func tile_of(v: Vector3) -> Vector2:
-	return Vector2(v.x, v.z) / T
+func hv(x: float, y: float, z: float) -> Vector3:      # вектор в осях дома, метры мира
+	var v := ld(x, y)
+	return Vector3(v.x, z, v.y)
+func hy() -> float:
+	return S.house_y
 
-func floor_y(p: Vector2) -> float:
-	# высота пола под ногами: дом, веранда, ступени к воде, сарай, иначе земля
-	var q := local(p)
-	var hy: float = S.house_y
-	if absf(q.x) < 4.5 and absf(q.y) < 4.0:
-		return hy + 0.64
-	if absf(q.x) < 4.7 and q.y >= 4.0 and q.y <= 7.2:
-		return hy + 0.6
-	if absf(q.x) < 0.95 and q.y > 7.2 and q.y < 8.5:
-		return lerpf(hy + 0.6, gh(p), (q.y - 7.2) / 1.3)
-	if absf(q.x - 9.0) < 2.0 and absf(q.y + 1.0) < 1.7:
-		return (S.shed_y as float) + 0.35 + 0.02
-	return gh(p)
-
+# ---------- построение ----------
 func _mesh(name: String) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = props._meshes.get(name)
 	return mi
+
+func _find_skel(n: Node) -> Skeleton3D:
+	if n is Skeleton3D:
+		return n
+	for c in n.get_children():
+		var r := _find_skel(c)
+		if r:
+			return r
+	return null
+
+const TOON := """
+shader_type spatial;
+render_mode diffuse_toon, specular_toon;
+uniform sampler2D tex : source_color, filter_linear_mipmap;
+uniform vec4 col : source_color = vec4(1.0);
+uniform bool has_tex = true;
+void fragment() {
+	vec3 c = has_tex ? texture(tex, UV).rgb : vec3(1.0);
+	c *= col.rgb;
+	c = mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, 1.25);   // ярче, как краска в комиксе
+	ALBEDO = clamp(c, 0.0, 1.0);
+	ROUGHNESS = 0.75;
+	SPECULAR = 0.25;
+	RIM = 0.5;
+	RIM_TINT = 0.4;
+}
+"""
+const OUTLINE := """
+shader_type spatial;
+render_mode unshaded, cull_front;
+uniform float w = 0.011;
+void vertex() { VERTEX += NORMAL * w; }
+void fragment() { ALBEDO = vec3(0.03, 0.03, 0.04); }
+"""
+var _toon_sh: Shader
+var _line_mat: ShaderMaterial
+
+func _comic_look(n: Node) -> void:
+	# все сетки героя: краска плоскими полосами света и чёрный контур (вывернутая оболочка)
+	if _toon_sh == null:
+		_toon_sh = Shader.new()
+		_toon_sh.code = TOON
+		var ls := Shader.new()
+		ls.code = OUTLINE
+		_line_mat = ShaderMaterial.new()
+		_line_mat.shader = ls
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for i in m.mesh.get_surface_count():
+			var src := m.get_active_material(i)
+			var tm := ShaderMaterial.new()
+			tm.shader = _toon_sh
+			if src is BaseMaterial3D:
+				var bm := src as BaseMaterial3D
+				tm.set_shader_parameter("col", bm.albedo_color)
+				tm.set_shader_parameter("has_tex", bm.albedo_texture != null)
+				if bm.albedo_texture:
+					tm.set_shader_parameter("tex", bm.albedo_texture)
+			tm.next_pass = _line_mat
+			m.set_surface_override_material(i, tm)
 
 func _build() -> void:
 	var hs: PackedScene = load("res://assets/character/hero.glb")
@@ -123,9 +158,7 @@ func _build() -> void:
 	add_child(hero)
 	anim = hero.find_child("AnimationPlayer", true, false)
 	skel = _find_skel(hero)
-	for n in ["Idle", "Walk", "WalkSlow", "Run", "Sleep", "SitIdle", "PhoneRead", "SitPhoneRead", "ClimbDown", "ClimbUp"]:
-		if anim and anim.has_animation(n):
-			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	_comic_look(hero)
 	if skel:
 		var att := BoneAttachment3D.new()
 		att.bone_name = "LeftHand"
@@ -135,33 +168,34 @@ func _build() -> void:
 		phone_mi.rotation_degrees = Vector3(90, 0, 0)
 		phone_mi.visible = false
 		att.add_child(phone_mi)
-	# крышка люка в сарае (петля по оси X)
-	lid = Node3D.new()
+	lid = Node3D.new()                                         # крышка люка (петля по оси X)
 	add_child(lid)
 	lid.position = w3(S.lid, S.shed_y + 0.35 + 0.16 + 0.004)
 	lid.rotation.y = S.th
-	var lm := _mesh("bunker_lid")
-	lid.add_child(lm)
-	# жители (тот же человек, рост чуть разный) — бегут по домам в деревне
-	var vc := Vector2(WorldGen.FEATURES["village"].x, WorldGen.FEATURES["village"].y)
-	var plots: Array = props._plots.filter(func(q): return (q[0] as Vector2).distance_to(vc) < 60.0)
-	plots.sort_custom(func(a, b): return (a[0] as Vector2).distance_to(vc) < (b[0] as Vector2).distance_to(vc))
-	for i in mini(7, plots.size()):
-		var q: Array = plots[i]
-		var f := Vector2(sin(q[1]), cos(q[1]))
-		var a: Vector2 = q[0] + f * (float(q[3]) + 6.0) + Vector2(f.y, -f.x) * _rng.randf_range(-6, 6)
-		var b: Vector2 = q[0] + f * (float(q[3]) * 0.3)
+	lid.add_child(_mesh("bunker_lid"))
+	for i in 5:                                                # жители для кадра паники
 		var npc: Node3D = hs.instantiate()
-		npc.scale = Vector3.ONE * _rng.randf_range(0.93, 1.05)
 		npc.visible = false
+		npc.scale = Vector3.ONE * _rng.randf_range(0.93, 1.05)
 		add_child(npc)
-		npcs.append([npc, a, b, _rng.randf_range(0.0, 0.7)])
-	cam = Camera3D.new()
-	cam.fov = 48.0
-	cam.near = 0.05
-	cam.far = 700.0
-	add_child(cam)
-	cam.make_current()
+		_comic_look(npc)
+		npcs.append(npc)
+	# съёмка кадров: отдельный экран с тем же миром
+	vp = SubViewport.new()
+	vp.size = Vector2i(640, 360)
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.msaa_3d = Viewport.MSAA_4X
+	add_child(vp)
+	pcam = Camera3D.new()
+	pcam.near = 0.05
+	pcam.far = 800.0
+	vp.add_child(pcam)
+	pcam.current = true
+	fill = OmniLight3D.new()                                   # подсветка героя в комнатах (объём, как в комиксе)
+	fill.light_color = Color(1.0, 0.9, 0.78)
+	fill.omni_range = 7.0
+	fill.light_energy = 0.0
+	add_child(fill)
 	_ui()
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = RATE
@@ -173,193 +207,62 @@ func _build() -> void:
 	pl.play()
 	_pb = pl.get_stream_playback()
 
-func _find_skel(n: Node) -> Skeleton3D:
-	if n is Skeleton3D:
-		return n
-	for c in n.get_children():
-		var r := _find_skel(c)
-		if r:
-			return r
-	return null
-
 func _ui() -> void:
 	ui = CanvasLayer.new()
 	ui.layer = 20
 	add_child(ui)
+	var bg := ColorRect.new()                                  # бумага страницы
+	bg.color = PAPER
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(bg)
+	page = Control.new()
+	page.set_anchors_preset(Control.PRESET_FULL_RECT)
+	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(page)
 	fade = ColorRect.new()
 	fade.color = Color(0, 0, 0, 1)
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(fade)
-	sub = Label.new()
-	sub.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	sub.position = Vector2(-560, -120)
-	sub.size = Vector2(1120, 70)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD
-	sub.add_theme_font_size_override("font_size", 30)
-	sub.add_theme_color_override("font_color", Color(1, 1, 0.94))
-	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	sub.add_theme_constant_override("outline_size", 8)
-	ui.add_child(sub)
-	title = Label.new()
-	title.set_anchors_preset(Control.PRESET_FULL_RECT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 52)
-	title.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85))
-	title.modulate.a = 0.0
-	ui.add_child(title)
-	# экран телефона: лента новостей (справа, герой виден слева)
-	phone_ui = PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.97, 0.97, 0.98)
-	st.set_corner_radius_all(26)
-	st.border_color = Color(0.08, 0.08, 0.09)
-	st.set_border_width_all(14)
-	st.content_margin_left = 24; st.content_margin_right = 24; st.content_margin_top = 30; st.content_margin_bottom = 30
-	phone_ui.add_theme_stylebox_override("panel", st)
-	phone_ui.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	phone_ui.position = Vector2(-500, -330)
-	phone_ui.custom_minimum_size = Vector2(420, 660)
-	phone_ui.visible = false
-	ui.add_child(phone_ui)
-	news = VBoxContainer.new()
-	news.add_theme_constant_override("separation", 14)
-	phone_ui.add_child(news)
+	var tap := Control.new()                                   # тап — следующий кадр
+	tap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tap.gui_input.connect(func(e: InputEvent):
+		if (e is InputEventMouseButton and e.pressed) or (e is InputEventScreenTouch and e.pressed):
+			tapped = true)
+	ui.add_child(tap)
 	skip_btn = Button.new()
 	skip_btn.text = "Пропустить ▶"
 	skip_btn.add_theme_font_size_override("font_size", 22)
 	skip_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	skip_btn.position = Vector2(-230, 20)
-	skip_btn.size = Vector2(200, 52)
+	skip_btn.position = Vector2(-230, 14)
+	skip_btn.size = Vector2(200, 50)
+	skip_btn.modulate.a = 0.75
 	skip_btn.pressed.connect(func(): skipping = true)
 	ui.add_child(skip_btn)
 
-func _news_item(head: String, body: String, col: Color) -> void:
-	var v := VBoxContainer.new()
-	var h := Label.new()
-	h.text = head
-	h.autowrap_mode = TextServer.AUTOWRAP_WORD
-	h.custom_minimum_size = Vector2(360, 0)
-	h.add_theme_font_size_override("font_size", 22)
-	h.add_theme_color_override("font_color", col)
-	v.add_child(h)
-	var b := Label.new()
-	b.text = body
-	b.autowrap_mode = TextServer.AUTOWRAP_WORD
-	b.custom_minimum_size = Vector2(360, 0)
-	b.add_theme_font_size_override("font_size", 17)
-	b.add_theme_color_override("font_color", Color(0.25, 0.25, 0.28))
-	v.add_child(b)
-	v.modulate.a = 0.0
-	news.add_child(v)
-	news.move_child(v, 0)
-	create_tween().tween_property(v, "modulate:a", 1.0, 0.6)
-
-# ---------- управление ----------
-func _wait(s: float) -> void:
-	var e := 0.0
-	while e < s and not skipping:
-		await get_tree().process_frame
-		e += get_process_delta_time()
-
-func _mark(name: String) -> void:
-	if name == jump_to:
-		skipping = false
-		jump_to = ""
-
-func _fade(to: float, s: float) -> void:
-	if skipping:
-		fade.color.a = to
-		return
-	var tw := create_tween()
-	tw.tween_property(fade, "color:a", to, s)
-	await _wait(s)
-
-func _say(text: String) -> void:
-	sub.text = text
-
-func _shot(a: Vector3, b: Vector3, la: Vector3, lb: Vector3, length: float) -> void:
-	follow = false
-	cam_a = a; cam_b = b; look_a = la; look_b = lb; cam_t = 0.0; cam_len = maxf(length, 0.01)
-	main.focus = Vector2(lb.x, lb.z) / T                       # мир (лес, трава) подгружается у кадра, а не у точки игры
-	main.world.ensure_now(main.focus, 2)
-	_cam_update()
-
-func _follow(off: Vector3) -> void:
-	follow = true
-	follow_off = off
-	cam.global_position = hero.global_position + off
-	cam.look_at(hero.global_position + Vector3.UP * 1.0, Vector3.UP)
-
-func _cam_update() -> void:
-	if follow:
-		var want := hero.global_position + follow_off
-		cam.global_position = cam.global_position.lerp(want, 0.04)
-		cam.look_at(hero.global_position + Vector3.UP * 1.0, Vector3.UP)
-		return
-	var k := clampf(cam_t / cam_len, 0.0, 1.0)
-	k = k * k * (3.0 - 2.0 * k)
-	cam.global_position = cam_a.lerp(cam_b, k)
-	var lt := look_a.lerp(look_b, k)
-	if cam.global_position.distance_to(lt) > 0.01:
-		cam.look_at(lt, Vector3.UP)
-
-func _play(n: String, blend := 0.3, speed := 1.0) -> void:
-	if anim and anim.has_animation(n):
-		anim.play(n, blend, speed)
-
-func _clip_len(n: String) -> float:
-	return anim.get_animation(n).length if anim and anim.has_animation(n) else 1.0
-
-func _act(n: String, blend := 0.3, speed := 1.0) -> void:
-	# разовый клип до конца; сдвиг таза из записи (встал, сел) переносится в узел героя
-	_play(n, blend, speed)
-	await _wait(maxf(_clip_len(n) / speed - 0.05, 0.0))
-	if MOVE.has(n):
-		var fw := Vector3(sin(hero.rotation.y), 0, cos(hero.rotation.y))
-		hero.global_position += fw * float(MOVE[n])
-
-func _place(p: Vector2, y: float, yaw: float) -> void:
+# ---------- сцена кадра ----------
+func _pose(clip: String, t: float, p: Vector2, y: float, yaw: float) -> void:
+	hero.visible = true
 	hero.global_position = w3(p, y)
 	hero.rotation = Vector3(0, yaw, 0)
+	if anim and anim.has_animation(clip):
+		anim.play(clip, 0.0)
+		anim.seek(t, true)
+		if clip in ["Idle", "SitIdle", "Sleep", "SitPhoneRead", "LookAround"]:
+			anim.speed_scale = 0.35
+		else:
+			anim.pause()
 
-func _turn(d: Vector2, s := 0.6) -> void:
-	# плавный поворот на месте лицом в сторону d (тайлы)
-	var a0 := hero.rotation.y
-	var a1 := a0 + wrapf(yaw_to(d) - a0, -PI, PI)
-	var e := 0.0
-	while e < s and not skipping:
-		await get_tree().process_frame
-		e += get_process_delta_time()
-		var k := clampf(e / s, 0.0, 1.0)
-		hero.rotation.y = lerpf(a0, a1, k * k * (3.0 - 2.0 * k))
-	hero.rotation.y = a1
-
-func _move(path: Array, clip: String, blend := 0.35) -> void:
-	# пройти по точкам (тайлы) со скоростью клипа; корпус плавно доворачивает на следующий отрезок
-	var speed: float = SPEED.get(clip, 1.0)
-	_play(clip, blend)
-	for i in range(1, path.size()):
-		var a: Vector2 = path[i - 1]
-		var b: Vector2 = path[i]
-		var len_m := a.distance_to(b) * T
-		if len_m < 0.01:
-			continue
-		var tt := len_m / speed
-		var want := yaw_to(b - a)
-		var e := 0.0
-		while e < tt and not skipping:
-			await get_tree().process_frame
-			var dt := get_process_delta_time()
-			e += dt
-			var p := a.lerp(b, clampf(e / tt, 0.0, 1.0))
-			hero.global_position = w3(p, floor_y(p))
-			hero.rotation.y += wrapf(want - hero.rotation.y, -PI, PI) * minf(1.0, dt * 7.0)
-		if skipping:
-			hero.global_position = w3(b, floor_y(b))
-			hero.rotation.y = want
+func _npc_pose(n: Node3D, clip: String, t: float, p: Vector2, yaw: float) -> void:
+	n.visible = true
+	n.global_position = w3(p, gh(p))
+	n.rotation = Vector3(0, yaw, 0)
+	var ap: AnimationPlayer = n.find_child("AnimationPlayer", true, false)
+	if ap and ap.has_animation(clip):
+		ap.play(clip, 0.0)
+		ap.seek(t, true)
+		ap.pause()
 
 func _hide_roofs(models: Array) -> void:
 	for c in props.get_children():
@@ -373,41 +276,304 @@ func _show_roofs() -> void:
 		c.visible = true
 	hidden.clear()
 
-func _fly(model: String, from: Vector3, dir: Vector3, speed: float, rotor := false) -> void:
+func _clear_scene() -> void:
+	for n in npcs:
+		(n as Node3D).visible = false
+	for a in air:
+		(a as Node3D).queue_free()
+	air.clear()
+	if phone_mi:
+		phone_mi.visible = false
+	fill.light_energy = 0.0
+	_show_roofs()
+
+func _air(model: String, at: Vector3, dir: Vector3) -> void:
 	var n := Node3D.new()
 	add_child(n)
-	n.global_position = from
-	n.look_at(from + dir, Vector3.UP)
+	n.global_position = at
+	n.look_at(at + dir, Vector3.UP)
 	var body := _mesh(model)
-	body.rotation.y = -PI / 2.0                       # нос модели — по +X (Blender), узел смотрит в −Z
+	body.rotation.y = -PI / 2.0
 	n.add_child(body)
-	if rotor:
+	if model == "heli_fly":
 		var r := _mesh("heli_rotor")
 		r.position = Vector3(0, 4.0, 0)
+		r.rotation.y = 0.4
 		n.add_child(r)
-	air.append([n, speed, dir.normalized(), rotor])
+	air.append(n)
 
-func _vert(v: float, s: float) -> void:
-	# герой едет по вертикали (лестница) со скоростью v м/с s секунд
-	if skipping:
-		hero.global_position.y += v * s
-		return
+func _snap_panel(eye: Vector3, look: Vector3, fov: float, size: Vector2i) -> Texture2D:
+	# живой кадр: камера медленно плывёт к цели (вода, листва, герой дышат), мир вокруг подгружен
+	vp.size = size
+	pcam.fov = fov
+	live_a = eye
+	live_b = eye.lerp(look, 0.07) + (look - eye).cross(Vector3.UP).normalized() * 0.25
+	live_look = look
+	live_t = 0.0
+	pcam.global_position = eye
+	pcam.look_at(look, Vector3.UP)
+	main.focus = Vector2(look.x, look.z) / T
+	main.world.ensure_now(main.focus, 2)
+	for i in 3:
+		await RenderingServer.frame_post_draw
+	return vp.get_texture()
+
+func _freeze() -> void:
+	# кадр уходит в прошлое — остаётся снимком, а экран съёмки свободен для следующего
+	if cur_tr and is_instance_valid(cur_tr) and cur_tr.texture is ViewportTexture:
+		cur_tr.texture = ImageTexture.create_from_image(vp.get_texture().get_image())
+	cur_tr = null
+
+# ---------- страница ----------
+func _panel_rect(r: Rect2) -> Rect2:
+	var sz := page.get_viewport_rect().size
+	var m := sz.y * 0.035                                       # поля и промежутки между кадрами
+	var g := sz.y * 0.022
+	var area := Rect2(Vector2(m, m), sz - Vector2(m, m) * 2.0)
+	var p := area.position + area.size * r.position
+	var s := area.size * r.size
+	var x0 := p.x + (g * 0.5 if r.position.x > 0.001 else 0.0)
+	var y0 := p.y + (g * 0.5 if r.position.y > 0.001 else 0.0)
+	var x1 := p.x + s.x - (g * 0.5 if r.end.x < 0.999 else 0.0)
+	var y1 := p.y + s.y - (g * 0.5 if r.end.y < 0.999 else 0.0)
+	return Rect2(x0, y0, x1 - x0, y1 - y0)
+
+func _frame(rect: Rect2, tex: Texture2D, dark := false) -> Control:
+	# кадр: чёрная рамка, внутри снимок (обрезка по рамке), лёгкий наезд
+	var box := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = INK if dark or tex == null else Color.WHITE
+	sb.border_color = INK
+	sb.set_border_width_all(4)
+	box.add_theme_stylebox_override("panel", sb)
+	box.position = rect.position
+	box.size = rect.size
+	box.clip_contents = true
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page.add_child(box)
+	if tex:
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		tr.position = Vector2(4, 4)
+		tr.size = rect.size - Vector2(8, 8)
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(tr)
+		if tex is ViewportTexture:
+			cur_tr = tr
+	box.modulate.a = 0.0
+	box.pivot_offset = rect.size * 0.5
+	box.scale = Vector2.ONE * 0.96
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(box, "modulate:a", 1.0, 0.45)
+	tw.tween_property(box, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	return box
+
+func _window_frame(box: Control) -> void:
+	# кадр «из окна»: белая рама с переплётом и подоконник поверх вида
+	var col := Color(0.96, 0.95, 0.92)
+	var w := box.size
+	var t := w.y * 0.045
+	for rr in [Rect2(0, 0, w.x, t), Rect2(0, w.y - t * 1.6, w.x, t * 1.6), Rect2(0, 0, t, w.y), Rect2(w.x - t, 0, t, w.y),
+			Rect2(w.x * 0.5 - t * 0.4, 0, t * 0.8, w.y), Rect2(0, w.y * 0.36, w.x, t * 0.6)]:
+		var c := ColorRect.new()
+		c.color = col
+		c.position = rr.position
+		c.size = rr.size
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(c)
+	var sh := ColorRect.new()                                    # тень на подоконнике
+	sh.color = Color(0, 0, 0, 0.18)
+	sh.position = Vector2(0, w.y - t * 1.6)
+	sh.size = Vector2(w.x, t * 0.25)
+	sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(sh)
+
+func _font(sz: float) -> int:
+	return int(page.get_viewport_rect().size.y * sz)
+
+func _caption(box: Control, text: String, at := Vector2(0.0, 0.0), w := 0.55) -> void:
+	# плашка рассказчика: жёлтый прямоугольник у края кадра
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = CAPTION
+	sb.border_color = INK
+	sb.set_border_width_all(3)
+	sb.content_margin_left = 10; sb.content_margin_right = 10; sb.content_margin_top = 6; sb.content_margin_bottom = 6
+	pc.add_theme_stylebox_override("panel", sb)
+	var lb := Label.new()
+	lb.text = text
+	lb.autowrap_mode = TextServer.AUTOWRAP_WORD
+	lb.custom_minimum_size = Vector2(box.size.x * w - 20, 0)
+	lb.add_theme_font_size_override("font_size", _font(0.032))
+	lb.add_theme_color_override("font_color", INK)
+	pc.add_child(lb)
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(pc)
+	pc.position = Vector2(4 + (box.size.x - box.size.x * w - 8) * at.x, 4 + (box.size.y * 0.75) * at.y)
+	pc.modulate.a = 0.0
+	create_tween().tween_property(pc, "modulate:a", 1.0, 0.4).set_delay(0.35)
+
+func _bubble(box: Control, text: String, at: Vector2, tail: Vector2, think := false) -> void:
+	# облачко: белое, с хвостиком к говорящему (tail — точка в кадре, 0..1); мысли — кружочками
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color.WHITE
+	sb.border_color = INK
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(40)
+	sb.content_margin_left = 18; sb.content_margin_right = 18; sb.content_margin_top = 10; sb.content_margin_bottom = 10
+	pc.add_theme_stylebox_override("panel", sb)
+	var lb := Label.new()
+	lb.text = text
+	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lb.add_theme_font_size_override("font_size", _font(0.034))
+	lb.add_theme_color_override("font_color", INK)
+	if think:
+		lb.add_theme_font_size_override("font_size", _font(0.031))
+	pc.add_child(lb)
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var layer := Control.new()
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.size = box.size
+	box.add_child(layer)
+	var tp := box.size * tail
+	var c := box.size * at
+	if think:
+		for k in 3:                                              # кружочки мысли от головы к облаку
+			var f := 0.25 + 0.25 * k
+			var r := 5.0 + 4.0 * k
+			var d := _disc(tp.lerp(c, f), r)
+			layer.add_child(d)
+	else:
+		var dir := (tp - c).normalized()
+		var side := Vector2(-dir.y, dir.x) * 12.0
+		var tl := Polygon2D.new()
+		tl.polygon = PackedVector2Array([c + side, c - side, tp])
+		tl.color = Color.WHITE
+		var ol := Line2D.new()
+		ol.points = PackedVector2Array([c + side, tp, c - side])
+		ol.width = 3.0
+		ol.default_color = INK
+		layer.add_child(ol)
+		layer.add_child(tl)
+	layer.add_child(pc)
+	await get_tree().process_frame
+	pc.position = c - pc.size * 0.5
+	layer.modulate.a = 0.0
+	create_tween().tween_property(layer, "modulate:a", 1.0, 0.35).set_delay(0.5)
+
+func _disc(p: Vector2, r: float) -> Control:
+	var d := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color.WHITE
+	sb.border_color = INK
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(int(r))
+	d.add_theme_stylebox_override("panel", sb)
+	d.size = Vector2(r, r) * 2.0
+	d.position = p - Vector2(r, r)
+	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return d
+
+func _sfx(box: Control, text: String, at: Vector2, rot_deg: float, col: Color, k := 1.0) -> void:
+	# звук буквами: крупно, с толстой обводкой, под углом
+	var lb := Label.new()
+	lb.text = text
+	lb.add_theme_font_size_override("font_size", _font(0.075 * k))
+	lb.add_theme_color_override("font_color", col)
+	lb.add_theme_color_override("font_outline_color", INK)
+	lb.add_theme_constant_override("outline_size", int(_font(0.016 * k)))
+	lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(lb)
+	await get_tree().process_frame
+	lb.position = box.size * at - lb.size * 0.5
+	lb.pivot_offset = lb.size * 0.5
+	lb.rotation = deg_to_rad(rot_deg)
+	lb.scale = Vector2.ONE * 1.6
+	lb.modulate.a = 0.0
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(lb, "scale", Vector2.ONE, 0.3).set_delay(0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lb, "modulate:a", 1.0, 0.2).set_delay(0.3)
+
+func _phone_screen(box: Control, at: Vector2, h: float) -> void:
+	# экран телефона — врезка в кадр: лента новостей
+	var pc := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.97, 0.98)
+	sb.set_corner_radius_all(18)
+	sb.border_color = Color(0.08, 0.08, 0.09)
+	sb.set_border_width_all(9)
+	sb.content_margin_left = 14; sb.content_margin_right = 14; sb.content_margin_top = 18; sb.content_margin_bottom = 18
+	pc.add_theme_stylebox_override("panel", sb)
+	var hh := box.size.y * h
+	pc.custom_minimum_size = Vector2(hh * 0.66, hh)
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	pc.add_child(v)
+	for it in [["СРОЧНО: авария в НИИ «Вектор-7»", "Утечка неизвестного вещества. Район оцеплен.", Color(0.75, 0.08, 0.06)],
+			["Власти: не выходите из домов", "Закройте окна и двери. Оставайтесь в укрытиях.", Color(0.75, 0.08, 0.06)],
+			["Погода: +21°, солнечно", "Выходные будут тёплыми.", Color(0.2, 0.3, 0.5)]]:
+		var a := Label.new()
+		a.text = it[0]
+		a.autowrap_mode = TextServer.AUTOWRAP_WORD
+		a.custom_minimum_size = Vector2(hh * 0.66 - 46, 0)
+		a.add_theme_font_size_override("font_size", _font(0.024))
+		a.add_theme_color_override("font_color", it[2])
+		v.add_child(a)
+		var b := Label.new()
+		b.text = it[1]
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD
+		b.custom_minimum_size = Vector2(hh * 0.66 - 46, 0)
+		b.add_theme_font_size_override("font_size", _font(0.02))
+		b.add_theme_color_override("font_color", Color(0.25, 0.25, 0.28))
+		v.add_child(b)
+	box.add_child(pc)
+	pc.position = box.size * at
+	pc.rotation = deg_to_rad(-4.0)
+	pc.modulate.a = 0.0
+	create_tween().tween_property(pc, "modulate:a", 1.0, 0.4).set_delay(0.6)
+
+# ---------- управление ----------
+func _wait(s: float) -> void:
+	tapped = false
 	var e := 0.0
-	while e < s and not skipping:
+	while e < s and not skipping and not tapped:
 		await get_tree().process_frame
-		var dt := get_process_delta_time()
-		e += dt
-		hero.global_position.y += v * dt
+		e += get_process_delta_time()
 
-func _sleep_place(hy: float) -> void:
-	# лёжа на боку: голова на подушке (у изголовья, +X дома), тело вдоль кровати, на матрасе
-	var hv := Vector2(SLEEP_HEAD.x - SLEEP_HIPS.x, -(SLEEP_HEAD.y - SLEEP_HIPS.y))   # таз → голова в осях модели Godot (x, z)
-	var want := ld(1, 0)
-	var yaw := atan2(want.x, want.y) - atan2(hv.x, hv.y)
-	hero.rotation = Vector3(0, yaw, 0)
-	var head_m := Vector3(SLEEP_HEAD.x, 0, -SLEEP_HEAD.y).rotated(Vector3.UP, yaw)
-	var pos := w3(L(3.2, 3.25), 0.0) - head_m
-	hero.global_position = Vector3(pos.x, hy + 1.12, pos.z)
+func _hold(s: float) -> void:
+	# держать кадр s секунд (тап — дальше); при проверке кадрами — коротко
+	await _wait(1.2 if shot_dir != "" else s)
+	_freeze()
+
+func _new_page() -> void:
+	if page.get_child_count() > 0:
+		await _page_snap()
+		var tw := create_tween()
+		tw.tween_property(page, "modulate:a", 0.0, 0.5)
+		await tw.finished                                          # иначе твин успевает вернуть 0 после 1 — страница пустая
+	for c in page.get_children():
+		c.queue_free()
+	page.modulate.a = 1.0
+	page_n += 1
+
+func _page_snap() -> void:
+	if shot_dir == "":
+		return
+	await get_tree().create_timer(1.2).timeout
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	img.save_jpg("%s/page_%02d.jpg" % [shot_dir, page_n], 0.85)
+
+func _px(r: Rect2) -> Vector2i:
+	var s := _panel_rect(r).size * page.get_viewport().get_screen_transform().get_scale()
+	return Vector2i(maxi(64, int(s.x)), maxi(64, int(s.y)))
+
+func _cam(target: Vector3, off: Vector3) -> Vector3:
+	return target + off
 
 # ---------- сценарий ----------
 var _env: Environment
@@ -420,282 +586,333 @@ func _run() -> void:
 		_bg_keep = [_env.background_mode, _env.background_color]
 		var sky := Sky.new()
 		var sm := ProceduralSkyMaterial.new()
-		sm.sky_top_color = Color(0.32, 0.5, 0.78)
-		sm.sky_horizon_color = Color(0.72, 0.78, 0.84)
+		sm.sky_top_color = Color(0.3, 0.5, 0.8)
+		sm.sky_horizon_color = Color(0.74, 0.8, 0.86)
 		sm.ground_horizon_color = Color(0.6, 0.62, 0.6)
 		sm.ground_bottom_color = Color(0.3, 0.3, 0.28)
 		sky.sky_material = sm
 		_env.sky = sky
 		_env.background_mode = Environment.BG_SKY
 	_cam_size_keep = main.cam_size
-	main.cam_size = 38.0                                       # шире радиус подгрузки чанков
+	main.cam_size = 38.0
 	main.camctl.visible = false
 	main.daynight.auto = false
 	var t_keep: float = main.daynight.t
-	main.daynight.t = 9.0
+	main.daynight.t = 8.5
 	if main.weather:
 		main.weather.set("rain", 0.0)
-	var f: Vector2 = S.f
-	var hy: float = S.house_y
 	var up := Vector3.UP
-	var F3 := Vector3(f.x, 0, f.y)
-	var U3 := ld3(1, 0)
-	var LK := -F3                                              # к озеру
-	main.focus = S.c
-	main.world.ensure_now(main.focus, 2)
-	_hide_roofs(["hero_house_roof"])
-
-	_mark("bed")
-	# 1. Спальня. Спит на боку; будильник
-	_sleep_place(hy)
-	_play("Sleep", 0.0)
-	var bedc := w3(L(2.6, 3.25), hy + 1.1)
-	_shot(w3(L(1.2, -1.6), hy + 2.5), w3(L(1.6, -0.6), hy + 2.3), bedc + up * 0.1, bedc + up * 0.15, 12.0)
-	_say("Субботнее утро. Дом у озера.")
-	await _fade(0.0, 2.5)
-	await _wait(5.0)
-	_say("")
-	alarm_v = 1.0
-	await _wait(3.5)
-	alarm_v = 0.0
-	await _fade(1.0, 1.2)
-
-	_mark("sit")
-	# 2. Сидит на краю кровати, встаёт, потягивается
-	_place(L(2.3, 2.62), hy + 0.64, yaw_to(ld(0, -1)))
-	_play("SitIdle", 0.0)
-	var hp3 := hero.global_position
-	_shot(hp3 + ld3(0.6, -3.3) + up * 1.6, hp3 + ld3(0.3, -3.0) + up * 1.55, hp3 + up * 0.9, hp3 + up * 1.25, 13.0)
-	_say("Проснулся. Ещё минуту посидеть…")
-	await _fade(0.0, 1.5)
-	await _wait(3.5)
-	_say("")
-	await _act("StandUp", 0.4)
-	_say("Потянуться, зевнуть.")
-	await _act("Stretch", 0.4)
-	_play("Idle", 0.4)
-	await _wait(1.0)
-
-	_mark("kitchen")
-	# 3. На кухню (камера сверху — крыша снята)
-	_say("Сначала — умыться.")
-	_follow(ld3(0.8, -1.8) + up * 6.0)
-	await _move([tile_of(hero.global_position), L(1.5, 1.5), L(-0.2, 1.5), L(-2.0, 1.0), L(-2.0, -0.6), L(-2.6, -2.55)], "WalkSlow")
-	await _turn(ld(0, -1), 0.7)
-	_say("")
-	# 4. Умывается у раковины
-	_shot(w3(L(-1.0, -1.7), hy + 2.2), w3(L(-1.2, -2.0), hy + 2.1), w3(L(-2.6, -3.0), hy + 1.6), w3(L(-2.6, -3.1), hy + 1.55), 8.5)
-	water_v = 1.0
-	await _act("WashFace", 0.4)
-	water_v = 0.0
-	_play("Idle", 0.4)
-	await _wait(0.8)
-
-	_mark("window")
-	# 5. К окну на озеро
-	_follow(ld3(-0.8, -1.8) + up * 6.0)
-	await _move([tile_of(hero.global_position), L(-2.0, -0.6), L(-2.0, 1.0), L(-0.9, 2.6), L(-0.6, 3.3)], "WalkSlow")
-	await _turn(ld(0, 1), 0.8)
-	_play("Idle", 0.4)
-	var hpw := hero.global_position
-	_shot(w3(L(-2.3, 2.2), hy + 2.0), w3(L(-2.1, 2.5), hy + 1.95), hpw + up * 1.5, hpw + up * 1.6 + LK * 0.3, 6.0)   # сбоку: стоит у окна
-	_say("За окном — озеро. Ни ветерка.")
-	await _wait(6.0)
-	var win := w3(L(-0.6, 4.2), hy + 1.7)                                # то, что он видит: озеро с веранды
-	_shot(win + LK * 0.3 + U3 * 0.3, win + LK * 1.2 + U3 * 0.2, win + LK * 20.0 - up * 1.4, win + LK * 22.0 - up * 1.3 - U3 * 3.0, 6.0)
-	_say("Хороший день, чтобы ничего не делать.")
-	await _wait(6.0)
-	_say("")
-	await _fade(1.0, 0.8)
-
-	_mark("outside")
-	# 6. На улицу: от крыльца вокруг дома к веранде
-	var pc := L(-3.4, -5.0)
-	_place(pc, floor_y(pc), yaw_to(ld(-1, -0.3)))
-	_shot(w3(L(-9.5, -9.0), hy + 3.0), w3(L(-10.0, -6.0), hy + 3.0), w3(pc, hy + 1.2), w3(L(-5.8, -3.0), hy + 1.0), 6.0)
-	await _fade(0.0, 0.8)
-	await _move([pc, L(-5.6, -5.6), L(-5.9, -2.5)], "WalkSlow")
-	await _fade(1.0, 0.5)
-	var st0 := L(-3.0, 9.6)
-	_place(st0, floor_y(st0), yaw_to(ld(1, 0)))
-	_shot(w3(L(4.5, 12.5), hy + 2.6), w3(L(5.5, 11.0), hy + 2.6), w3(L(-1.0, 9.0), hy + 1.2), w3(L(1.5, 6.0), hy + 1.6), 9.0)
-	await _fade(0.0, 0.5)
-	await _move([st0, L(-0.2, 9.2), L(0.0, 8.0), L(0.2, 6.9), L(1.5, 6.6), L(1.5, 6.0)], "WalkSlow")
-	_mark("chair")
-	# 7. Садится на стул лицом к озеру
-	await _turn(ld(0, 1), 0.7)
-	await _act("SitDown", 0.4)
-	_play("SitIdle", 0.4)
-	var cp := w3(S.chair, hy + 0.6)
-	_shot(cp + U3 * 2.4 + LK * 0.6 + up * 1.5, cp + U3 * 1.7 + LK * 1.3 + up * 1.35, cp + up * 0.8 - U3 * 0.5, cp + LK * 20.0 - U3 * 4.0, 8.0)
-	_say("Тихо. Только вода и птицы.")
-	await _wait(8.0)
-
-	_mark("phone")
-	# 8. Достаёт телефон из кармана, читает новости
-	_say("Что там в новостях?")
-	_shot(cp + LK * 1.7 + U3 * 1.0 + up * 1.45, cp + LK * 1.3 + U3 * 0.7 + up * 1.4, cp + up * 1.0, cp + up * 1.05, 20.0)   # спереди-сбоку: видно телефон в руках
-	_play("SitPhoneOut", 0.4)
-	await _wait(0.45)
-	if phone_mi:
-		phone_mi.visible = true
-	await _wait(_clip_len("SitPhoneOut") - 0.5)
-	_play("SitPhoneRead", 0.4)
-	await _wait(1.0)
-	_say("")
-	phone_ui.visible = true
-	for it in [["Погода: +21°, солнечно", "Выходные обещают быть тёплыми. Ветер слабый.", Color(0.2, 0.3, 0.5)],
-			["СРОЧНО: авария в НИИ «Вектор-7»", "На территории закрытого института произошла утечка неизвестного вещества. Район оцеплен.", Color(0.75, 0.08, 0.06)],
-			["Власти: не выходите из домов", "Жителей окрестных посёлков просят закрыть окна и двери и оставаться в укрытиях до особого распоряжения.", Color(0.75, 0.08, 0.06)],
-			["К институту стянуты войска", "Над районом закрыто воздушное пространство. Связь может пропадать.", Color(0.4, 0.1, 0.08)]]:
-		_news_item(it[0], it[1], it[2])
-		await _wait(3.8)
-	await _wait(2.0)
-	phone_ui.visible = false
-
-	_mark("siren")
-	# 9. Сирена. Вскочил — и бегом к сараю
-	siren = 1.0
-	_say("Сирена… Это не учения.")
-	await _wait(1.5)
-	if phone_mi:
-		phone_mi.visible = false
-	await _act("StandUp", 0.25, 1.6)
-	_play("Idle", 0.2)
-	await _turn(ld(-1, 0.6), 0.4)
-	var pp: Vector3 = w3(L(4.0, 8.0), hy)
-	_shot(pp + LK * 8.0 + U3 * 10.0 + up * 7.0, pp + U3 * 14.0 + up * 8.0 - LK * 2.0, w3(L(1.0, 7.0), hy + 1.0), w3(S.shed, S.shed_y + 1.0), 6.0)
-	await _move([tile_of(hero.global_position), L(0.3, 6.6), L(0.0, 8.4), L(5.8, 8.8), L(7.6, 2.4), S.shed_door + f * 1.5], "Run", 0.2)
-	_play("Idle", 0.2)
-
-	_mark("village")
-	# 10. Деревня: паника, вертолёт, истребители
-	await _fade(1.0, 0.4)
-	var vc := Vector2(WorldGen.FEATURES["village"].x, WorldGen.FEATURES["village"].y)
-	var vg := gh(vc)
-	var nc := Vector2.ZERO                                       # середина путей жителей — туда смотрит камера
-	for n in npcs:
-		nc += ((n[1] as Vector2) + (n[2] as Vector2)) * 0.5
-	if not npcs.is_empty():
-		nc /= float(npcs.size())
-	else:
-		nc = vc
-	var ng := gh(nc)
-	var vcam := w3(nc, ng) + Vector3(7, 8, 11)
-	_shot(vcam, vcam + Vector3(-3, -1, -2), w3(nc, ng) + Vector3(-4, 4, -6), w3(nc, ng) + Vector3(-5, 5, -7), 9.0)   # жители внизу кадра, небо с авиацией сверху
-	_say("Люди в панике прячутся по домам.")
-	for n in npcs:
-		var nd: Node3D = n[0]
-		nd.visible = true
-		var p0: Vector2 = n[1]
-		nd.global_position = w3(p0, gh(p0))
-		nd.rotation.y = yaw_to((n[2] as Vector2) - p0)
-		var ap: AnimationPlayer = nd.find_child("AnimationPlayer", true, false)
-		if ap and ap.has_animation("Run"):
-			ap.get_animation("Run").loop_mode = Animation.LOOP_LINEAR
-			ap.play("Run")
-			ap.seek(float(n[3]), true)
-	var mid := w3(nc, ng)                                      # авиация проходит поперёк кадра за жителями: вертолёт на 4-й с, истребители на 3-й
-	var across := Vector3(11, 0, -7).normalized()
-	var over := mid + Vector3(-6, 10, -9)
-	_fly("heli_fly", over - across * 100.0, across, 24.0, true)
-	_fly("plane_jet", over + Vector3(-10, 25, -30) + across * 420.0, -across, 140.0)
-	_fly("plane_jet", over + Vector3(-4, 28, -40) + across * 440.0, -across, 140.0)
-	heli_v = 1.0
-	jet_v = 1.0
-	await _fade(0.0, 0.4)
-	var e := 0.0
-	while e < 9.0 and not skipping:
-		await get_tree().process_frame
-		var dt := get_process_delta_time()
-		e += dt
-		for n in npcs:
-			var nd: Node3D = n[0]
-			if not nd.visible:
-				continue
-			var a: Vector2 = n[1]
-			var b: Vector2 = n[2]
-			var k := clampf((e - 0.3 - float(n[3])) * SPEED["Run"] / maxf(a.distance_to(b) * T, 0.5), 0.0, 1.0)
-			var p := a.lerp(b, k)
-			nd.global_position = w3(p, gh(p))
-			if k >= 1.0:
-				nd.visible = false                      # забежал в дом
-	await _fade(1.0, 0.4)
-	for n in npcs:
-		(n[0] as Node3D).visible = false
-
-	_mark("shed")
-	# 11. Сарай: открыл люк, спускается по лестнице
-	_hide_roofs(["hero_shed_roof"])
+	var h := hy()
+	var floor_y := h + 0.64
 	var sy: float = S.shed_y + 0.35 + 0.02
-	var side := SL(1.6, 0.35)
-	_place(S.shed_door, floor_y(S.shed_door), yaw_to(side - (S.shed_door as Vector2)))
-	var hc := w3(SL(0.7, 0.35), sy)
-	_shot(hc + F3 * 3.2 - U3 * 1.4 + up * 3.6, hc + F3 * 2.4 - U3 * 0.8 + up * 3.0, hc + up * 0.9, hc + up * 0.3, 14.0)
-	_say("Скорее — в бункер.")
-	await _fade(0.0, 0.4)
-	await _move([S.shed_door, SL(-0.9, -1.2), side], "Walk")
-	await _turn(ld(-1, 0), 0.4)
-	_play("Idle", 0.3)
-	var tw := create_tween()
-	tw.tween_property(lid, "rotation:x", deg_to_rad(110.0), 0.9)
-	await _wait(1.0)
-	await _move([side, SL(0.7, 0.3)], "WalkSlow", 0.3)
-	hero.global_position = w3(SL(0.7, 0.3), sy)
-	await _turn(ld(0, 1), 0.5)
-	_play("ClimbDown", 0.4, 1.4)
-	_say("")
-	await _vert(-CLIMB_DOWN_V * 1.4, 7.0)
+	await get_tree().process_frame
+	create_tween().tween_property(fade, "color:a", 0.0, 0.8)
+
+	# ===== Страница 1: утро =====
+	await _new_page()
+	var r := Rect2(0, 0, 1, 0.52)
 	hero.visible = false
-	var tw2 := create_tween()
-	tw2.tween_property(lid, "rotation:x", 0.0, 0.8)
-	await _wait(1.2)
+	var hc := w3(L(0.0, 2.0), h + 1.8)
+	var tex := await _snap_panel(hc + hv(-9.0, 24.0, 6.0), hc + hv(0.5, 0.0, -0.5), 46.0, _px(r))
+	var b := _frame(_panel_rect(r), tex)
+	_caption(b, "Суббота. Дом у Большого озера.", Vector2(0, 0), 0.42)
+	await _hold(3.5)
+	if skipping:
+		await _finish(t_keep)
+		return
+	_hide_roofs(["hero_house_roof"])
+	r = Rect2(0, 0.52, 0.5, 0.48)
+	_sleep_place(h)
+	_play_pose("Sleep", 0.2)
+	fill.global_position = w3(L(2.0, 1.4), h + 2.3)
+	fill.light_energy = 1.4
+	var head := w3(L(3.0, 3.25), h + 1.25)
+	tex = await _snap_panel(head + hv(-1.6, -2.0, 1.2), head + hv(-0.6, 0.0, -0.15), 44.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "7:00", Vector2(0, 0), 0.22)
+	_sfx(b, "БИП-БИП-БИП!", Vector2(0.62, 0.22), -8.0, Color(1.0, 0.35, 0.2))
+	alarm_v = 1.0
+	await _hold(3.0)
+	alarm_v = 0.0
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.5, 0.52, 0.5, 0.48)
+	_pose("SitIdle", 1.0, L(2.3, 2.62), floor_y, yaw_to(ld(0, -1)))
+	var ch := hero.global_position + up * 1.15
+	fill.global_position = ch + hv(0.6, -1.4, 0.8)
+	tex = await _snap_panel(ch + hv(0.9, -2.3, 0.3), ch + hv(0.0, 0.0, -0.15), 42.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_bubble(b, "Ещё пять минут…\nили пять часов.", Vector2(0.3, 0.2), Vector2(0.48, 0.38), true)
+	await _hold(3.5)
+	if skipping:
+		await _finish(t_keep)
+		return
+
+	# ===== Страница 2: потянулся, умылся, окно =====
+	await _new_page()
+	r = Rect2(0, 0, 0.38, 1)
+	var sp := L(2.3, 2.62) + ld(0, -1) * MOVE_STAND / T
+	_pose("Stretch", 1.35, sp, floor_y, yaw_to(ld(0, -1)))
+	ch = hero.global_position + up * 1.3
+	fill.global_position = ch + hv(-0.8, -1.6, 0.8)
+	tex = await _snap_panel(ch + hv(-1.0, -3.4, 0.1), ch + hv(0.0, 0.0, 0.0), 46.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_sfx(b, "У-А-АХ…", Vector2(0.5, 0.12), 6.0, Color(1.0, 0.85, 0.3), 0.8)
+	await _hold(3.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.38, 0, 0.62, 0.55)
+	_pose("WashFace", 6.6, L(-2.6, -2.55), floor_y, yaw_to(ld(0, -1)))
+	ch = hero.global_position + up * 1.45
+	fill.global_position = ch + hv(1.2, 1.0, 0.6)
+	tex = await _snap_panel(ch + hv(1.6, 0.35, 0.25), ch + hv(0.0, -0.2, -0.2), 44.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "Холодная вода — лучший будильник.", Vector2(0, 0), 0.5)
+	_sfx(b, "ПЛЮХ!", Vector2(0.25, 0.75), -10.0, Color(0.4, 0.75, 1.0), 0.9)
+	water_v = 1.0
+	await _hold(3.0)
+	water_v = 0.0
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.38, 0.55, 0.62, 0.45)
+	_pose("Idle", 0.5, L(-0.6, 3.3), floor_y, yaw_to(ld(0, 1)))
+	ch = hero.global_position + up * 1.5
+	fill.global_position = ch + hv(-1.5, -1.0, 0.5)
+	tex = await _snap_panel(ch + hv(-1.7, -1.2, 0.25), ch + hv(0.2, 0.6, -0.1), 46.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_bubble(b, "А там что?..", Vector2(0.28, 0.25), Vector2(0.5, 0.42), true)
+	await _hold(3.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	_show_roofs()
+
+	# ===== Страница: вид из окна — во всю страницу =====
+	await _new_page()
+	fill.light_energy = 0.0
+	hero.visible = false
+	r = Rect2(0, 0, 1, 1)
+	var wp := w3(L(-0.6, 4.3), h + 2.2)                         # из проёма окна гостиной — на озеро
+	tex = await _snap_panel(wp, w3(L(2.0, 26.0), h + 0.2), 52.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_window_frame(b)
+	_caption(b, "План на день: ничего не делать. Выполню на все сто.", Vector2(0, 1), 0.42)
+	await _hold(4.5)
+	if skipping:
+		await _finish(t_keep)
+		return
+	hero.visible = true
+
+	# ===== Страница 3: веранда, телефон =====
+	await _new_page()
+	fill.light_energy = 0.0
+	main.daynight.t = 9.5
+	r = Rect2(0, 0, 1, 0.46)
+	var chair_p := L(1.5, 5.62)
+	_pose("SitIdle", 0.6, chair_p, h + 0.6, yaw_to(ld(0, 1)))
+	ch = hero.global_position + up * 1.0
+	tex = await _snap_panel(ch + hv(-3.0, -1.0, 1.2), ch + hv(1.5, 6.0, -0.7), 50.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "Кофе на веранде. Озеро как зеркало.", Vector2(0, 0), 0.4)
+	await _hold(3.5)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0, 0.46, 0.55, 0.54)
+	_pose("SitPhoneRead", 0.4, chair_p, h + 0.6, yaw_to(ld(0, 1)))
+	phone_mi.visible = true
+	ch = hero.global_position + up * 1.15
+	fill.global_position = ch + hv(0.5, 1.0, 0.3)
+	fill.light_energy = 0.8
+	tex = await _snap_panel(ch + hv(-0.5, -0.6, 0.45), ch + hv(0.1, 0.4, -0.3), 40.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_phone_screen(b, Vector2(0.5, 0.08), 0.84)
+	_caption(b, "Что там в новостях?", Vector2(0, 0), 0.45)
+	await _hold(5.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.55, 0.46, 0.45, 0.54)
+	var face := hero.global_position + up * 1.2
+	fill.global_position = face + hv(0.0, 0.6, -0.1)
+	fill.light_color = Color(0.75, 0.85, 1.0)                  # свет экрана на лице
+	fill.light_energy = 1.2
+	tex = await _snap_panel(face + hv(0.35, 1.1, 0.05), face + hv(0.0, 0.0, 0.05), 32.0, _px(r))
+	fill.light_color = Color(1.0, 0.9, 0.78)
+	b = _frame(_panel_rect(r), tex)
+	_bubble(b, "Утечка?.. А я только\nкофе налил.", Vector2(0.5, 0.17), Vector2(0.5, 0.42), true)
+	await _hold(4.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+
+	# ===== Страница 4: сирена, бег, паника =====
+	await _new_page()
+	phone_mi.visible = false
+	fill.light_energy = 0.0
+	main.daynight.t = 10.5
+	r = Rect2(0, 0, 0.5, 0.55)
+	_pose("StandUp", 0.9, chair_p, h + 0.6, yaw_to(ld(0, 1)))
+	ch = hero.global_position + up * 1.0
+	tex = await _snap_panel(ch + hv(1.8, 3.4, 0.2), ch + hv(0.0, 0.0, 0.2), 42.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_sfx(b, "ВУУУУУУ!", Vector2(0.5, 0.18), -6.0, Color(1.0, 0.25, 0.2))
+	siren = 1.0
+	await _hold(3.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.5, 0, 0.5, 0.55)
+	var rp := L(7.0, 4.5)
+	var rdir: Vector2 = (S.shed_door as Vector2) - rp
+	_pose("Run", 0.18, rp, gh(rp), yaw_to(rdir))
+	ch = hero.global_position + up * 1.0
+	var rf := Vector3(rdir.x, 0, rdir.y).normalized()
+	var rs := rf.cross(up)
+	tex = await _snap_panel(ch + rf * 3.2 + rs * 1.6 - up * 0.3, ch + up * 0.1, 46.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "Это не учения.", Vector2(0, 1), 0.4)
+	_bubble(b, "Кофе, прости!", Vector2(0.25, 0.2), Vector2(0.47, 0.38))
+	await _hold(3.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0, 0.55, 1, 0.45)
+	hero.visible = false
+	var vc := Vector2(WorldGen.FEATURES["village"].x, WorldGen.FEATURES["village"].y)
+	var plots: Array = props._plots.filter(func(q): return (q[0] as Vector2).distance_to(vc) < 50.0)
+	plots.sort_custom(func(a, c): return (a[0] as Vector2).distance_to(vc) < (c[0] as Vector2).distance_to(vc))
+	var cen := vc
+	if not plots.is_empty():
+		cen = plots[0][0]
+	var cg := gh(cen)
+	var look := w3(cen, cg + 2.0)
+	var eye := look + Vector3(9, 0.2, 13)                      # камера на уровне глаз: жители бегут перед пожаркой
+	var vdir := (look - eye).normalized()
+	var vside := vdir.cross(up).normalized()
+	for i in npcs.size():                                       # жители бегут через кадр, между камерой и домами
+		var hd := Vector3(vdir.x, 0, vdir.z).normalized()          # по земле: 6–11 м от камеры, ближе здания в центре
+		var gx := Vector3(eye.x, 0, eye.z) + hd * (6.0 + 1.3 * i) + vside * (float(i % 3) - 1.0) * 2.8
+		var np := Vector2(gx.x, gx.z) / T
+		var to := Vector2(vside.x, vside.z) * (1.0 if i % 2 == 0 else -1.0) + Vector2(vdir.x, vdir.z) * 0.4
+		_npc_pose(npcs[i], "Run", 0.12 * i, np, yaw_to(to))
+	_air("heli_fly", look + vdir * 40.0 + vside * 8.0 + up * 16.0, -vside)
+	heli_v = 1.0
+	tex = await _snap_panel(eye, look + up * 2.5, 50.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "В деревне — паника. Над крышами — вертолёт.", Vector2(0, 0), 0.4)
+	_sfx(b, "ДЫН-ДЫН-ДЫН", Vector2(0.75, 0.2), 4.0, Color(0.95, 0.85, 0.4), 0.8)
+	await _hold(4.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	_clear_scene()
+
+	# ===== Страница 5: бункер =====
+	await _new_page()
+	heli_v = 0.0
+	_hide_roofs(["hero_shed_roof"])
+	lid.rotation.x = deg_to_rad(110.0)
+	r = Rect2(0, 0, 0.5, 1)
+	_pose("Idle", 0.3, SL(1.45, 0.35), sy, yaw_to(ld(-1, 0)))
+	ch = hero.global_position + up * 1.0
+	var hatch := w3(SL(0.7, 0.35), sy)
+	fill.global_position = hatch + hv(0.0, -1.0, 2.0)
+	fill.light_energy = 1.2
+	tex = await _snap_panel(hatch + hv(-0.9, -2.1, 2.6), hatch + hv(0.35, 0.0, 0.5), 50.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "Бункер. Три года копал. Соседи смеялись.", Vector2(0, 0), 0.8)
+	await _hold(4.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.5, 0, 0.5, 0.62)
+	_pose("ClimbDown", 0.3, SL(0.7, 0.3), sy - 0.75, yaw_to(ld(0, 1)))
+	tex = await _snap_panel(hatch + hv(0.5, -1.9, 2.4), hatch + hv(0.0, 0.1, 0.2), 48.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_sfx(b, "ЛЯЗГ", Vector2(0.72, 0.8), -12.0, Color(0.85, 0.85, 0.9), 0.8)
+	siren = 0.0
+	await _hold(3.0)
+	if skipping:
+		await _finish(t_keep)
+		return
+	r = Rect2(0.5, 0.62, 0.5, 0.38)
+	b = _frame(_panel_rect(r), null, true)
+	var mlb := Label.new()
+	mlb.text = "Прошёл месяц…"
+	mlb.add_theme_font_size_override("font_size", _font(0.06))
+	mlb.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85))
+	mlb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mlb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	b.add_child(mlb)
+	await _hold(3.5)
+	if skipping:
+		await _finish(t_keep)
+		return
+
+	# ===== Страница 6: тишина =====
+	await _new_page()
+	main.daynight.t = 17.6
+	r = Rect2(0, 0, 0.42, 1)
+	_pose("ClimbUp", 0.2, SL(0.7, 0.3), sy - 1.05, yaw_to(ld(0, 1)))
+	fill.global_position = hatch + hv(0.0, -0.8, 1.2)
+	fill.light_color = Color(1.0, 0.7, 0.45)
+	fill.light_energy = 1.0
+	tex = await _snap_panel(hatch + hv(1.0, -0.6, 0.65), hatch + hv(0.0, 0.15, 0.4), 50.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_sfx(b, "СКРИИП…", Vector2(0.5, 0.15), 8.0, Color(0.9, 0.8, 0.6), 0.7)
+	await _hold(3.5)
+	if skipping:
+		await _finish(t_keep)
+		return
+	_show_roofs()
+	lid.rotation.x = 0.0
+	fill.light_energy = 0.0
+	r = Rect2(0.42, 0, 0.58, 1)
+	var out_p: Vector2 = (S.shed_door as Vector2) + (S.f as Vector2) * 6.0
+	_pose("LookAround", 3.0, out_p, gh(out_p), yaw_to(S.f))
+	ch = hero.global_position + up * 1.2
+	var ff := Vector3((S.f as Vector2).x, 0, (S.f as Vector2).y)
+	tex = await _snap_panel(ch - ff * 2.6 + hv(1.2, 0, 0) + up * 0.4, ch + ff * 20.0 - up * 0.8, 50.0, _px(r))
+	b = _frame(_panel_rect(r), tex)
+	_caption(b, "Тишина. Никого.", Vector2(0, 0), 0.4)
+	_bubble(b, "Кажется, я немного\nпроспал…", Vector2(0.55, 0.35), Vector2(0.82, 0.5), true)
+	await _hold(5.0)
+	await _finish(t_keep)
+
+func _sleep_place(h: float) -> void:
+	# лёжа на боку: голова на подушке (у изголовья, +X дома), тело вдоль кровати, на матрасе
+	var hv2 := Vector2(SLEEP_HEAD.x - SLEEP_HIPS.x, -(SLEEP_HEAD.y - SLEEP_HIPS.y))
+	var want := ld(1, 0)
+	var yaw := atan2(want.x, want.y) - atan2(hv2.x, hv2.y)
+	hero.rotation = Vector3(0, yaw, 0)
+	var head_m := Vector3(SLEEP_HEAD.x, 0, -SLEEP_HEAD.y).rotated(Vector3.UP, yaw)
+	var pos := w3(L(3.2, 3.25), 0.0) - head_m
+	hero.global_position = Vector3(pos.x, h + 1.12, pos.z)
+
+func _play_pose(clip: String, t: float) -> void:
+	hero.visible = true
+	if anim and anim.has_animation(clip):
+		anim.play(clip, 0.0)
+		anim.seek(t, true)
+		anim.pause()
+
+func _finish(t_keep: float) -> void:
+	await _page_snap()
 	siren = 0.0
 	heli_v = 0.0
-	jet_v = 0.0
-	await _fade(1.0, 1.5)
-
-	_mark("month")
-	# 12. «Прошёл месяц…»
-	title.text = "Прошёл месяц…"
-	var tt := create_tween()
-	tt.tween_property(title, "modulate:a", 1.0, 1.0)
-	await _wait(3.5)
-	var tt2 := create_tween()
-	tt2.tween_property(title, "modulate:a", 0.0, 1.0)
-	await _wait(1.1)
-
-	_mark("exit")
-	# 13. Поднимается по лестнице, выходит: тишина, никого
-	for a in air:
-		(a[0] as Node3D).queue_free()
-	air.clear()
-	main.daynight.t = 17.5
-	var lid_up := create_tween()
-	lid_up.tween_property(lid, "rotation:x", deg_to_rad(110.0), 0.8)
-	hero.visible = true
-	hero.global_position = w3(SL(0.7, 0.3), sy - 1.75)
-	hero.rotation.y = yaw_to(ld(0, 1))
-	_play("ClimbUp", 0.0, 1.8)
-	_shot(hc + F3 * 2.6 + U3 * 1.2 + up * 3.2, hc + F3 * 2.2 + U3 * 1.0 + up * 2.9, hc + up * 0.4, hc + up * 1.0, 8.0)
-	await _fade(0.0, 1.0)
-	await _vert(CLIMB_UP_V * 1.8, 1.75 / (CLIMB_UP_V * 1.8) - 1.0)
-	hero.global_position.y = sy
-	_play("Idle", 0.5)
-	await _wait(0.6)
-	await _turn(ld(0, -1), 0.8)
-	_show_roofs()
-	var out_p: Vector2 = S.shed_door + f * 6.0
-	var op := w3(out_p, gh(out_p))
-	_shot(op + F3 * 6.0 + U3 * 3.0 + up * 2.2, op + F3 * 7.0 + U3 * 4.0 + up * 2.6, w3(S.shed_door, gh(S.shed_door) + 1.2), op + up * 1.2, 7.0)
-	await _move([tile_of(hero.global_position), SL(-0.9, -1.2), S.shed_door, out_p], "WalkSlow")
-	_play("LookAround", 0.5)
-	_shot(op + F3 * 3.0 + U3 * 2.0 + up * 1.8, op + F3 * 9.0 + U3 * 5.0 + up * 6.0, op + up * 1.3, op + up * 0.8, 9.0)
-	_say("Тишина. Никого.")
-	await _wait(7.0)
-	await _fade(1.0, 1.6)
-	# конец: обратно в игру
-	_say("")
+	alarm_v = 0.0
+	water_v = 0.0
+	var tw := create_tween()
+	tw.tween_property(fade, "color:a", 1.0, 0.8)
+	await get_tree().create_timer(0.85).timeout
+	_clear_scene()
+	hero.visible = false
+	lid.rotation.x = 0.0
 	main.daynight.t = t_keep
 	main.daynight.auto = true
 	if _env:
@@ -703,9 +920,11 @@ func _run() -> void:
 		_env.background_color = _bg_keep[1]
 	main.cam_size = _cam_size_keep
 	main.camctl.visible = true
-	_show_roofs()
 	main.cam.make_current()
+	var out_p: Vector2 = (S.shed_door as Vector2) + (S.f as Vector2) * 6.0
 	main.teleport(out_p)
+	page.visible = false
+	ui.get_child(0).visible = false
 	var fo := create_tween()
 	fo.tween_property(fade, "color:a", 0.0, 0.8)
 	await get_tree().create_timer(0.85).timeout
@@ -718,26 +937,12 @@ func _run() -> void:
 	queue_free()
 
 func _process(dt: float) -> void:
-	if not skipping:
-		t_all += dt
-	cam_t += dt
-	if cam:
-		_cam_update()
-	for a in air:
-		var n: Node3D = a[0]
-		n.global_position += (a[2] as Vector3) * float(a[1]) * dt
-		if a[3]:
-			var r: Node3D = n.get_child(1)
-			r.rotation.y += dt * 22.0
+	if cur_tr:
+		live_t += dt
+		var k := clampf(live_t / 6.0, 0.0, 1.0)
+		pcam.global_position = live_a.lerp(live_b, k * k * (3.0 - 2.0 * k))
+		pcam.look_at(live_look, Vector3.UP)
 	_audio()
-	if shot_dir != "" and not skipping and int(t_all / 2.0) >= shot_n:
-		shot_n += 1
-		_snap()
-
-func _snap() -> void:
-	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
-	img.save_jpg("%s/intro_%03d.jpg" % [shot_dir, shot_n], 0.8)
 
 func _audio() -> void:
 	if _pb == null:
@@ -755,24 +960,20 @@ func _audio() -> void:
 		if siren > 0.0:                                             # сирена: тон ползёт 300→800→300 Гц за 6 с
 			var fr := 300.0 + 500.0 * (0.5 - 0.5 * cos(_st * TAU / 6.0))
 			_ph[0] += fr * dt
-			s += (2.0 * fmod(_ph[0], 1.0) - 1.0) * 0.18 * siren
+			s += (2.0 * fmod(_ph[0], 1.0) - 1.0) * 0.16 * siren
 		if heli_v > 0.0:                                            # вертолёт: удары лопастей ~5 Гц
 			var w := _rng.randf() * 2.0 - 1.0
 			_lp += 0.08 * (w - _lp)
 			var thump := pow(0.5 + 0.5 * sin(_st * TAU * 5.2), 6.0)
 			s += _lp * 1.6 * thump * heli_v
-		if jet_v > 0.0:                                             # самолёты: гул (шум), нарастает и уходит
-			var w2 := _rng.randf() * 2.0 - 1.0
-			var k := clampf(1.0 - absf(fmod(_st, 7.0) - 2.5) / 2.5, 0.0, 1.0)
-			s += w2 * 0.12 * k * jet_v
-		if alarm_v > 0.0:                                           # будильник: 4 коротких писка в секунду, пауза
+		if alarm_v > 0.0:                                           # будильник: 4 писка, пауза
 			var on_b := fmod(_st, 1.0) < 0.5 and fmod(_st, 0.125) < 0.07
 			_ph[1] += 2300.0 * dt
 			s += (0.08 * sin(_ph[1] * TAU) if on_b else 0.0) * alarm_v
 		if water_v > 0.0:                                           # вода из крана: мягкий шум
-			var w3n := _rng.randf() * 2.0 - 1.0
-			_wl += 0.25 * (w3n - _wl)
-			s += (w3n - _wl) * 0.07 * water_v
+			var wn := _rng.randf() * 2.0 - 1.0
+			_wl += 0.25 * (wn - _wl)
+			s += (wn - _wl) * 0.07 * water_v
 		s = clampf(s * (1.0 if on else 0.0), -1.0, 1.0)
 		buf[i] = Vector2(s, s)
 	_pb.push_buffer(buf)
