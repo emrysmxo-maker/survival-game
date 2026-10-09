@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dc73xm4i02km0"
-path.s3tc="res://.godot/imported/hero_hero_buckle_n.jpg-5e5d2eeae9488e70f2923e079f02cf93.s3tc.ctex"
-path.etc2="res://.godot/imported/hero_hero_buckle_n.jpg-5e5d2eeae9488e70f2923e079f02cf93.etc2.ctex"
+uid="uid://bdeq8n5254j30"
+path.s3tc="res://.godot/imported/hero_hero_visor_n.jpg-31237657b488f27446a5cf0107f7b8aa.s3tc.ctex"
+path.etc2="res://.godot/imported/hero_hero_visor_n.jpg-31237657b488f27446a5cf0107f7b8aa.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "926ee3157e48d42551e2ea56ac4ab395"
+"md5": "a1927d68857bcc9518f5a3232c850167"
 }
 
 [deps]
 
-source_file="res://assets/character/hero_hero_buckle_n.jpg"
-dest_files=["res://.godot/imported/hero_hero_buckle_n.jpg-5e5d2eeae9488e70f2923e079f02cf93.s3tc.ctex", "res://.godot/imported/hero_hero_buckle_n.jpg-5e5d2eeae9488e70f2923e079f02cf93.etc2.ctex"]
+source_file="res://assets/character/hero_hero_visor_n.jpg"
+dest_files=["res://.godot/imported/hero_hero_visor_n.jpg-31237657b488f27446a5cf0107f7b8aa.s3tc.ctex", "res://.godot/imported/hero_hero_visor_n.jpg-31237657b488f27446a5cf0107f7b8aa.etc2.ctex"]
 
 [params]
 

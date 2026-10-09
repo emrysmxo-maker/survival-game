@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://jb8h5deg1sce"
-path.s3tc="res://.godot/imported/hero_hero_belt_c.jpg-f4c0dc80e0633886721bb86884db6b5c.s3tc.ctex"
-path.etc2="res://.godot/imported/hero_hero_belt_c.jpg-f4c0dc80e0633886721bb86884db6b5c.etc2.ctex"
+uid="uid://dl6vcnagh8e5x"
+path.s3tc="res://.godot/imported/hero_hero_cap_c.jpg-1a76a0142f584c220f569399086ca4ad.s3tc.ctex"
+path.etc2="res://.godot/imported/hero_hero_cap_c.jpg-1a76a0142f584c220f569399086ca4ad.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "9c94cf861161988b5e259da634452e3c"
+"md5": "0ed9d2180c1a2910abc5cbe91b4b0c5b"
 }
 
 [deps]
 
-source_file="res://assets/character/hero_hero_belt_c.jpg"
-dest_files=["res://.godot/imported/hero_hero_belt_c.jpg-f4c0dc80e0633886721bb86884db6b5c.s3tc.ctex", "res://.godot/imported/hero_hero_belt_c.jpg-f4c0dc80e0633886721bb86884db6b5c.etc2.ctex"]
+source_file="res://assets/character/hero_hero_cap_c.jpg"
+dest_files=["res://.godot/imported/hero_hero_cap_c.jpg-1a76a0142f584c220f569399086ca4ad.s3tc.ctex", "res://.godot/imported/hero_hero_cap_c.jpg-1a76a0142f584c220f569399086ca4ad.etc2.ctex"]
 
 [params]
 

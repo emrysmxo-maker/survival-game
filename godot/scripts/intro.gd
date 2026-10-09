@@ -19,6 +19,8 @@ var npcs: Array = []
 var air: Array = []
 var hidden: Array = []
 var vp: SubViewport
+var text_len := 0                       # букв в надписях текущего кадра — для времени на чтение
+var head_uv := Vector2(0.5, 0.3)        # где голова героя в текущем кадре (0..1), для облачка
 var cur_tr: TextureRect                 # живой кадр (показывает экран съёмки)
 var live_a := Vector3.ZERO
 var live_b := Vector3.ZERO
@@ -316,6 +318,13 @@ func _snap_panel(eye: Vector3, look: Vector3, fov: float, size: Vector2i) -> Tex
 	main.world.ensure_now(main.focus, 2)
 	for i in 3:
 		await RenderingServer.frame_post_draw
+	head_uv = Vector2(0.5, 0.3)
+	if hero.visible and skel:
+		var hi := skel.find_bone("Head")
+		if hi >= 0:
+			var hp := skel.global_transform * skel.get_bone_global_pose(hi).origin + Vector3.UP * 0.1
+			if not pcam.is_position_behind(hp):
+				head_uv = pcam.unproject_position(hp) / Vector2(size)
 	return vp.get_texture()
 
 func _freeze() -> void:
@@ -370,31 +379,12 @@ func _frame(rect: Rect2, tex: Texture2D, dark := false) -> Control:
 	tw.tween_property(box, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	return box
 
-func _window_frame(box: Control) -> void:
-	# кадр «из окна»: белая рама с переплётом и подоконник поверх вида
-	var col := Color(0.96, 0.95, 0.92)
-	var w := box.size
-	var t := w.y * 0.045
-	for rr in [Rect2(0, 0, w.x, t), Rect2(0, w.y - t * 1.6, w.x, t * 1.6), Rect2(0, 0, t, w.y), Rect2(w.x - t, 0, t, w.y),
-			Rect2(w.x * 0.5 - t * 0.4, 0, t * 0.8, w.y), Rect2(0, w.y * 0.36, w.x, t * 0.6)]:
-		var c := ColorRect.new()
-		c.color = col
-		c.position = rr.position
-		c.size = rr.size
-		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(c)
-	var sh := ColorRect.new()                                    # тень на подоконнике
-	sh.color = Color(0, 0, 0, 0.18)
-	sh.position = Vector2(0, w.y - t * 1.6)
-	sh.size = Vector2(w.x, t * 0.25)
-	sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(sh)
-
 func _font(sz: float) -> int:
 	return int(page.get_viewport_rect().size.y * sz)
 
 func _caption(box: Control, text: String, at := Vector2(0.0, 0.0), w := 0.55) -> void:
 	# плашка рассказчика: жёлтый прямоугольник у края кадра
+	text_len += text.length()
 	var pc := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = CAPTION
@@ -415,7 +405,11 @@ func _caption(box: Control, text: String, at := Vector2(0.0, 0.0), w := 0.55) ->
 	pc.modulate.a = 0.0
 	create_tween().tween_property(pc, "modulate:a", 1.0, 0.4).set_delay(0.35)
 
-func _bubble(box: Control, text: String, at: Vector2, tail: Vector2, think := false) -> void:
+func _bubble(box: Control, text: String, _at: Vector2, _tail: Vector2, think := false) -> void:
+	# облачко всегда над головой героя (голова находится проекцией кости Head на кадр), хвостик — к голове
+	text_len += text.length()
+	var tail := Vector2(head_uv.x, maxf(head_uv.y - 0.05, 0.12))
+	var at := Vector2(clampf(head_uv.x + (0.12 if head_uv.x < 0.5 else -0.12), 0.22, 0.78), clampf(head_uv.y - 0.24, 0.13, 0.5))
 	# облачко: белое, с хвостиком к говорящему (tail — точка в кадре, 0..1); мысли — кружочками
 	var pc := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
@@ -545,8 +539,10 @@ func _wait(s: float) -> void:
 		e += get_process_delta_time()
 
 func _hold(s: float) -> void:
-	# держать кадр s секунд (тап — дальше); при проверке кадрами — коротко
-	await _wait(1.2 if shot_dir != "" else s)
+	# держать кадр (тап — дальше): не меньше s×1,6 и не меньше, чем нужно прочитать надписи кадра (~12 букв/с)
+	var need := maxf(s * 1.6, 2.5 + float(text_len) / 12.0)
+	text_len = 0
+	await _wait(1.2 if shot_dir != "" else need)
 	_freeze()
 
 func _new_page() -> void:
@@ -698,7 +694,6 @@ func _run() -> void:
 	var wp := w3(L(-0.6, 4.3), h + 2.2)                         # из проёма окна гостиной — на озеро
 	tex = await _snap_panel(wp, w3(L(2.0, 26.0), h + 0.2), 52.0, _px(r))
 	b = _frame(_panel_rect(r), tex)
-	_window_frame(b)
 	_caption(b, "План на день: ничего не делать. Выполню на все сто.", Vector2(0, 1), 0.42)
 	await _hold(4.5)
 	if skipping:

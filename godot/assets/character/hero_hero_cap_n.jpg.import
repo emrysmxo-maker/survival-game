@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cv84cm5y38xvf"
-path.s3tc="res://.godot/imported/hero_hero_buckle_c.jpg-4b8898f8133cf82c67fb6a4610d9f219.s3tc.ctex"
-path.etc2="res://.godot/imported/hero_hero_buckle_c.jpg-4b8898f8133cf82c67fb6a4610d9f219.etc2.ctex"
+uid="uid://ct827re3r4548"
+path.s3tc="res://.godot/imported/hero_hero_cap_n.jpg-54e523b8b84b62bfadc66c5efc6393bb.s3tc.ctex"
+path.etc2="res://.godot/imported/hero_hero_cap_n.jpg-54e523b8b84b62bfadc66c5efc6393bb.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "ac664f5326de6824cdf2aae10271cbe0"
+"md5": "b2758d3eafcd80a38aca0569682da794"
 }
 
 [deps]
 
-source_file="res://assets/character/hero_hero_buckle_c.jpg"
-dest_files=["res://.godot/imported/hero_hero_buckle_c.jpg-4b8898f8133cf82c67fb6a4610d9f219.s3tc.ctex", "res://.godot/imported/hero_hero_buckle_c.jpg-4b8898f8133cf82c67fb6a4610d9f219.etc2.ctex"]
+source_file="res://assets/character/hero_hero_cap_n.jpg"
+dest_files=["res://.godot/imported/hero_hero_cap_n.jpg-54e523b8b84b62bfadc66c5efc6393bb.s3tc.ctex", "res://.godot/imported/hero_hero_cap_n.jpg-54e523b8b84b62bfadc66c5efc6393bb.etc2.ctex"]
 
 [params]
 

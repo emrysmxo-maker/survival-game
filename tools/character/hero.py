@@ -172,8 +172,8 @@ def shirt_pred(p):
 	if p.z > 1.40 * S and math.hypot(p.x, p.y) < 0.075 * S or p.z > 1.415 * S and abs(p.x) < 0.11 * S and p.y < -0.02 * S:
 		return False                                                    # шея и под подбородком
 	if is_arm(p):
-		(d1, t1), _ = arm_t(p)
-		return t1 < 0.42 and d1 < 0.085 * S                               # короткий рукав
+		(d1, t1), (d2, t2) = arm_t(p)
+		return (t1 < 1.0 and d1 < 0.085 * S) or (t2 < 0.42 and d2 < 0.07 * S)   # рукав закатан до середины предплечья
 	return abs(p.x) < 0.24 * S
 
 def jeans_pred(p):
@@ -202,7 +202,7 @@ def soften_body():
 	bm.to_mesh(body.data); bm.free()
 soften_body()
 BV = body_bvh()
-shirt = cloth("shirt", shirt_pred, lambda p: (0.02 + 0.012 * max(0.0, min(1.0, (1.25 * S - p.z) / (0.3 * S)))) * S, smooth=30, fac=0.6, thick=0.004)
+shirt = cloth("shirt", shirt_pred, lambda p: (0.011 + 0.008 * max(0.0, min(1.0, (1.25 * S - p.z) / (0.3 * S)))) * S, smooth=14, fac=0.5, thick=0.004)
 jeans = cloth("jeans", jeans_pred, lambda p: (0.014 + 0.018 * max(0.0, min(1.0, (0.62 * S - p.z) / (0.3 * S)))) * S, smooth=14, fac=0.5, thick=0.004)   # прямые: ниже колена свободнее
 SOLES = []
 LACES = []
@@ -390,7 +390,64 @@ def hair_pred(p):
 	return r.z > line
 def hair_top(p):                                                       # объём волос — только внутри окрашенной стрижки
 	return hair_pred(p - Vector((0, 0, 0.022 * S)))
-hair = None                                                           # короткая стрижка «ёжиком» — цветом кожи головы
+def beard_pred(p):                                                    # короткая борода: челюсть, подбородок, усы (губы открыты)
+	if (p - HC).length > 0.17 * S or p.y > EYE.y + 0.06 * S:
+		return False
+	e = p - EYE
+	ax = abs(e.x)
+	if -0.075 * S < e.z < -0.055 * S and ax < 0.026 * S:
+		return False                                                    # губы
+	if e.z > -0.045 * S or e.z < -0.15 * S or ax > 0.075 * S:
+		return False
+	if e.z > -0.075 * S and ax < 0.034 * S and e.z < -0.052 * S:
+		return True                                                     # усы над губой
+	return e.z < -0.06 * S or ax > 0.045 * S
+def tufts(o, k):
+	"""Пряди: вершины наружу по нормали на шум — волосы не «шлем», а ёжик с вихрами."""
+	me = o.data
+	for v in me.vertices:
+		c = v.co
+		n = 0.5 + 0.5 * math.sin(c.x * 260 + math.sin(c.y * 190) * 2.0) * math.sin(c.y * 230 + math.sin(c.z * 210) * 2.0)
+		v.co = c + v.normal * k * S * n
+def hair_depth(p):                                                    # насколько точка выше линии роста волос (м)
+	r = p - HC
+	d = r.normalized()
+	front = max(0.0, -d.y); back = max(0.0, d.y)
+	return r.z - (0.055 * S * front + (-0.085 * S) * back)
+def hair_gap(p):                                                      # у линии роста ~0 (край не ступенькой), к макушке — 1,3 см
+	k = max(0.0, min(1.0, hair_depth(p) / (0.05 * S)))
+	return (0.0015 + 0.012 * k * k * (3 - 2 * k)) * S
+# кепка: купол по голове (над линией роста волос), козырёк вперёд — образ выжившего, читается в комиксе
+hair = cloth("hair", hair_pred, 0.011 * S, smooth=6, fac=0.5, thick=0.004)
+def visor():
+	vs = [v.co.copy() for v in hair.data.vertices]
+	fw = []
+	for i in range(13):                                              # передний край купола: дуга −52°…+52° от лба
+		a = math.radians(-52 + 104 * i / 12)
+		d = Vector((math.sin(a), -math.cos(a), 0))
+		best = max((v for v in vs if (v - HC).z < 0.075 * S), key=lambda v: (v - HC).normalized().dot(d) - abs((v - HC).z - 0.06 * S) * 3.0)
+		fw.append((best, d, a))
+	bm = bmesh.new()
+	rows = []
+	for (p0, d, a) in fw:
+		ext = (0.072 - 0.045 * abs(a) / math.radians(52)) * S              # посередине козырёк длиннее
+		row = []
+		for k in range(4):
+			t = k / 3
+			q = p0 + d * ext * t + Vector((0, 0, -0.012 * S * t * t))      # чуть вниз к краю
+			row.append(bm.verts.new(q))
+		rows.append(row)
+	for i in range(len(rows) - 1):
+		for k in range(3):
+			bm.faces.new((rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]))
+	bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+	bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.006)
+	me = bpy.data.meshes.new("visor"); bm.to_mesh(me); bm.free()
+	o = bpy.data.objects.new("visor", me); scn.collection.objects.link(o)
+	for p in me.polygons:
+		p.use_smooth = True
+	return o
+visor_o = visor()
 # ---------------- цвет ----------------
 MATS = {}
 def mat(name, rough=0.8, sss=0.0, spec=0.5):
@@ -444,7 +501,7 @@ def skin_col(p, n):
 		# щетина: челюсть, подбородок, над губой (не на губах)
 		lip = bump(e.z, -0.075 * S, -0.06 * S, 0.003 * S) * bump(ax, 0.0, 0.022 * S, 0.004 * S)
 		st = bump(e.z, -0.135 * S, -0.045 * S, 0.012 * S) * bump(ax, 0.0, 0.065 * S, 0.012 * S) * (1 - bump(ax, 0.0, 0.03 * S, 0.006 * S) * bump(e.z, -0.058 * S, -0.04 * S, 0.006 * S))
-		c = mix(c, (0.42, 0.33, 0.28), 0.5 * st * (1 - lip))
+		c = mix(c, (0.40, 0.31, 0.26), 0.6 * st * (1 - lip))            # щетина
 		c = mix(c, (0.66, 0.42, 0.38), 0.7 * lip)
 		# румянец на щеках и носу
 		c = mix(c, (0.85, 0.5, 0.44), 0.18 * bump(e.z, -0.04 * S, -0.01 * S, 0.01 * S) * bump(ax, 0.0, 0.05 * S, 0.01 * S))
@@ -457,8 +514,11 @@ for e in ("eye_L", "eye_R"):
 		ec += v.co
 	ec /= max(1, len(o.data.vertices))
 	paint(o, lambda p, n, ec=ec: (0.03, 0.03, 0.03) if (p - ec).normalized().y < -0.95 else ((0.32, 0.36, 0.22) if (p - ec).normalized().y < -0.82 else (0.9, 0.88, 0.84)), mat("eye", 0.08))
-TEE = (0.33, 0.37, 0.30)
-paint(shirt, lambda p, n: mix(TEE, (0.20, 0.23, 0.19), 0.25 * max(0.0, -n.z)), mat("cotton", 0.95))
+TEE = (0.55, 0.13, 0.10)                                              # красная фланель в клетку (клетка — при запекании)
+paint(shirt, lambda p, n: mix(TEE, (0.33, 0.08, 0.06), 0.25 * max(0.0, -n.z)), mat("cotton", 0.95))
+CAP = (0.26, 0.31, 0.22)                                              # кепка цвета хаки
+paint(hair, lambda p, n: mix(CAP, (0.18, 0.21, 0.15), 0.3 * max(0.0, -n.z)), mat("cap", 0.9))
+paint(visor_o, lambda p, n: (0.2, 0.24, 0.17), mat("cap", 0.9))
 def denim(p, n):
 	base = (0.21, 0.28, 0.42)
 	fade = max(0.0, 1.0 - abs(p.z - 0.62 * S) / (0.22 * S)) * (0.18 if n.y < -0.2 else 0.08) + max(0.0, 1.0 - abs(p.z - 0.86 * S) / (0.07 * S)) * 0.12
@@ -501,7 +561,7 @@ used = set(x.group for v in body.data.vertices for x in v.groups if x.weight > 0
 empty = [g.name for g in body.vertex_groups if g.index not in used]
 print("HERO группы без весов (выборка):", empty)
 # одежда, волосы, глаза — веса с ближайшего места тела
-for o in [shirt, jeans, shoes, shoes2, belt_o, buckle] + SOLES + LACES + [bpy.data.objects["eye_L"], bpy.data.objects["eye_R"]]:
+for o in [shirt, jeans, shoes, shoes2, belt_o, buckle, hair, visor_o] + SOLES + LACES + [bpy.data.objects["eye_L"], bpy.data.objects["eye_R"]]:
 	for (n, a, b, par) in BONES:
 		o.vertex_groups.new(name=n)
 	dt = o.modifiers.new("dt", "DATA_TRANSFER")
@@ -603,6 +663,21 @@ def pat_leather(nt, vc, co):
 	c = mixc(nt, vc, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, 0.3), 0.85), 1.0, "MULTIPLY")
 	return c, v.outputs["Distance"], 0.2
 
+def pat_flannel(nt, vc, co):
+	bx = wave(nt, co, 9.0, "X"); bz = wave(nt, co, 9.0, "Z")               # клетка: полосы поперёк и вдоль, ~11 см
+	fx = wave(nt, co, 27.0, "X"); fz = wave(nt, co, 27.0, "Z")             # тонкие светлые нити
+	dx = mathn(nt, "GREATER_THAN", bx, 0.62); dz = mathn(nt, "GREATER_THAN", bz, 0.62)
+	dark = mathn(nt, "MINIMUM", mathn(nt, "ADD", dx, dz), 1.4)
+	c = mixc(nt, vc, mathn(nt, "SUBTRACT", 1.0, mathn(nt, "MULTIPLY", dark, 0.42)), 1.0, "MULTIPLY")
+	ln = mathn(nt, "MULTIPLY", mathn(nt, "GREATER_THAN", fx, 0.93), mathn(nt, "GREATER_THAN", fz, 0.2))
+	c = mixc(nt, c, (0.85, 0.75, 0.62), mathn(nt, "MULTIPLY", ln, 0.35))
+	n1 = noise(nt, co, 800.0, 2.0)
+	return c, mathn(nt, "ADD", mathn(nt, "MULTIPLY", n1, 0.5), mathn(nt, "MULTIPLY", wave(nt, co, 600.0, "DIAGONAL"), 0.5)), 0.3
+def pat_hair(nt, vc, co):
+	st = wave(nt, co, 400.0, "Z", "BANDS", 6.0); n1 = noise(nt, co, 300.0, 3.0)
+	c = mixc(nt, vc, mathn(nt, "ADD", mathn(nt, "MULTIPLY", st, 0.35), 0.75), 1.0, "MULTIPLY")
+	return c, mathn(nt, "ADD", st, n1), 0.5
+
 def bake_part(o, name, size, pat, rough, metal=0.0, sss=0.0, reuv=True):
 	bpy.context.view_layer.objects.active = o
 	for x in bpy.context.view_layer.objects:
@@ -652,7 +727,9 @@ def bake_part(o, name, size, pat, rough, metal=0.0, sss=0.0, reuv=True):
 
 if os.environ.get("BAKE", "1") == "1":
 	bake_part(body, "hero_skin", int(os.environ.get("SKIN_TEX", "2048")), pat_skin, 0.48, sss=0.2, reuv=True)
-	bake_part(shirt, "hero_shirt", 1024, pat_cotton, 0.95)
+	bake_part(shirt, "hero_shirt", 1024, pat_flannel, 0.95)
+	bake_part(hair, "hero_cap", 512, pat_cotton, 0.9)
+	bake_part(visor_o, "hero_visor", 256, pat_cotton, 0.9)
 	bake_part(jeans, "hero_jeans", 1024, pat_denim, 0.9)
 	for i, o in enumerate([shoes, shoes2]):
 		bake_part(o, "hero_shoe%d" % i, 512, pat_mesh, 0.7)
@@ -665,6 +742,9 @@ if os.environ.get("BAKE", "1") == "1":
 	for e in ("eye_L", "eye_R"):
 		bake_part(bpy.data.objects[e], "hero_" + e, 128, pat_plain(3000.0, 0.05, 0.05), 0.05, reuv=False)
 
+# ремень под фланелью навыпуск не виден (пряжка торчала сквозь рубашку) — убрать
+for o in (belt_o, buckle):
+	bpy.data.objects.remove(o)
 # всё в один объект
 for b in body.modifiers:
 	if b.type == "ARMATURE":
