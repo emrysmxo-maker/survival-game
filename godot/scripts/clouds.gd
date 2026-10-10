@@ -26,11 +26,13 @@ uniform vec2 wind = vec2(1.0, 0.35);
 varying vec3 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 float dens(vec2 p) {
-	float t = TIME;
+	float t = TIME * (1.0 + layer * 0.35);                 // верхний слой быстрее
 	vec2 o = vec2(layer * 0.37, layer * 0.71);
-	float d = texture(noise, p * 0.0022 + o + wind * t * 0.0009).r * 0.58
-		+ texture(noise, p * 0.0061 - o + wind * t * 0.0016 + vec2(0.0, t * 0.0004)).r * 0.29
-		+ texture(noise, p * 0.019 + o * 2.0 + wind * t * 0.003).r * 0.13;
+	vec2 side = vec2(-wind.y, wind.x);
+	// масштабы едут с разной скоростью и вбок друг к другу — облака плывут ≈4 м/с и меняют форму
+	float d = texture(noise, p * 0.0022 + o - wind * t * 0.0088).r * 0.58
+		+ texture(noise, p * 0.0061 - o - wind * t * 0.019 + side * t * 0.006).r * 0.29
+		+ texture(noise, p * 0.019 + o * 2.0 - wind * t * 0.05 - side * t * 0.02).r * 0.13;
 	float thr = mix(0.66, 0.38, cover) + layer * 0.05;
 	return smoothstep(thr, thr + 0.11, d);
 }

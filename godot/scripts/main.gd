@@ -46,7 +46,7 @@ func _ready() -> void:
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.size = CAM_SIZE
 	cam.near = 1.0
-	cam.far = 400.0
+	cam.far = 800.0
 	cam.rotation_degrees = Vector3(-CAM_ELEV_DEG, CAM_YAW_DEG, 0)
 	add_child(cam)
 
@@ -145,7 +145,7 @@ func _pan(d: Vector2) -> void:
 func _place_camera(k: float) -> void:
 	cam_h = lerpf(cam_h, WorldGen.height_m(focus.x, focus.y), k)
 	var target := Vector3(focus.x * WorldGen.T, cam_h, focus.y * WorldGen.T)
-	cam.global_position = target + cam.global_transform.basis.z * 150.0
+	cam.global_position = target + cam.global_transform.basis.z * 300.0   # далеко: орто-вид тот же, а облака (clouds.gd) не срезает ближняя граница
 
 func _update_camera(dt: float) -> void:
 	if camctl.zoom != 0.0:
