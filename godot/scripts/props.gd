@@ -481,8 +481,11 @@ func _find_power() -> void:
 				_flicker_i = n
 			n += 1
 
-func _flick(t: float, seed: float) -> float:
-	return 1.0 if fposmod(sin(floor(t * 7.0) * 12.9898 + seed) * 43758.5453, 1.0) >= 0.35 else 0.0
+func _flick(t: float, seed: float) -> float:                         # то же, что h21 в props.gdshader
+	var p3 := Vector3(floor(t * 7.0), seed, floor(t * 7.0)) * 0.1031
+	p3 = Vector3(fposmod(p3.x, 1.0), fposmod(p3.y, 1.0), fposmod(p3.z, 1.0))
+	p3 += Vector3.ONE * p3.dot(Vector3(p3.y, p3.z, p3.x) + Vector3.ONE * 33.33)
+	return 1.0 if fposmod((p3.x + p3.y) * p3.z, 1.0) >= 0.35 else 0.0
 
 # каждый кадр (main.gd): лампы пула — на ближние к точке at горящие фонари
 var _lamp_t := 0.0
@@ -527,11 +530,11 @@ func _flush() -> void:
 		mm.use_custom_data = true                                          # износ дома (shaders/props.gdshader)
 		mm.mesh = _meshes[b.model]
 		mm.instance_count = b.xf.size()
-		var roof := 1.0 if str(b.model).ends_with("_roof") else 0.0
+		var roof := 0.25 if str(b.model).ends_with("_roof") else 0.0
 		var md := str(b.model)
 		var lamp := md == "lamp_post"
 		var lit := not roof and (md in LIT_MODELS)
-		var car := 1.0 if (md.begins_with("car_") or md.begins_with("tractor") or md.begins_with("trailer") or md.begins_with("boat") or md.begins_with("wagon")) else 0.0
+		var car := 0.5 if (md.begins_with("car_") or md.begins_with("tractor") or md.begins_with("trailer") or md.begins_with("boat") or md.begins_with("wagon")) else 0.0
 		for i in b.xf.size():
 			mm.set_instance_transform(i, b.xf[i])
 			var o: Vector3 = b.xf[i].origin
@@ -541,17 +544,18 @@ func _flush() -> void:
 			if lamp or lit:
 				var pw := _power_at(tp)
 				if lamp and lamp_n == _flicker_i:
-					bflag = 3.0
+					bflag = 0.75
 				elif pw:
-					bflag = 2.0
+					bflag = 0.5
 				if lamp:
-					if bflag > 1.5:
-						lamp_pts.append([b.xf[i] * Vector3(1.55, 7.7, 0.0), bflag > 2.5, sd * 37.0])
+					if bflag > 0.4:
+						lamp_pts.append([b.xf[i] * Vector3(1.55, 7.7, 0.0), bflag > 0.65, sd * 37.0])
 					lamp_n += 1
 			var wr := wear_of(b.model, tp)
+			var kind := car
 			if md == "road_dash":
-				wr = 0.5 + 0.4 * sd                                     # разметка стёртая
-			mm.set_instance_custom_data(i, Color(wr, sd, bflag, car))
+				kind = 1.0                                              # разметка — стёртая краска (шейдер)
+			mm.set_instance_custom_data(i, Color(wr, sd, bflag, kind))
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
 		mi.name = key.replace(".", "_")                                    # «модель|клетка» — по имени находит заставка (крыша дома героя)

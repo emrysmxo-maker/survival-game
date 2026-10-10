@@ -137,12 +137,19 @@ func _foliage_mesh(src: ArrayMesh, cat: String, href: float) -> ArrayMesh:
 		mat.set_shader_parameter("sway", WorldGen.SWAY.get(cat, 0.0))
 		mat.set_shader_parameter("push", WorldGen.PUSH.get(cat, 0.0))
 		mat.set_shader_parameter("height_ref", href)
+		mat.set_shader_parameter("autumn", _autumn)
 		mat.set_shader_parameter("translucency", 0.3 if cat in ["tree", "sap", "sapm", "shrub", "fern", "nettle", "grass", "flower"] else 0.0)
 		m.surface_set_material(s, mat)
 	return m
 
 func _add_kind(key: String, kd: Dictionary) -> void:
 	var cat: String = kd.cat
+	_autumn = 0.0
+	for d in DECID:
+		if key.begins_with(d):
+			_autumn = 1.0 if cat in ["tree", "sapling"] else 0.5
+	if cat in ["grass", "shrub", "fern", "nettle"] and _autumn == 0.0:
+		_autumn = 0.4                                                   # трава и кусты подсохли
 	var wood := _find_mesh(kd.m, "wood", kd.n)
 	var leaf := [] if kd.wood_only else _find_mesh(kd.m, "leaf", kd.n)
 	var ref: Array = wood if not wood.is_empty() else leaf
@@ -185,6 +192,8 @@ func _add_kind(key: String, kd: Dictionary) -> void:
 		kinds[key]["cv"] = float(kd.crown[1])
 		kinds[key]["cr"] = float(kd.crown[2]) * bs
 
+const DECID := ["birch", "aspen", "oak", "alder", "willow", "apple", "cherry"]
+var _autumn := 0.0                    # осень листвы для текущего вида (_add_kind → _foliage_mesh)
 func _make_mmis(wood: Array, leaf: Array, cat: String, href: float, shadow: bool) -> Array:
 	var out := []
 	for part in [wood, leaf]:

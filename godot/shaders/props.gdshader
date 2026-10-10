@@ -1,6 +1,7 @@
 // Постройки, машины, мелочь из props.glb — один шейдер вместо стандартного материала (props.gd _collect):
 // те же текстура, карта рельефа, цвет вершин, шероховатость, металл + ИЗНОС на каждый экземпляр
-// (INSTANCE_CUSTOM: r — износ 0 ухоженный .. 0.35 пожилой .. 0.7 запущенный .. 1; g — случайное число дома; b — 1 у крыши, 2 — есть ток (окна/фонарь горят ночью), 3 — фонарь мигает; a — 1 у машин и техники).
+// (INSTANCE_CUSTOM, всё в 0..1: r — износ 0 ухоженный .. 0.35 пожилой .. 0.7 запущенный .. 1; g — случайное число дома;
+// b — 0.25 крыша, 0.5 есть ток (окна/фонарь горят ночью), 0.75 фонарь мигает; a — 0.5 машины и техника, 1 — краска на асфальте).
 // Износ: тёмный низ стен (грязь, брызги дождя), потёки сверху вниз, выцветание краски, мох и пятна на крышах.
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
@@ -23,7 +24,11 @@ varying vec3 lp;                       // точка в осях модели (�
 varying vec3 ln;                       // нормаль в осях модели
 varying vec4 cd;
 
-float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float h21(vec2 p) {                    // хеш без sin (sin больших чисел на телефонах и программном Vulkan неточен)
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
 float vn(vec2 p) {
 	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
@@ -41,9 +46,16 @@ void fragment() {
 	if (use_vc) { c *= COLOR.rgb; }
 	float wear = clamp(cd.r, 0.0, 1.0);
 	float seed = cd.g * 37.0;
-	bool roof = abs(cd.b - 1.0) < 0.3 || ln.y > 0.55;
+	bool roof = abs(cd.b - 0.25) < 0.1 || ln.y > 0.55;
 	float along = lp.x * 0.83 + lp.z * 0.57;
 	float rough = roughness;
+	if (cd.a > 0.75) {
+		// краска на асфальте стёрта пятнами (колёса, время): местами до асфальта
+		vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		float e = vn(wp.xz * 1.2) * 0.6 + vn(wp.xz * 4.7) * 0.4;
+		c = mix(c * 0.92, vec3(0.2, 0.2, 0.21), smoothstep(0.3, 0.6, e) * 0.95);
+		wear = 0.0;
+	}
 	if (wear > 0.01 && grime > 0.0) {
 		float w = wear * grime;
 		// выцветание: светлее и серее, у старых сильнее
@@ -53,7 +65,7 @@ void fragment() {
 			// мох и тёмные пятна на крыше (сверху — не по краям), ржавчина/лишайник
 			float m = vn(lp.xz * 0.9 + seed) * 0.65 + vn(lp.xz * 3.1 - seed) * 0.35;
 			float moss = smoothstep(0.62 - 0.32 * w, 0.95, m) * w;
-			c = mix(c, c * (cd.a > 0.5 ? vec3(0.78, 0.72, 0.62) : vec3(0.52, 0.6, 0.36)), moss);   // у машин — пыль, не мох
+			c = mix(c, c * (cd.a > 0.25 ? vec3(0.78, 0.72, 0.62) : vec3(0.52, 0.6, 0.36)), moss);   // у машин — пыль, не мох
 			float spot = smoothstep(0.55, 0.9, vn(lp.xz * 1.7 + seed * 2.0)) * w;
 			c *= 1.0 - 0.35 * spot;
 		} else {
@@ -73,11 +85,11 @@ void fragment() {
 	// соседние дома не одного оттенка
 	c *= 0.94 + 0.12 * fract(seed * 0.618);
 	ALBEDO = clamp(c, 0.0, 1.0);
-	if (glow > 0 && cd.b > 1.5 && night > 0.02) {
+	if (glow > 0 && cd.b > 0.4 && night > 0.02) {
 		float on = 1.0;
 		if (glow == 1) { on = step(0.3, fract(seed * 0.618 + 0.17)); }          // не во всех домах с током горит свет
-		if (cd.b > 2.5) {                                                       // мигающий фонарь (то же в props.gd _flick)
-			float k = fract(sin(floor(TIME * 7.0) * 12.9898 + seed) * 43758.5453);
+		if (cd.b > 0.65) {                                                       // мигающий фонарь (то же в props.gd _flick)
+			float k = h21(vec2(floor(TIME * 7.0), seed));
 			on *= step(0.35, k);
 		}
 		vec3 ec = glow == 1 ? vec3(1.0, 0.68, 0.32) * 3.0 : vec3(1.0, 0.86, 0.62) * 5.0;

@@ -106,7 +106,8 @@ class HB:
 
 	def _paint(s, bm, faces, col):
 		cl = bm.loops.layers.color["Color"]
-		c = tuple(srgb2lin(col)) + (1.0,)
+		c = tuple(col) + (1.0,)        # слой цвета bmesh хранит sRGB (байты): Blender сам переводит в линейный при экспорте.
+		                               # Раньше здесь был srgb2lin — двойной перевод: средние цвета темнели в разы (бетон моста 0.8 → 0.11, мост чёрный)
 		for f in faces:
 			for l in f.loops:
 				l[cl] = c
@@ -870,7 +871,7 @@ def bridge(name):
 	hb = HB()
 	L, Wd = 18.0, 7.0
 	hb.box(mat("concrete"), (0, 0, -0.45), (L, Wd, 0.6), (0.8, 0.8, 0.78))                 # плита
-	hb.box(mat("block"), (0, 0, -0.13), (L, Wd - 1.6, 0.04), (0.35, 0.35, 0.37))              # асфальт
+	hb.box(mat("block"), (0, 0, -0.13), (L, Wd - 1.6, 0.04), (0.55, 0.55, 0.57))              # асфальт
 	for sy in (-1, 1):
 		hb.box(mat("concrete"), (0, sy * (Wd / 2 - 0.4), -0.05), (L, 0.8, 0.2), (0.75, 0.75, 0.72))   # тротуар
 		hb.box(mat("metal_paint"), (0, sy * (Wd / 2 - 0.05), 0.95), (L, 0.06, 0.06), (0.35, 0.45, 0.4))  # перила
@@ -879,7 +880,7 @@ def bridge(name):
 			hb.box(mat("metal_paint"), (-L / 2 + 0.3 + i * (L - 0.6) / 12, sy * (Wd / 2 - 0.05), 0.47), (0.06, 0.06, 0.95), (0.35, 0.45, 0.4))
 	for x in (-L / 2 + 0.6, -3.0, 3.0, L / 2 - 0.6):                                           # опоры
 		hb.box(mat("concrete"), (x, 0, -2.6), (0.9, Wd * 0.8, 4.0), (0.7, 0.7, 0.68))
-	return hb.build(name), None
+	return hb.build(name, ao=False), None
 
 def sign(name, kind):
 	"""Дорожный знак на стойке: town — белый прямоугольник «населённый пункт» (без надписи), round — круглый (красная кайма), info — синий."""
