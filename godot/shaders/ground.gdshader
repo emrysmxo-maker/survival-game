@@ -12,6 +12,9 @@ uniform vec4 morok_c[3];                 // морок: центр x, z (м), р
 uniform float rain_wet = 0.0;       // после дождя: земля темнее, лужи в низинках (weather.gd)
 uniform bool detail = true;          // false (Низкое/Среднее): одна выборка на слой, слабые слои пропускаются
 global uniform bool q_ground_normals;
+uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable;   // тени облаков (clouds.gd): бесшовный шум, плывёт по ветру
+uniform float cloud_k = 0.0;
+uniform vec2 cloud_off = vec2(0.0);
 
 float ssf(float e0, float e1, float x) { float t = clamp((x - e0) / (e1 - e0), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
 
@@ -106,6 +109,10 @@ void fragment() {
 	float wet = max(water * 0.88, puddle);
 	// под водой и у кромки — мокрый грунт: темнее, с зеленоватым налётом (саму воду рисует water.gdshader)
 	c = mix(c, c * vec3(0.52, 0.58, 0.56) + vec3(0.0, 0.015, 0.012), water * 0.9);
+	if (cloud_k > 0.01) {                                    // тень облака — пятно ~80 м, мягкий край
+		float cs = smoothstep(0.42, 0.6, texture(cloud_tex, wm / 640.0 + cloud_off).r);
+		c *= 1.0 - 0.55 * cs * cloud_k;
+	}
 	ALBEDO = c;
 	if (q_ground_normals) {
 		NORMAL_MAP = mix(nm, vec3(0.5, 0.5, 1.0), puddle);
