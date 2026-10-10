@@ -230,6 +230,9 @@ func set_night(k: float) -> void:
 	_night = k
 	for m in _lit:
 		m.set_shader_parameter("night", k)
+	if _lone_light:
+		_lone_light.visible = k > 0.1
+		_lone_light.light_energy = k * 1.6
 
 # ---------------- загрузка и вывод ----------------
 # кэш расстановки (только на телефоне): расстановка детерминирована — после первого запуска сборки читается из файла
@@ -412,7 +415,7 @@ func _build_doors() -> void:
 				_dgrid[ck] = []
 			_dgrid[ck].append(doors.size())
 			doors.append(e)
-	print("props: дверей ", doors.size(), " горящих фонарей ", lamp_pts.size(), " генераторов ", _power.size())
+	print("props: дверей ", doors.size(), " горящих фонарей ", lamp_pts.size(), " генераторов ", _power.size(), " окно в деревне ", lone_window.round())
 	for lp in lamp_pts:
 		print("LAMP %.1f %.1f %s" % [lp[0].x / T, lp[0].z / T, str(lp[1])])
 	if OS.get_environment("DOORDBG") != "":
@@ -481,6 +484,36 @@ func _find_power() -> void:
 				_flicker_i = n
 			n += 1
 
+# одно светящееся окно в деревне (кто-то живой — будущее задание): ближний к центру деревни дом с окнами
+var lone_window := Vector2.INF
+func _find_lone() -> void:
+	var v: Dictionary = WorldGen.FEATURES["village"]
+	var best := 1e9
+	for key in _batch:
+		if not (_batch[key].model in LIT_MODELS):
+			continue
+		for xf: Transform3D in _batch[key].xf:
+			var sd := fposmod(xf.origin.x * 0.173 + xf.origin.z * 0.311, 1.0)
+			if fposmod(sd * 37.0 * 0.618 + 0.17, 1.0) < 0.3:
+				continue                                                # шейдер оставил бы этот дом тёмным
+			var tp := Vector2(xf.origin.x, xf.origin.z) / T
+			var d := tp.distance_to(Vector2(v.x, v.y))
+			if d < best and d < 60.0:
+				best = d
+				lone_window = tp
+				_lone_pos = xf.origin
+	if lone_window != Vector2.INF:                                       # тёплый свет внутри — пятном из окон и двери
+		_lone_light = OmniLight3D.new()
+		_lone_light.light_color = Color(1.0, 0.66, 0.34)
+		_lone_light.omni_range = 9.0
+		_lone_light.omni_attenuation = 0.8
+		_lone_light.shadow_enabled = false                         # свет вокруг дома: сверху читается «в доме горит свет»
+		_lone_light.position = _lone_pos + Vector3(0, 1.9, 0)
+		_lone_light.visible = false
+		add_child(_lone_light)
+var _lone_pos := Vector3.ZERO
+var _lone_light: OmniLight3D
+
 func _flick(t: float, seed: float) -> float:                         # то же, что h21 в props.gdshader
 	var p3 := Vector3(floor(t * 7.0), seed, floor(t * 7.0)) * 0.1031
 	p3 = Vector3(fposmod(p3.x, 1.0), fposmod(p3.y, 1.0), fposmod(p3.z, 1.0))
@@ -522,6 +555,7 @@ func update_lights(at: Vector2, dt: float) -> void:
 
 func _flush() -> void:
 	_find_power()
+	_find_lone()
 	var lamp_n := 0
 	for key in _batch:
 		var b: Dictionary = _batch[key]
@@ -545,7 +579,7 @@ func _flush() -> void:
 				var pw := _power_at(tp)
 				if lamp and lamp_n == _flicker_i:
 					bflag = 0.75
-				elif pw:
+				elif pw or (lit and tp.distance_to(lone_window) < 0.5):
 					bflag = 0.5
 				if lamp:
 					if bflag > 0.4:
