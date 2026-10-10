@@ -85,6 +85,7 @@ func _ready() -> void:
 	ambience.on = settings.sound
 	add_child(ambience)                                     # ветер, дождь, птицы, сверчки, вороны
 	var crows = load("res://scripts/crows.gd").new()
+	crows.name = "Crows"                                    # звук ворон — у стаи (ambience.gd)
 	crows.main = self
 	add_child(crows)                                        # стаи ворон над полями
 	var clouds = load("res://scripts/clouds.gd").new()
