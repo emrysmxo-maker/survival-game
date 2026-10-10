@@ -1,6 +1,6 @@
 // Постройки, машины, мелочь из props.glb — один шейдер вместо стандартного материала (props.gd _collect):
 // те же текстура, карта рельефа, цвет вершин, шероховатость, металл + ИЗНОС на каждый экземпляр
-// (INSTANCE_CUSTOM: r — износ 0 ухоженный .. 0.35 пожилой .. 0.7 запущенный .. 1; g — случайное число дома; b — 1 у крыши; a — 1 у машин и техники).
+// (INSTANCE_CUSTOM: r — износ 0 ухоженный .. 0.35 пожилой .. 0.7 запущенный .. 1; g — случайное число дома; b — 1 у крыши, 2 — есть ток (окна/фонарь горят ночью), 3 — фонарь мигает; a — 1 у машин и техники).
 // Износ: тёмный низ стен (грязь, брызги дождя), потёки сверху вниз, выцветание краски, мох и пятна на крышах.
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
@@ -16,6 +16,8 @@ uniform float roughness = 0.9;
 uniform float metallic = 0.0;
 uniform float specular = 0.35;
 uniform float grime = 1.0;            // насколько материал пачкается (стекло/фары — 0.3)
+uniform int glow = 0;                  // 1 — окно с тёплым светом, 2 — плафон фонаря: светятся ночью, только где есть ток
+uniform float night = 0.0;
 
 varying vec3 lp;                       // точка в осях модели (м): y — высота над землёй
 varying vec3 ln;                       // нормаль в осях модели
@@ -39,7 +41,7 @@ void fragment() {
 	if (use_vc) { c *= COLOR.rgb; }
 	float wear = clamp(cd.r, 0.0, 1.0);
 	float seed = cd.g * 37.0;
-	bool roof = cd.b > 0.5 || ln.y > 0.55;
+	bool roof = abs(cd.b - 1.0) < 0.3 || ln.y > 0.55;
 	float along = lp.x * 0.83 + lp.z * 0.57;
 	float rough = roughness;
 	if (wear > 0.01 && grime > 0.0) {
@@ -57,7 +59,7 @@ void fragment() {
 		} else {
 			// низ стены: грязь и брызги от земли (до ~0.9 м), полосой с неровным краем
 			float edge = 0.35 + 0.55 * w + 0.25 * vn(vec2(along * 2.0, seed));
-			float mud = (1.0 - smoothstep(0.0, edge, lp.y)) * (0.35 + 0.55 * w);
+			float mud = (1.0 - smoothstep(0.0, edge, lp.y)) * (0.35 + 0.55 * w) * (1.0 - abs(ln.y));   // только стены, не пол и не разметка
 			c = mix(c, c * vec3(0.42, 0.37, 0.31), mud);
 			// потёки: вертикальные полосы сверху вниз
 			float st = vn(vec2(along * 5.0 + seed, lp.y * 0.35));
@@ -71,6 +73,16 @@ void fragment() {
 	// соседние дома не одного оттенка
 	c *= 0.94 + 0.12 * fract(seed * 0.618);
 	ALBEDO = clamp(c, 0.0, 1.0);
+	if (glow > 0 && cd.b > 1.5 && night > 0.02) {
+		float on = 1.0;
+		if (glow == 1) { on = step(0.3, fract(seed * 0.618 + 0.17)); }          // не во всех домах с током горит свет
+		if (cd.b > 2.5) {                                                       // мигающий фонарь (то же в props.gd _flick)
+			float k = fract(sin(floor(TIME * 7.0) * 12.9898 + seed) * 43758.5453);
+			on *= step(0.35, k);
+		}
+		vec3 ec = glow == 1 ? vec3(1.0, 0.68, 0.32) * 3.0 : vec3(1.0, 0.86, 0.62) * 5.0;
+		EMISSION = ec * night * on;
+	}
 	ROUGHNESS = rough;
 	METALLIC = metallic;
 	SPECULAR = specular;

@@ -272,6 +272,7 @@ func _process(dt_raw: float) -> void:
 	RenderingServer.global_shader_parameter_set("sun_dir", daynight.sun.global_transform.basis.z)
 	props.set_night(daynight.night)
 	props.update_doors(focus, dt)                           # двери открываются, когда рядом (пока — точка камеры)
+	props.update_lights(focus, dt)                          # настоящий свет у ближних горящих фонарей
 	_place_camera(minf(1.0, 6.0 * dt))
 	if hud.due(dt):
 		hud.update_hud(0.25, focus, world.ecosystem_at(focus), world.count_trees())

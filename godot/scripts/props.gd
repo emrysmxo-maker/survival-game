@@ -126,6 +126,7 @@ func _ready() -> void:
 	_forest_houses(); step.call("forest")
 	_quarantine(); step.call("quarantine")
 	_road_marks(); step.call("marks")
+	_crosswalks(); step.call("zebra")
 	_road_stuff(); step.call("roadstuff")
 	_fields(); step.call("fields")
 	_flush(); step.call("flush")
@@ -228,9 +229,7 @@ func set_night(k: float) -> void:
 		return
 	_night = k
 	for m in _lit:
-		m.emission_enabled = k > 0.05
-		m.emission = Color(1.0, 0.68, 0.32)
-		m.emission_energy_multiplier = k * 3.0
+		m.set_shader_parameter("night", k)
 
 # ---------------- загрузка и вывод ----------------
 # кэш расстановки (только на телефоне): расстановка детерминирована — после первого запуска сборки читается из файла
@@ -284,9 +283,6 @@ func _collect(n: Node) -> void:
 				mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 				mat.alpha_scissor_threshold = 0.5
 				mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-			elif mat is BaseMaterial3D and str(mat.resource_name) == "glass_lit":
-				if not _lit.has(mat):
-					_lit.append(mat)
 			elif mat is BaseMaterial3D and str(mat.resource_name) == "glass":
 				mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED          # стекло — тёмное зеркальное, без сортировки прозрачности
 			elif mat is BaseMaterial3D and mat.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
@@ -296,10 +292,11 @@ func _collect(n: Node) -> void:
 		_collect(c)
 
 # ---------------- материалы и износ ----------------
+const LIT_MODELS := ["admin", "camp_corpus", "hero_shed", "house_brick", "house_cabin", "house_cottage", "house_izba_a", "lab_main", "lab_wing", "motel", "phone", "school", "supermarket"]
 # блеск по замеру (сборка 106): краска машин r=0.30 m=0.45 — пластик; профнастил 0.45; рамы/железо 0.4–0.6.
 # [шероховатость, металл, блик, пачкается]; остальные — как в модели, но не глаже 0.9 (стены, шифер, дерево).
 const MAT_FIX := {"paint": [0.58, 0.12, 0.4, 0.8], "car_glass": [0.18, 0.2, 0.5, 0.35], "chrome": [0.38, 0.85, 0.5, 0.6], "rim": [0.5, 0.6, 0.45, 0.8],
-	"headlight": [0.2, 0.3, 0.5, 0.35], "taillight": [0.3, 0.1, 0.5, 0.35], "brake": [0.6, 0.5, 0.4, 0.8], "metal": [0.6, 0.55, 0.4, 0.8],
+	"headlight": [0.2, 0.3, 0.5, 0.35], "glass_lit": [0.3, 0.0, 0.5, 0.3], "taillight": [0.3, 0.1, 0.5, 0.35], "brake": [0.6, 0.5, 0.4, 0.8], "metal": [0.6, 0.55, 0.4, 0.8],
 	"metal_paint": [0.72, 0.1, 0.35, 1.0], "frame": [0.72, 0.1, 0.35, 0.8], "frame_white": [0.75, 0.0, 0.35, 0.8], "profnastil": [0.72, 0.15, 0.35, 1.0],
 	"tin_rust": [0.9, 0.1, 0.3, 1.0], "steel": [0.55, 0.7, 0.45, 0.8], "steel_dark": [0.6, 0.65, 0.4, 0.8], "rail": [0.55, 0.7, 0.45, 0.5],
 	"boat_alu": [0.6, 0.35, 0.4, 0.8], "cont_b": [0.78, 0.12, 0.35, 1.0], "cont_g": [0.78, 0.12, 0.35, 1.0], "cont_r": [0.78, 0.12, 0.35, 1.0],
@@ -333,6 +330,9 @@ func _wear_mat(src: BaseMaterial3D) -> Material:
 	m.set_shader_parameter("specular", fx[2])
 	m.set_shader_parameter("grime", fx[3])
 	m.resource_name = src.resource_name
+	if nm == "glass_lit" or nm == "headlight":
+		m.set_shader_parameter("glow", 1 if nm == "glass_lit" else 2)        # свет в окне / плафон фонаря — где есть ток
+		_lit.append(m)
 	_wmats[src] = m
 	return m
 
@@ -412,7 +412,9 @@ func _build_doors() -> void:
 				_dgrid[ck] = []
 			_dgrid[ck].append(doors.size())
 			doors.append(e)
-	print("props: дверей ", doors.size())
+	print("props: дверей ", doors.size(), " горящих фонарей ", lamp_pts.size(), " генераторов ", _power.size())
+	for lp in lamp_pts:
+		print("LAMP %.1f %.1f %s" % [lp[0].x / T, lp[0].z / T, str(lp[1])])
 	if OS.get_environment("DOORDBG") != "":
 		for e in doors.slice(0, 40):
 			print("DOOR %.1f %.1f rest %.2f" % [e.pos.x, e.pos.y, e.rest])
@@ -444,7 +446,80 @@ func update_doors(at: Vector2, dt: float) -> void:
 	for i in done:
 		_dactive.erase(i)
 
+# ---------------- электричество: свет только у генераторов ----------------
+# в зоне карантина тока нет; окна и фонари горят только рядом с генератором (generator_shed) и у НИИ;
+# в деревне один фонарь мигает (последний, кто не сдался). Ближним горящим фонарям — настоящий свет (до 4 ламп).
+const POWER_R := 40.0                 # тайлов от генератора
+var _power: Array = []                # точки с током (тайлы)
+var lamp_pts: Array = []              # [мир. позиция плафона, мигает, seed]
+var _lamps: Array = []                # OmniLight3D — пул
+var _flicker_i := -1
+func _power_at(tp: Vector2) -> bool:
+	for q in _power:
+		if tp.distance_to(q) < POWER_R:
+			return true
+	return false
+
+func _find_power() -> void:
+	_power.clear()
+	for key in _batch:
+		if _batch[key].model == "generator_shed":
+			for xf: Transform3D in _batch[key].xf:
+				_power.append(Vector2(xf.origin.x, xf.origin.z) / T)
+	var lab: Dictionary = WorldGen.FEATURES["lab"]
+	_power.append(Vector2(lab.x, lab.y))
+	var v: Dictionary = WorldGen.FEATURES["village"]                    # мигающий фонарь — ближний к центру деревни
+	var best := 1e9
+	var n := 0
+	for key in _batch:
+		if _batch[key].model != "lamp_post":
+			continue
+		for xf: Transform3D in _batch[key].xf:
+			var d := Vector2(xf.origin.x, xf.origin.z).distance_to(Vector2(v.x, v.y) * T)
+			if d < best:
+				best = d
+				_flicker_i = n
+			n += 1
+
+func _flick(t: float, seed: float) -> float:
+	return 1.0 if fposmod(sin(floor(t * 7.0) * 12.9898 + seed) * 43758.5453, 1.0) >= 0.35 else 0.0
+
+# каждый кадр (main.gd): лампы пула — на ближние к точке at горящие фонари
+var _lamp_t := 0.0
+func update_lights(at: Vector2, dt: float) -> void:
+	if lamp_pts.is_empty() or _night < 0.05:
+		for l in _lamps:
+			l.visible = false
+		return
+	_lamp_t -= dt
+	if _lamp_t <= 0.0:
+		_lamp_t = 0.5
+		var near := lamp_pts.duplicate()
+		var a3 := Vector3(at.x * T, 0.0, at.y * T)
+		near.sort_custom(func(p, q): return Vector2(p[0].x - a3.x, p[0].z - a3.z).length() < Vector2(q[0].x - a3.x, q[0].z - a3.z).length())
+		while _lamps.size() < 4:
+			var l := OmniLight3D.new()
+			l.light_color = Color(1.0, 0.82, 0.58)
+			l.omni_range = 16.0
+			l.omni_attenuation = 0.7
+			l.shadow_enabled = false
+			add_child(l)
+			_lamps.append(l)
+		for i in _lamps.size():
+			var l: OmniLight3D = _lamps[i]
+			l.visible = i < near.size() and Vector2(near[i][0].x - a3.x, near[i][0].z - a3.z).length() < 60.0
+			if l.visible:
+				l.position = near[i][0] - Vector3(0, 0.3, 0)
+				l.set_meta("fl", near[i][1])
+				l.set_meta("seed", near[i][2])
+	var tt := Time.get_ticks_msec() / 1000.0
+	for l in _lamps:
+		if l.visible:
+			l.light_energy = _night * 6.0 * (_flick(tt, l.get_meta("seed", 0.0)) if l.get_meta("fl", false) else 1.0)
+
 func _flush() -> void:
+	_find_power()
+	var lamp_n := 0
 	for key in _batch:
 		var b: Dictionary = _batch[key]
 		var mm := MultiMesh.new()
@@ -454,12 +529,29 @@ func _flush() -> void:
 		mm.instance_count = b.xf.size()
 		var roof := 1.0 if str(b.model).ends_with("_roof") else 0.0
 		var md := str(b.model)
+		var lamp := md == "lamp_post"
+		var lit := not roof and (md in LIT_MODELS)
 		var car := 1.0 if (md.begins_with("car_") or md.begins_with("tractor") or md.begins_with("trailer") or md.begins_with("boat") or md.begins_with("wagon")) else 0.0
 		for i in b.xf.size():
 			mm.set_instance_transform(i, b.xf[i])
 			var o: Vector3 = b.xf[i].origin
 			var tp := Vector2(o.x, o.z) / T
-			mm.set_instance_custom_data(i, Color(wear_of(b.model, tp), fposmod(o.x * 0.173 + o.z * 0.311, 1.0), roof, car))
+			var sd := fposmod(o.x * 0.173 + o.z * 0.311, 1.0)
+			var bflag := roof
+			if lamp or lit:
+				var pw := _power_at(tp)
+				if lamp and lamp_n == _flicker_i:
+					bflag = 3.0
+				elif pw:
+					bflag = 2.0
+				if lamp:
+					if bflag > 1.5:
+						lamp_pts.append([b.xf[i] * Vector3(1.55, 7.7, 0.0), bflag > 2.5, sd * 37.0])
+					lamp_n += 1
+			var wr := wear_of(b.model, tp)
+			if md == "road_dash":
+				wr = 0.5 + 0.4 * sd                                     # разметка стёртая
+			mm.set_instance_custom_data(i, Color(wr, sd, bflag, car))
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
 		mi.name = key.replace(".", "_")                                    # «модель|клетка» — по имени находит заставка (крыша дома героя)
@@ -1510,6 +1602,51 @@ func _road_marks() -> void:
 				d += 1.2
 				acc -= 1.2
 
+# пешеходные переходы: стёртая «зебра» на асфальте у центров деревень и хуторов, школы, магазинов, остановок
+const ZEBRA_AT := ["school", "shop", "supermarket", "bus_stop", "cafe", "fap", "admin"]
+func _crosswalks() -> void:
+	var sites: Array = []
+	var v: Dictionary = WorldGen.FEATURES["village"]
+	sites.append(Vector2(v.x, v.y))
+	for k in WorldGen.HAMLETS:
+		sites.append(Vector2(WorldGen.HAMLETS[k].x, WorldGen.HAMLETS[k].y))
+	for key in _batch:
+		if _batch[key].model in ZEBRA_AT:
+			for xf: Transform3D in _batch[key].xf:
+				sites.append(Vector2(xf.origin.x, xf.origin.z) / T)
+	var made: Array = []
+	for st: Vector2 in sites:
+		var best := 1e9
+		var cp := Vector2.ZERO
+		var dir := Vector2.RIGHT
+		for rd in WorldGen._roads:
+			if rd.track:
+				continue
+			var pts: PackedVector2Array = rd.pts
+			for i in pts.size() - 1:
+				var q := Geometry2D.get_closest_point_to_segment(st, pts[i], pts[i + 1])
+				var d := st.distance_to(q)
+				if d < best:
+					best = d
+					cp = q
+					dir = (pts[i + 1] - pts[i]).normalized()
+		if best > 22.0 or WorldGen.terrain(cp.x, cp.y)[1] > 0.02:
+			continue
+		var dup := false
+		for m: Vector2 in made:
+			if m.distance_to(cp) < 25.0:
+				dup = true
+		if dup:
+			continue
+		made.append(cp)
+		var yaw := atan2(-dir.y, dir.x)
+		var lat := dir.orthogonal()
+		for k in 5:                                                    # 5 полос по 0,4 м поперёк дороги (~4 м), каждая 2,6 м вдоль
+			var p := cp + lat * ((k - 2) * 0.85 * M)
+			var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(0.87, 1.0, 3.4)), Vector3(p.x * T, _h(p.x, p.y) + 0.04, p.y * T))
+			_add("road_dash", p.x, p.y, xf)
+	_rej["переходов"] = made.size()
+
 # ---------------- следы карантина: блокпосты на дорогах, брошенная колонна, вещи ----------------
 func _road_of(a: String, b: String) -> PackedVector2Array:
 	for i in WorldGen.ROADS.size():
@@ -1969,7 +2106,8 @@ func _lab() -> void:
 	var items := [["lab_main", 0.0, 0.0, 0.0], ["lab_wing", 0.0, -22.0, 0.0], ["lab_stack", 30.0, -16.0, 0.0], ["lab_tank", 32.0, 6.0, 0.0], ["lab_tank", 32.0, -5.0, 0.0],
 		["checkpoint", 0.0, 24.0, 0.0], ["lab_sign", 9.0, 27.0, 0.0], ["lab_sign", -9.0, 27.0, 0.0], ["mil_tower", 40.0, 21.0, 0.0], ["mil_tower", -40.0, 21.0, 0.0],
 		["mil_tower", 40.0, -31.0, 0.0], ["mil_tower", -40.0, -31.0, 0.0], ["car_truck_green", 14.0, 15.0, 90.0], ["car_police", -12.0, 17.0, 70.0],
-		["car_ambulance", -20.0, 12.0, 100.0], ["tent_med", -30.0, 9.0, 0.0], ["tent_med", -30.0, -2.0, 0.0], ["barrels_a", 22.0, -12.0, 0.0], ["crates", -24.0, -14.0, 0.0]]
+		["car_ambulance", -20.0, 12.0, 100.0], ["tent_med", -30.0, 9.0, 0.0], ["tent_med", -30.0, -2.0, 0.0], ["barrels_a", 22.0, -12.0, 0.0], ["crates", -24.0, -14.0, 0.0],
+		["lamp_post", 12.0, 21.0, 180.0], ["lamp_post", -12.0, 21.0, 0.0], ["lamp_post", 22.0, 4.0, 180.0], ["lamp_post", -22.0, 4.0, 0.0]]   # у НИИ есть ток — фонари горят
 	for it in items:
 		var q: Vector2 = L.call(it[1], it[2])
 		put(it[0], q.x, q.y, yaw + float(it[3]), "", false)
