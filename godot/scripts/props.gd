@@ -289,19 +289,94 @@ func _collect(n: Node) -> void:
 					_lit.append(mat)
 			elif mat is BaseMaterial3D and str(mat.resource_name) == "glass":
 				mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED          # стекло — тёмное зеркальное, без сортировки прозрачности
+			elif mat is BaseMaterial3D and mat.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+				(m as ArrayMesh).surface_set_material(i, _wear_mat(mat))                  # свой шейдер: матовость + износ (shaders/props.gdshader)
 		_meshes[str(n.name)] = m
 	for c in n.get_children():
 		_collect(c)
+
+# ---------------- материалы и износ ----------------
+# блеск по замеру (сборка 106): краска машин r=0.30 m=0.45 — пластик; профнастил 0.45; рамы/железо 0.4–0.6.
+# [шероховатость, металл, блик, пачкается]; остальные — как в модели, но не глаже 0.9 (стены, шифер, дерево).
+const MAT_FIX := {"paint": [0.58, 0.12, 0.4, 0.8], "car_glass": [0.18, 0.2, 0.5, 0.35], "chrome": [0.38, 0.85, 0.5, 0.6], "rim": [0.5, 0.6, 0.45, 0.8],
+	"headlight": [0.2, 0.3, 0.5, 0.35], "taillight": [0.3, 0.1, 0.5, 0.35], "brake": [0.6, 0.5, 0.4, 0.8], "metal": [0.6, 0.55, 0.4, 0.8],
+	"metal_paint": [0.72, 0.1, 0.35, 1.0], "frame": [0.72, 0.1, 0.35, 0.8], "frame_white": [0.75, 0.0, 0.35, 0.8], "profnastil": [0.72, 0.15, 0.35, 1.0],
+	"tin_rust": [0.9, 0.1, 0.3, 1.0], "steel": [0.55, 0.7, 0.45, 0.8], "steel_dark": [0.6, 0.65, 0.4, 0.8], "rail": [0.55, 0.7, 0.45, 0.5],
+	"boat_alu": [0.6, 0.35, 0.4, 0.8], "cont_b": [0.78, 0.12, 0.35, 1.0], "cont_g": [0.78, 0.12, 0.35, 1.0], "cont_r": [0.78, 0.12, 0.35, 1.0],
+	"tin_blue": [0.78, 0.12, 0.35, 1.0], "tin_gray": [0.78, 0.12, 0.35, 1.0], "tin_green": [0.78, 0.12, 0.35, 1.0], "tin_red": [0.78, 0.12, 0.35, 1.0],
+	"dome_tin": [0.75, 0.15, 0.35, 1.0], "tank_rust": [0.85, 0.2, 0.3, 1.0], "onion": [0.5, 0.5, 0.45, 0.5], "fish": [0.6, 0.2, 0.4, 0.5],
+	"gas": [0.65, 0.15, 0.4, 0.8], "plate": [0.65, 0.0, 0.4, 0.8], "film": [0.45, 0.0, 0.5, 0.4], "wagon_red": [0.8, 0.1, 0.35, 1.0],
+	"wallpaper": [0.92, 0.0, 0.3, 0.15], "paint_wall": [0.92, 0.0, 0.3, 0.15], "floor_wood": [0.85, 0.0, 0.3, 0.15], "linoleum": [0.75, 0.0, 0.35, 0.15],
+	"interior": [0.92, 0.0, 0.3, 0.2], "plastic": [0.7, 0.0, 0.4, 0.6], "hazard": [0.75, 0.0, 0.35, 0.8], "red_w": [0.8, 0.0, 0.35, 0.8]}
+var _wsh: Shader
+var _wmats := {}
+func _wear_mat(src: BaseMaterial3D) -> Material:
+	if _wmats.has(src):
+		return _wmats[src]
+	if _wsh == null:
+		_wsh = load("res://shaders/props.gdshader")
+	var nm := str(src.resource_name).get_slice(".", 0)
+	var fx: Array = MAT_FIX.get(nm, [maxf(src.roughness, 0.92), src.metallic, 0.3, 1.0])
+	var m := ShaderMaterial.new()
+	m.shader = _wsh
+	m.set_shader_parameter("albedo", src.albedo_color)
+	m.set_shader_parameter("has_tex", src.albedo_texture != null)
+	if src.albedo_texture:
+		m.set_shader_parameter("albedo_tex", src.albedo_texture)
+	m.set_shader_parameter("has_normal", src.normal_enabled and src.normal_texture != null)
+	if src.normal_texture:
+		m.set_shader_parameter("normal_tex", src.normal_texture)
+		m.set_shader_parameter("normal_k", src.normal_scale)
+	m.set_shader_parameter("use_vc", src.vertex_color_use_as_albedo)
+	m.set_shader_parameter("roughness", fx[0])
+	m.set_shader_parameter("metallic", fx[1])
+	m.set_shader_parameter("specular", fx[2])
+	m.set_shader_parameter("grime", fx[3])
+	m.resource_name = src.resource_name
+	_wmats[src] = m
+	return m
+
+const CLEAN_AT := ["lab", "h_dachi"]                   # у НИИ и в дачном посёлке — ухоженнее
+# износ постройки/машины 0..1 по типу, месту и случаю (без кэша: из позиции, всегда одинаково)
+func wear_of(model: String, tp: Vector2) -> float:
+	var r := fposmod(sin(tp.x * 12.9898 + tp.y * 78.233) * 43758.5453, 1.0)
+	var base := model.trim_suffix("_roof")
+	var w := 0.25 + 0.5 * r                                             # пожилой ± случай
+	if base.contains("burnt") or base.contains("wreck"):
+		return 1.0
+	if base.contains("izba") or base.contains("cabin") or base.contains("banya") or base.contains("shed") or base.contains("barn") \
+			or base.contains("outhouse") or base == "well_a" or base == "well_b" or base.contains("silo") or base.contains("wagon"):
+		w += 0.22                                                       # дерево и хозпостройки стареют быстрее
+	if base.contains("brick") or base.contains("new") or base.contains("cottage") or base.begins_with("lab") or base in ["school", "admin", "supermarket", "fap"]:
+		w -= 0.18
+	if base.begins_with("car_"):
+		w = 0.15 + 0.75 * r
+	for k in CLEAN_AT:
+		var f: Dictionary = WorldGen.FEATURES[k] if WorldGen.FEATURES.has(k) else WorldGen.HAMLETS.get(k, {})
+		if not f.is_empty() and tp.distance_to(Vector2(f.x, f.y)) < float(f.r) + 30.0:
+			w -= 0.25
+	for k in WorldGen.HAMLETS:                                          # хутора — запущеннее
+		var f: Dictionary = WorldGen.HAMLETS[k]
+		if k != "h_dachi" and tp.distance_to(Vector2(f.x, f.y)) < float(f.r) + 10.0:
+			w += 0.18
+	return clampf(w, 0.0, 0.95)
 
 func _flush() -> void:
 	for key in _batch:
 		var b: Dictionary = _batch[key]
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true                                          # износ дома (shaders/props.gdshader)
 		mm.mesh = _meshes[b.model]
 		mm.instance_count = b.xf.size()
+		var roof := 1.0 if str(b.model).ends_with("_roof") else 0.0
+		var md := str(b.model)
+		var car := 1.0 if (md.begins_with("car_") or md.begins_with("tractor") or md.begins_with("trailer") or md.begins_with("boat") or md.begins_with("wagon")) else 0.0
 		for i in b.xf.size():
 			mm.set_instance_transform(i, b.xf[i])
+			var o: Vector3 = b.xf[i].origin
+			var tp := Vector2(o.x, o.z) / T
+			mm.set_instance_custom_data(i, Color(wear_of(b.model, tp), fposmod(o.x * 0.173 + o.z * 0.311, 1.0), roof, car))
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
 		mi.name = key.replace(".", "_")                                    # «модель|клетка» — по имени находит заставка (крыша дома героя)
