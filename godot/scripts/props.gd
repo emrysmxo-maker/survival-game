@@ -555,6 +555,8 @@ func _flush() -> void:
 			var kind := car
 			if md == "road_dash":
 				kind = 1.0                                              # разметка — стёртая краска (шейдер)
+			elif md == "clothesline":
+				kind = 0.25                                             # бельё качается на ветру (шейдер)
 			mm.set_instance_custom_data(i, Color(wr, sd, bflag, kind))
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
