@@ -14,17 +14,17 @@
 - Не тратить токены: не читать файлы целиком без нужды, не переделывать решённое.
 
 ## Текущее состояние (обновлять при каждом пуше, коротко)
-- Последняя сборка: 106 (apk_min 101). 106: главное меню «КАРАНТИН» (`menu.gd`, сохранение `user://save.cfg`, заставка — после «Новой игры»). 103–105: живые облака при отдалении (`clouds.gd`), камера на 300 м, заставка при первом входе. Герой в кепке и фланели, заставка 3D-комикс (101). На телефоне облака 104 не проверены. Подробно и следующие шаги — конец `CHANGES_DRAFT.md` («НА ЧЁМ ОСТАНОВИЛИСЬ»).
+- Последняя сборка: 115 (apk_min 112). 107–115 — детализация (картинка, износ `props.gdshader`, двери `doors.json`, фонари у генераторов, звук по месту, цвета моделей, осень, облака/тени, дым, листья). 106: главное меню «КАРАНТИН» (`menu.gd`, сохранение `user://save.cfg`). 103–105: живые облака при отдалении (`clouds.gd`), камера на 300 м, заставка при первом входе. Герой в кепке и фланели, заставка 3D-комикс (101). На телефоне облака 104 не проверены. Подробно и следующие шаги — конец `CHANGES_DRAFT.md` («НА ЧЁМ ОСТАНОВИЛИСЬ»).
 - Бойца и зомби в игре нет (удалены в 64), вместо них свободная камера `main.focus` + `camctl.gd`. Старое (мокап 100STYLE, Swat, «уже решено» про бег/стрельбу) — `docs/СБОРКИ.md` и git.
 - Запасной полный текст прежнего CLAUDE.md — `docs/запас/CLAUDE_полный.md`: НЕ читать и НЕ менять без прямой просьбы владельца.
 - **История сборок 35–101** (пути, команды, причины решений) — `docs/СБОРКИ.md`. Читать нужную строку по поиску, а не целиком.
 - Режим владельца: экономия токенов ВЫКЛЮЧЕНА (бонусные кредиты до 5 ноября); ответы короткие и по делу.
 
 ## Конвейеры (кратко; подробности — `docs/СБОРКИ.md`)
-- Постройки/машины/места/сюжет → один `godot/assets/props/props.glb`: `tools/props/build_all.py` (+ `tools/houses/house.py|places.py|story.py`, `tools/cars/car.py`, текстуры `tools/props/tex.py`, фото-текстуры `tools/houses/get_tex.py`). glTF: `export_vertex_color='NAME'`. Расстановка — `scripts/props.gd` (улицы, дворы, локации, `put()` со следом), кэш на телефоне `user://props_cache.bin`.
+- Постройки/машины/места/сюжет → один `godot/assets/props/props.glb`: `tools/props/build_all.py` (+ `tools/houses/house.py|places.py|story.py`, `tools/cars/car.py`, текстуры `tools/props/tex.py`, фото-текстуры `tools/houses/get_tex.py`). glTF: `export_vertex_color='NAME'`. Расстановка — `scripts/props.gd` (улицы, дворы, локации, `put()` со следом; материалы → `shaders/props.gdshader` с износом/током в custom data 0..1; двери по `assets/props/doors.json`; ток от `generator_shed`), кэш на телефоне `user://props_cache.bin`. Цвет вершин в `house.py _paint` — sRGB (не srgb2lin!).
 - Деревья: `tools/trees/treegen.py` (берёза/сосна/ель), `broadleaf.py` (осина, дуб, ольха, ива, яблоня, черёмуха), грибы `mushrooms.py`; LOD `_l1/_l2`, `kinds.json`.
 - Герой: `tools/character/hero.py` → `assets/character/hero.glb` (основа Human Base Meshes CC0, `get_base.sh`), мокап CMU `cmu.py`/`hero_mocap.py`/`get_cmu.sh` → `hero_clips.json`; показ без игры `hero_show.py`. Заставка-комикс — `scripts/intro.gd` (снимки заставки ~8 мин — не запускать без просьбы, только parsecheck).
-- Мир: `world_gen.gd` (лес массивами, хутора, дороги/асфальт, озёра, карьер, овраги, морок), `weather.gd`, `ambience.gd`, `crows.gd`, `clouds.gd` (облака при отдалении), `daynight.gd`.
+- Мир: `world_gen.gd` (лес массивами, хутора, дороги/асфальт, озёра, карьер, овраги, морок), `weather.gd`, `ambience.gd`, `crows.gd`, `clouds.gd` (облака при отдалении + тени облаков в ground.gdshader), `leaves.gd` (листья по ветру), `daynight.gd`.
 - Проверки: `parsecheck.gd`, `overlapcheck.gd` (OVL/ROAD/FENCE = 0), `mapcheck.gd`, `treecheck.gd`, `task.sh shot` (DRAW — вызовы/треугольники), `task.sh shaders`.
 
 ## Карта (фундамент под миссии)
