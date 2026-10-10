@@ -87,6 +87,9 @@ func _ready() -> void:
 	var crows = load("res://scripts/crows.gd").new()
 	crows.main = self
 	add_child(crows)                                        # стаи ворон над полями
+	var clouds = load("res://scripts/clouds.gd").new()
+	clouds.main = self
+	add_child(clouds)                                       # живые облака — видны при отдалении камеры
 	hud._refresh_q()
 	# трава/кусты раздвигаются у ног бойца — бойца нет, точка вдали
 	RenderingServer.global_shader_parameter_set("player_pos", Vector3(1e6, 0.0, 1e6))

@@ -9,6 +9,12 @@ REPO=$(cd "$(dirname "$0")/../.." && pwd)
 GV=4.3
 mkdir -p "$TOOLS/godot" "$TOOLS/blender"
 
+# программный Vulkan (lavapipe) и экран-заглушка — для снимков игры (task.sh shot)
+if [ ! -f /usr/share/vulkan/icd.d/lvp_icd.json ] && command -v apt-get >/dev/null; then
+	echo "== mesa-vulkan-drivers"
+	(apt-get install -y -q mesa-vulkan-drivers libvulkan1 xvfb >/dev/null 2>&1 || (apt-get update -q >/dev/null 2>&1 && apt-get install -y -q mesa-vulkan-drivers libvulkan1 xvfb >/dev/null 2>&1)) || echo "!! mesa не поставилась"
+fi
+
 # Godot
 G="$TOOLS/godot/Godot_v${GV}-stable_linux.x86_64"
 if [ ! -x "$G" ]; then
