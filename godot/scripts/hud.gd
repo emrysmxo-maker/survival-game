@@ -67,6 +67,12 @@ func _ready() -> void:
 	ub.pressed.connect(func():
 		Engine.set_meta("from_game", true)
 		get_tree().change_scene_to_file("res://boot.tscn"))
+	var mb := _button("☰ Главное меню", Vector2.ZERO, Vector2(190, 40), Color(0.3, 0.22, 0.12, 0.95))
+	mb.reparent(q_panel)
+	mb.pressed.connect(func():
+		q_panel.visible = false
+		main.save_game()
+		main.open_menu())
 	var ib := _button("▶ Заставка", Vector2.ZERO, Vector2(190, 40), Color(0.25, 0.12, 0.1, 0.95))
 	ib.reparent(q_panel)
 	ib.pressed.connect(func():

@@ -97,8 +97,11 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--bigmap"):
 		hud._open_big()
 	var args := OS.get_cmdline_user_args()
-	if args.has("--intro") or (not FileAccess.file_exists("user://intro_done") and not _has_prefix(args, "--shot=") and not args.has("--nointro")):
-		start_intro.call_deferred()                         # заставка «как всё началось» — при первом входе
+	get_tree().set_quit_on_go_back(false)                   # «назад» на телефоне — в меню, а не выход
+	if args.has("--intro"):
+		start_intro.call_deferred()                         # заставка «как всё началось» (теперь — из «Новой игры»)
+	elif args.has("--menu") or (not _has_prefix(args, "--shot=") and not args.has("--nomenu")):
+		open_menu.call_deferred()                           # главное меню (scripts/menu.gd)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--shot="):                        # снимки без телефона (scripts/shot.gd)
 			var sh = load("res://scripts/shot.gd").new()
@@ -111,6 +114,96 @@ func _has_prefix(args: PackedStringArray, pre: String) -> bool:
 			return true
 	return false
 
+# ---------------- главное меню и сохранение ----------------
+const SAVE := "user://save.cfg"
+var menu = null
+var game := {"diff": 1, "day": 1, "play": 0.0}       # сложность 0..3, день выживания, секунд в игре
+var _autosave := 120.0
+var _last_t := 0.0
+
+func open_menu() -> void:
+	if menu != null or intro != null:
+		return
+	menu = load("res://scripts/menu.gd").new()
+	menu.main = self
+	add_child(menu)
+	menu.closed.connect(func(): menu = null)
+
+func has_save() -> bool:
+	return FileAccess.file_exists(SAVE)
+
+func save_label() -> String:
+	var cf := ConfigFile.new()
+	if cf.load(SAVE) != OK:
+		return ""
+	var f: Vector2 = cf.get_value("g", "focus", Vector2.ZERO)
+	var where := ""
+	var best := 1e9
+	for k in WorldGen.LANDMARKS:
+		var lm: Dictionary = WorldGen.FEATURES[k]
+		var d := f.distance_to(Vector2(lm.x, lm.y))
+		if d < best:
+			best = d
+			where = lm.name
+	return "день %d · %s" % [int(cf.get_value("g", "day", 1)), where if best < 60.0 else "в пути"]
+
+func save_game() -> void:
+	if menu != null or intro != null:
+		return
+	var cf := ConfigFile.new()
+	cf.set_value("g", "diff", game.diff)
+	cf.set_value("g", "day", game.day)
+	cf.set_value("g", "play", game.play)
+	cf.set_value("g", "focus", focus)
+	cf.set_value("g", "time", daynight.t)
+	cf.set_value("g", "cam", Vector3(cam_yaw, cam_elev, cam_size))
+	cf.save(SAVE)
+
+func continue_game() -> void:
+	var cf := ConfigFile.new()
+	if cf.load(SAVE) != OK:
+		new_game(1)
+		return
+	game.diff = int(cf.get_value("g", "diff", 1))
+	game.day = int(cf.get_value("g", "day", 1))
+	game.play = float(cf.get_value("g", "play", 0.0))
+	daynight.t = float(cf.get_value("g", "time", 10.0))
+	var c: Vector3 = cf.get_value("g", "cam", Vector3(CAM_YAW_DEG, CAM_ELEV_DEG, CAM_SIZE))
+	cam_yaw = c.x; cam_elev = c.y; cam_size = c.z
+	_last_t = daynight.t
+	teleport(cf.get_value("g", "focus", Vector2(4, 6)))
+
+func new_game(diff: int) -> void:
+	game = {"diff": diff, "day": 1, "play": 0.0}
+	cam_yaw = CAM_YAW_DEG; cam_elev = CAM_ELEV_DEG; cam_size = CAM_SIZE
+	daynight.t = 9.0
+	_last_t = daynight.t
+	teleport(Vector2(4, 6))
+	save_game()
+	start_intro()                                           # «как всё началось»; по концу — у люка бункера
+
+func _game_clock(dt: float) -> void:
+	if menu != null or intro != null:
+		return
+	game.play += dt
+	if daynight.t < _last_t - 12.0:                         # полночь — новый день
+		game.day += 1
+	_last_t = daynight.t
+	_autosave -= dt
+	if _autosave <= 0.0:
+		_autosave = 120.0
+		save_game()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if menu != null:
+			menu.back()
+		elif intro == null:
+			save_game()
+			open_menu()
+
 var intro = null
 func start_intro() -> void:
 	if intro != null or props.story.is_empty() or not ResourceLoader.exists("res://assets/character/hero.glb"):
@@ -121,7 +214,8 @@ func start_intro() -> void:
 	hud.visible = false
 	intro.finished.connect(func():
 		intro = null
-		hud.visible = true)
+		hud.visible = true
+		save_game())
 
 func teleport(t: Vector2) -> void:
 	var lim := WorldGen.MAP_RADIUS - 5.0
@@ -172,6 +266,7 @@ func _update_camera(dt: float) -> void:
 
 func _process(dt_raw: float) -> void:
 	var dt := minf(dt_raw, 0.05)
+	_game_clock(dt)
 	_update_camera(dt)
 	world.update_world(focus, cam)
 	RenderingServer.global_shader_parameter_set("sun_dir", daynight.sun.global_transform.basis.z)

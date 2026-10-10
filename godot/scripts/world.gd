@@ -115,12 +115,20 @@ func _find_mesh(model: String, part: String, node: Variant) -> Array:
 			st.append([c, t])
 	return first if node == null else []
 
+var foliage_mats: Array = []
+# «окно» в кронах вокруг точки (главное меню — костёр не закрывают деревья); r = 0 — выключить
+func set_see_hole(pos: Vector3, r: float) -> void:
+	for m in foliage_mats:
+		m.set_shader_parameter("see_pos", pos)
+		m.set_shader_parameter("see_r", r)
+
 func _foliage_mesh(src: ArrayMesh, cat: String, href: float) -> ArrayMesh:
 	var m: ArrayMesh = src.duplicate()
 	for s in m.get_surface_count():
 		var o := m.surface_get_material(s)
 		var mat := ShaderMaterial.new()
 		mat.shader = load("res://shaders/foliage.gdshader")
+		foliage_mats.append(mat)
 		if o is BaseMaterial3D:
 			mat.set_shader_parameter("albedo_tex", o.albedo_texture)
 			if o.normal_texture:

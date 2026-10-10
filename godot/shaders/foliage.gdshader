@@ -12,6 +12,8 @@ uniform float sway = 0.5;              // сила ветра (0 — не кач
 uniform float push = 0.0;              // раздвигание бойцом (0 — не раздвигается)
 uniform float height_ref = 4.0;        // высота модели, м (для ветра)
 uniform float translucency = 0.2;
+uniform vec3 see_pos;                  // «окно» в кронах (главное меню): листва ближе к камере, чем эта точка,
+uniform float see_r = 0.0;             // в круге see_r м вокруг неё на экране растворяется точками (0 — выкл)
 global uniform vec3 player_pos;
 global uniform float wind_on;
 
@@ -39,6 +41,15 @@ void vertex() {
 void fragment() {
 	vec4 c = texture(albedo_tex, UV);
 	if (c.a < alpha_cut) { discard; }
+	if (see_r > 0.0) {
+		vec3 dv = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz - see_pos;
+		float front = dot(dv, INV_VIEW_MATRIX[2].xyz);
+		float d = length(vec2(dot(dv, INV_VIEW_MATRIX[0].xyz), dot(dv, INV_VIEW_MATRIX[1].xyz)));
+		float k = smoothstep(see_r, see_r * 0.55, d) * smoothstep(1.0, 3.0, front);
+		vec2 q = mod(floor(FRAGCOORD.xy), 4.0);
+		float bayer = (mod(q.x + q.y * 2.0, 4.0) * 4.0 + mod(q.y, 2.0) * 2.0 + mod(q.x, 2.0) + 0.5) / 16.0;
+		if (k > bayer) { discard; }
+	}
 	ALBEDO = c.rgb * tint.rgb * COLOR.rgb;     // затенение внутри кроны (цвет вершин; без него — белый)
 	ROUGHNESS = 0.9;
 	if (has_normal) { NORMAL_MAP = texture(normal_tex, UV).rgb; }

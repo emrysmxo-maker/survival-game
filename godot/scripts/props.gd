@@ -78,6 +78,7 @@ const FENCE_LEN := {"fence_picket": 2.6, "fence_rails": 2.7, "fence_board": 2.65
 var _meshes := {}
 var _lit: Array = []                  # материалы окон, где по ночам горит свет
 var _fire: OmniLight3D                # костёр в лагере
+var loc_th := {}                      # поворот двора локации (рад), для меню: где скамейки у костра
 var _night := -1.0
 var _batch := {}
 var _rng := RandomNumberGenerator.new()
@@ -142,7 +143,81 @@ func _after_ready(t0: int) -> void:
 	_fire.position = Vector3(cf.x * T, _h(cf.x, cf.y) + 0.8, cf.y * T)
 	_fire.visible = false
 	add_child(_fire)
+	_flames(Vector3(cf.x * T, _h(cf.x, cf.y), cf.y * T))
 	print("props: ", _n, " партий ", _batch.size(), " участков ", _plots.size(), " за ", Time.get_ticks_msec() - t0, " мс; отказы участков: ", _rej)
+
+# пламя костра: три перекрещенных языка (шейдер, без текстур) + искры
+const FLAME_SH := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+uniform float seed = 0.0;
+float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+void vertex() {   // поворот к камере вокруг вертикали
+	vec3 z = normalize(vec3(INV_VIEW_MATRIX[2].x, 0.0, INV_VIEW_MATRIX[2].z));
+	vec3 x = vec3(z.z, 0.0, -z.x);
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(vec4(x * length(MODEL_MATRIX[0].xyz), 0.0), vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0), vec4(z, 0.0), MODEL_MATRIX[3]);
+}
+void fragment() {
+	vec2 uv = UV; uv.y = 1.0 - uv.y;                 // 0 низ .. 1 верх
+	float t = TIME * 1.6 + seed * 7.0;
+	float nz = n(vec2(uv.x * 4.0 + seed * 3.0, uv.y * 3.0 - t * 2.2)) * 0.6 + n(vec2(uv.x * 9.0, uv.y * 7.0 - t * 3.7)) * 0.4;
+	float w = (1.0 - uv.y) * 0.5 + 0.06;              // язык уже кверху
+	float dx = abs(uv.x - 0.5 + (nz - 0.5) * 0.25 * uv.y);
+	float m = smoothstep(w, w * 0.35, dx) * smoothstep(1.0, 0.25, uv.y + nz * 0.45) * smoothstep(0.0, 0.08, uv.y);
+	vec3 c = mix(vec3(0.9, 0.18, 0.02), vec3(1.0, 0.62, 0.12), smoothstep(0.1, 0.5, m));
+	c = mix(c, vec3(1.0, 0.95, 0.7), smoothstep(0.65, 1.0, m));
+	ALBEDO = c * m * 2.2;
+}
+"""
+func _flames(at: Vector3) -> void:
+	var sh := Shader.new()
+	sh.code = FLAME_SH
+	var q := QuadMesh.new()
+	q.size = Vector2(0.6, 0.8)
+	q.center_offset = Vector3(0, 0.4, 0)
+	for i in 3:
+		var mi := MeshInstance3D.new()
+		mi.mesh = q
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("seed", float(i) * 1.37)
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position = at + Vector3([0.0, 0.14, -0.12][i], 0.12, [0.0, 0.1, -0.08][i])
+		mi.scale = Vector3.ONE * [1.0, 0.75, 0.8][i]
+		add_child(mi)
+	var sp := CPUParticles3D.new()                              # искры
+	sp.amount = 22
+	sp.lifetime = 2.2
+	sp.position = at + Vector3(0, 0.35, 0)
+	sp.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	sp.emission_sphere_radius = 0.25
+	sp.direction = Vector3.UP
+	sp.spread = 18.0
+	sp.initial_velocity_min = 0.8
+	sp.initial_velocity_max = 1.8
+	sp.gravity = Vector3(0.25, 0.15, 0.1)
+	sp.damping_min = 0.3
+	sp.damping_max = 0.6
+	sp.scale_amount_min = 0.5
+	sp.scale_amount_max = 1.0
+	var g := Gradient.new()
+	g.set_color(0, Color(1.0, 0.8, 0.35, 1.0))
+	g.set_color(1, Color(1.0, 0.25, 0.05, 0.0))
+	sp.color_ramp = g
+	var em := QuadMesh.new()
+	em.size = Vector2(0.045, 0.045)
+	var mm := StandardMaterial3D.new()
+	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mm.vertex_color_use_as_albedo = true
+	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	em.material = mm
+	sp.mesh = em
+	add_child(sp)
 
 # ночь: в некоторых окнах свет, костёр горит (вызывает main.gd каждый кадр)
 func set_night(k: float) -> void:
@@ -165,7 +240,7 @@ func _cache_key() -> String:
 		return ""                                                     # на ПК/сервере всегда считаем заново (проверки кода)
 	var b := FileAccess.get_file_as_string("res://build.txt").strip_edges()
 	var f := FileAccess.open("res://assets/props/props.glb", FileAccess.READ)
-	return "%s|%d|v1" % [b, f.get_length() if f else 0]
+	return "%s|%d|v2" % [b, f.get_length() if f else 0]
 
 func _cache_read(key: String) -> bool:
 	if key == "" or not FileAccess.file_exists(CACHE):
@@ -182,6 +257,7 @@ func _cache_read(key: String) -> bool:
 	WorldGen._xt = d.xt
 	WorldGen._xt_keys = d.xt_keys
 	_n = d.n
+	loc_th = d.get("loc_th", {})
 	return true
 
 func _cache_write(key: String) -> void:
@@ -189,7 +265,7 @@ func _cache_write(key: String) -> void:
 		return
 	var f := FileAccess.open(CACHE, FileAccess.WRITE)
 	if f:
-		f.store_var({"key": key, "batch": _batch, "roads": WorldGen._roads, "clr": WorldGen._clr, "xt": WorldGen._xt, "xt_keys": WorldGen._xt_keys, "n": _n})
+		f.store_var({"key": key, "batch": _batch, "roads": WorldGen._roads, "clr": WorldGen._clr, "xt": WorldGen._xt, "xt_keys": WorldGen._xt_keys, "n": _n, "loc_th": loc_th})
 
 func _load() -> void:
 	var path := "res://assets/props/props.glb"
@@ -852,6 +928,7 @@ func _locations() -> void:
 					best = hits
 					th = t
 			_rej["поворот " + key] = "%d° задели %.0f" % [roundi(rad_to_deg(th)), best]
+		loc_th[key] = th
 		var far := 0.0
 		for p in LOCS[key]:
 			far = maxf(far, Vector2(p[1], p[2]).length() * K)
