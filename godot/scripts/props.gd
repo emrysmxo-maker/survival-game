@@ -561,6 +561,102 @@ func _flush() -> void:
 		mi.name = key.replace(".", "_")                                    # «модель|клетка» — по имени находит заставка (крыша дома героя)
 		add_child(mi)
 	_build_doors()
+	_smokes()
+
+# ---------------- дым: из труб у пары изб (там кто-то живёт) и над костром лагеря ----------------
+const SMOKE_HOUSES := ["house_izba_a", "house_izba_b", "house_izba_c", "house_cabin"]
+var _smoke_tex: Texture2D
+func _chimney_top(model: String) -> Vector3:
+	var m: Mesh = _meshes.get(model + "_roof")
+	if m == null:
+		return Vector3.INF
+	var top := -1e9
+	var pts: Array = []
+	for si in m.get_surface_count():
+		var arrs := m.surface_get_arrays(si)
+		if arrs.size() <= Mesh.ARRAY_VERTEX or arrs[Mesh.ARRAY_VERTEX] == null:
+			continue                                                    # без экрана (проверки) — данных сетки нет
+		for v: Vector3 in arrs[Mesh.ARRAY_VERTEX]:
+			if v.y > top + 0.03:
+				top = v.y
+				pts = [v]
+			elif v.y > top - 0.03:
+				pts.append(v)
+	var c := Vector3.ZERO
+	for v: Vector3 in pts:
+		c += v
+	return c / maxf(pts.size(), 1.0)
+
+func _smoke_at(p: Vector3, k: float) -> void:
+	if _smoke_tex == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 0.55))
+		g.set_color(1, Color(1, 1, 1, 0.0))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 64
+		gt.height = 64
+		_smoke_tex = gt
+	var sp := CPUParticles3D.new()
+	sp.amount = int(14 * k)
+	sp.lifetime = 7.0
+	sp.preprocess = 7.0
+	sp.position = p
+	sp.direction = Vector3.UP
+	sp.spread = 8.0
+	sp.initial_velocity_min = 0.5
+	sp.initial_velocity_max = 0.8
+	sp.gravity = Vector3(0.35, 0.12, 0.12)                      # ветер сносит, тёплый дым поднимается
+	sp.damping_min = 0.05
+	sp.damping_max = 0.1
+	sp.scale_amount_min = 0.8 * k
+	sp.scale_amount_max = 1.2 * k
+	var sc := Curve.new()
+	sc.add_point(Vector2(0, 0.35))
+	sc.add_point(Vector2(1, 2.2))
+	sp.scale_amount_curve = sc
+	var cr := Gradient.new()
+	cr.set_color(0, Color(0.62, 0.62, 0.64, 0.0))
+	cr.add_point(0.12, Color(0.6, 0.6, 0.62, 0.7))
+	cr.set_color(1, Color(0.75, 0.76, 0.78, 0.0))
+	sp.color_ramp = cr
+	var q := QuadMesh.new()
+	q.size = Vector2(1.2, 1.2)
+	var mm := StandardMaterial3D.new()
+	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mm.vertex_color_use_as_albedo = true
+	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mm.albedo_texture = _smoke_tex
+	mm.disable_receive_shadows = true
+	q.material = mm
+	sp.mesh = q
+	sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(sp)
+
+func _smokes() -> void:
+	var cands: Array = []
+	for key in _batch:
+		var md: String = _batch[key].model
+		if md in SMOKE_HOUSES:
+			for xf: Transform3D in _batch[key].xf:
+				cands.append([fposmod(xf.origin.x * 0.731 + xf.origin.z * 0.193, 1.0), md, xf])
+	cands.sort_custom(func(a, b): return a[0] < b[0])
+	var n := 0
+	for c in cands:
+		if n >= 3:
+			break
+		var top := _chimney_top(c[1])
+		if top == Vector3.INF:
+			continue
+		_smoke_at((c[2] as Transform3D) * top + Vector3(0, 0.15, 0), 1.0)
+		if OS.get_environment("DOORDBG") != "": print("SMOKE %.0f %.0f" % [c[2].origin.x / T, c[2].origin.z / T])
+		n += 1
+	var cf: Dictionary = WorldGen.FEATURES["camp"]                    # костёр лагеря — дым пожиже
+	_smoke_at(Vector3(cf.x * T, _h(cf.x, cf.y) + 1.0, cf.y * T), 0.7)
 
 func _h(x: float, y: float) -> float:
 	return WorldGen.height_m(x, y)
