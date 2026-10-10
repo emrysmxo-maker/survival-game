@@ -97,8 +97,8 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--bigmap"):
 		hud._open_big()
 	var args := OS.get_cmdline_user_args()
-	if args.has("--intro"):                                 # заставка при входе пока ОТКЛЮЧЕНА (просьба владельца); вручную — ⚙ «▶ Заставка»
-		start_intro.call_deferred()
+	if args.has("--intro") or (not FileAccess.file_exists("user://intro_done") and not _has_prefix(args, "--shot=") and not args.has("--nointro")):
+		start_intro.call_deferred()                         # заставка «как всё началось» — при первом входе
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--shot="):                        # снимки без телефона (scripts/shot.gd)
 			var sh = load("res://scripts/shot.gd").new()
