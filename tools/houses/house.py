@@ -287,6 +287,20 @@ def window(hb, S, p, axis, outward, w, h, rnd, kind):
 			rot = (0, rnd.uniform(-0.15, 0.15), 0) if axis == "x" else (rnd.uniform(-0.15, 0.15), 0, 0)
 			hb.box(mat("wood_raw"), tuple(q), (w + 0.3, 0.03, 0.14) if axis == "x" else (0.03, w + 0.3, 0.14), (0.85, 0.85, 0.85), rot)
 
+DOOR_SEP = True        # полотна дверей — отдельно (сборка build_all.py), петли — в doors.json
+DOORS = {}             # дом -> [дверь]
+CUR = [""]             # какой дом сейчас строится
+
+def door_leaf(name, kind):
+	"""Полотно двери 1×2 м, петля — у края x=0 по оси Z (масштаб под проём — в игре)."""
+	hb = HB()
+	m = mat("door") if kind == "wood" else mat("metal_paint")
+	col = (1, 1, 1) if kind == "wood" else (0.45, 0.3, 0.22)
+	hb.box(m, (0.5, 0.0, 0.0), (1.0, 0.045, 2.0), col)
+	hb.box(mat("metal"), (0.85, -0.05, -0.05), (0.1, 0.05, 0.03), (0.6, 0.6, 0.6))      # ручка с обеих сторон
+	hb.box(mat("metal"), (0.85, 0.05, -0.05), (0.1, 0.05, 0.03), (0.6, 0.6, 0.6))
+	return hb.build(name, ao=False)
+
 def door(hb, p, axis, outward, w, h, rnd, open_k=0.0, kind="wood"):
 	nrm = Vector((0, outward, 0)) if axis == "x" else Vector((outward, 0, 0))
 	tan = Vector((1, 0, 0)) if axis == "x" else Vector((0, 1, 0))
@@ -303,6 +317,11 @@ def door(hb, p, axis, outward, w, h, rnd, open_k=0.0, kind="wood"):
 	ang = open_k * math.radians(80)                                   # открывается внутрь
 	hinge = c + tan * (-w / 2 + 0.06)
 	leaf_w = w - 0.12
+	if DOOR_SEP and CUR[0]:
+		# полотно — отдельная модель door_leaf_* (игра открывает её сама, props.gd): записать петлю и размер в doors.json
+		DOORS.setdefault(CUR[0], []).append({"p": [round(hinge.x, 3), round(hinge.y, 3), round(hinge.z, 3)], "tan": [tan.x, tan.y],
+			"in": [-nrm.x, -nrm.y], "w": round(leaf_w, 3), "h": round(h - 0.1, 3), "kind": kind, "open": round(open_k, 3)})
+		return
 	dv = tan * math.cos(ang) - nrm * math.sin(ang)
 	mid = hinge + dv * leaf_w / 2
 	m = mat("door") if kind == "wood" else mat("metal_paint")
@@ -541,6 +560,7 @@ def house(name, spec, seed):
 	"""spec: L, D, wall (материал), wcol, t, h, plinth, roof ('gable'/'hip'), rmat, rcol, pitch, floor, inner,
 	front/back/left/right — окна [(pos, w, h)], door (pos, w), porch, chimney (x, y), stove, rooms [перегородки], extras."""
 	rnd = random.Random(seed)
+	CUR[0] = name
 	S = spec
 	L, D = S["L"], S["D"]
 	t = S.get("t", 0.3)

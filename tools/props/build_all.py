@@ -40,6 +40,10 @@ for nm, fn in story2.JOBS.items():
     if roof is not None:
         roof.name = nm + '_roof'
         names.append(nm + '_roof')
+for nm, kind in (("door_leaf_wood", "wood"), ("door_leaf_metal", "metal")):     # полотна дверей (открывает игра)
+    if only and nm not in only.split(','): continue
+    house2.door_leaf(nm, kind).name = nm
+    names.append(nm); count += 1
 for nm, fn in cars2.JOBS.items():
     if only and nm not in only.split(','): continue
     o = fn()
@@ -58,3 +62,6 @@ tris = sum(len(o.data.polygons) for o in bpy.data.objects if o.type == 'MESH')
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=True, export_image_format='AUTO', export_jpeg_quality=82, export_apply=True, export_vertex_color='NAME', export_vertex_color_name='Color', export_all_vertex_colors=False, export_tangents=True)   # 'ACTIVE' в Blender 5.2 пишет пустой белый COLOR_0, краска уходила в COLOR_1 — Godot её не видел
 print('моделей', count, 'полигонов', tris, 'файл', os.path.getsize(OUT) // 1024, 'КБ')
 open(OUT.replace('.glb', '_names.txt'), 'w').write('\n'.join(names))
+import json
+json.dump(house2.DOORS, open(os.path.join(os.path.dirname(OUT), 'doors.json'), 'w'), ensure_ascii=False, indent=0)
+print('дверей', sum(len(v) for v in house2.DOORS.values()), 'в', len(house2.DOORS), 'домах')

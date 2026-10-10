@@ -47,6 +47,7 @@ case "$task" in
 		mkdir -p "$T/props/all"
 		ONLY="${1:-${ONLY:-}}" "$BPY" -I "$REPO/tools/props/build_all.py" "$T/props/all/props.glb" 2>&1 | sed '/Draco/d' | tail -30
 		cp "$T/props/all/props.glb" "$REPO/godot/assets/props/props.glb"
+		[ -z "${1:-${ONLY:-}}" ] && cp "$T/props/all/doors.json" "$REPO/godot/assets/props/doors.json"     # петли дверей (props.gd)
 		ls -la "$REPO/godot/assets/props/props.glb"; imp; echo "props ok (нужен новый APK: поднять godot/apk_min.txt)" ;;
 	houses|cars|places)
 		f=$REPO/tools/houses/house.py; [ "$task" = cars ] && f=$REPO/tools/cars/car.py; [ "$task" = places ] && f=$REPO/tools/houses/places.py

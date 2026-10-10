@@ -361,6 +361,89 @@ func wear_of(model: String, tp: Vector2) -> float:
 			w += 0.18
 	return clampf(w, 0.0, 0.95)
 
+# ---------------- двери: открываются сами, когда рядом игрок (пока — точка камеры) ----------------
+# полотна — отдельные модели door_leaf_wood/metal (tools/houses/house.py), петли домов — assets/props/doors.json
+const DOOR_R := 1.9                   # м: ближе — дверь открыта
+const DOOR_OPEN := 1.66               # рад (95°) внутрь
+const DCELL := 8.0                    # тайлов: клетка поиска дверей
+var doors: Array = []                 # {mm, i, base: Transform3D дома, p, t, n, w, h, rest, a, pos (тайлы)}
+var _dgrid := {}
+var _dactive := {}
+func _build_doors() -> void:
+	if not _meshes.has("door_leaf_wood") or not FileAccess.file_exists("res://assets/props/doors.json"):
+		return                                                          # старый props.glb — двери в доме
+	var spec = JSON.parse_string(FileAccess.get_file_as_string("res://assets/props/doors.json"))
+	if typeof(spec) != TYPE_DICTIONARY:
+		return
+	var lists := {"wood": [], "metal": []}
+	for key in _batch:
+		var b: Dictionary = _batch[key]
+		if not spec.has(b.model):
+			continue
+		for xf: Transform3D in b.xf:
+			for d in spec[b.model]:
+				var e := {"base": xf, "p": Vector3(d.p[0], d.p[2], -d.p[1]), "t": Vector3(d.tan[0], 0, -d.tan[1]), "n": Vector3(d["in"][0], 0, -d["in"][1]),
+					"w": float(d.w), "h": float(d.h), "rest": float(d.open) * deg_to_rad(80.0), "kind": "metal" if d.kind == "metal" else "wood", "wear": wear_of(b.model, Vector2(xf.origin.x, xf.origin.z) / T)}
+				e.a = e.rest
+				var wp: Vector3 = xf * (e.p + e.t * e.w * 0.5)
+				e.pos = Vector2(wp.x, wp.z) / T
+				lists[e.kind].append(e)
+	for kind in lists:
+		var arr: Array = lists[kind]
+		if arr.is_empty() or not _meshes.has("door_leaf_" + kind):
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = _meshes["door_leaf_" + kind]
+		mm.instance_count = arr.size()
+		var mi := MultiMeshInstance3D.new()
+		mi.multimesh = mm
+		mi.name = "doors_" + kind
+		add_child(mi)
+		for i in arr.size():
+			var e: Dictionary = arr[i]
+			e.mm = mm
+			e.i = i
+			mm.set_instance_custom_data(i, Color(e.wear, fposmod(e.base.origin.x * 0.173 + e.base.origin.z * 0.311, 1.0), 0.0, 0.0))
+			_door_xf(e)
+			var ck := Vector2i(floori(e.pos.x / DCELL), floori(e.pos.y / DCELL))
+			if not _dgrid.has(ck):
+				_dgrid[ck] = []
+			_dgrid[ck].append(doors.size())
+			doors.append(e)
+	print("props: дверей ", doors.size())
+	if OS.get_environment("DOORDBG") != "":
+		for e in doors.slice(0, 40):
+			print("DOOR %.1f %.1f rest %.2f" % [e.pos.x, e.pos.y, e.rest])
+
+func _door_xf(e: Dictionary) -> void:
+	var dv: Vector3 = e.t * cos(e.a) + e.n * sin(e.a)
+	var bx := Basis(dv * e.w, Vector3.UP * (e.h * 0.5), dv.cross(Vector3.UP))
+	e.mm.set_instance_transform(e.i, e.base * Transform3D(bx, e.p))
+
+# каждый кадр (main.gd): двери у точки at (тайлы) открываются, остальные — к своему положению
+func update_doors(at: Vector2, dt: float) -> void:
+	if doors.is_empty():
+		return
+	var c := Vector2i(floori(at.x / DCELL), floori(at.y / DCELL))
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			for i in _dgrid.get(c + Vector2i(dx, dy), []):
+				_dactive[i] = true
+	var done := []
+	for i in _dactive:
+		var e: Dictionary = doors[i]
+		var want: float = DOOR_OPEN if at.distance_to(e.pos) * T < DOOR_R else e.rest
+		var na: float = move_toward(e.a, want, dt * 2.6)
+		if na != e.a:
+			e.a = na
+			_door_xf(e)
+		elif at.distance_to(e.pos) > DCELL * 2.0:
+			done.append(i)
+	for i in done:
+		_dactive.erase(i)
+
 func _flush() -> void:
 	for key in _batch:
 		var b: Dictionary = _batch[key]
@@ -381,6 +464,7 @@ func _flush() -> void:
 		mi.multimesh = mm
 		mi.name = key.replace(".", "_")                                    # «модель|клетка» — по имени находит заставка (крыша дома героя)
 		add_child(mi)
+	_build_doors()
 
 func _h(x: float, y: float) -> float:
 	return WorldGen.height_m(x, y)
