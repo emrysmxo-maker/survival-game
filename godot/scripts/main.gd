@@ -91,6 +91,9 @@ func _ready() -> void:
 	var clouds = load("res://scripts/clouds.gd").new()
 	clouds.main = self
 	add_child(clouds)                                       # живые облака — видны при отдалении камеры
+	var leaves = load("res://scripts/leaves.gd").new()
+	leaves.main = self
+	add_child(leaves)                                       # листья по ветру у камеры
 	hud._refresh_q()
 	# трава/кусты раздвигаются у ног бойца — бойца нет, точка вдали
 	RenderingServer.global_shader_parameter_set("player_pos", Vector3(1e6, 0.0, 1e6))
