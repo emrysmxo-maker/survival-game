@@ -30,6 +30,8 @@ func apply(l: int) -> void:
 	RenderingServer.directional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH][l])
 	RenderingServer.global_shader_parameter_set("q_ground_normals", l >= 2)
 	apply_fps()
+	if main and main.daynight and main.daynight.env:
+		main.daynight.env.glow_enabled = l >= 1
 	if main and main.world:
 		main.world.load_radius = [2, 2, 3, 3][l]
 		main.world.crown_shadows = l >= 1

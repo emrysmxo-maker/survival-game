@@ -12,7 +12,7 @@ var env: Environment
 var night := 0.0       # 0 день .. 1 ночь (окна, костёр)
 var cloud := 0.0       # облачность 0..1 (weather.gd): солнце слабее, тени мягче
 
-const C_DAY := Color(1.0, 0.98, 0.94)
+const C_DAY := Color(1.0, 0.95, 0.87)          # солнце чуть теплее, тени (небо) холоднее — осень
 const C_GOLD := Color(1.0, 0.77, 0.55)
 const C_NIGHT := Color(0.28, 0.35, 0.56)
 
@@ -22,7 +22,20 @@ func setup(root: Node3D) -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.04, 0.05, 0.04)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	# картинка «как в кино», а не мультик: мягкая кривая Filmic, цвет конца октября (приглушённый), свечение огней
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.18
+	env.tonemap_white = 6.0
+	env.adjustment_enabled = true
+	env.adjustment_brightness = 1.0
+	env.adjustment_contrast = 1.07
+	env.adjustment_saturation = 0.8
+	env.glow_enabled = true                                  # ночью светятся окна, костёр, фонари (выкл на «Низком»)
+	env.glow_intensity = 0.55
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.05
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	we.environment = env
 	root.add_child(we)
 	sun = DirectionalLight3D.new()
@@ -71,7 +84,7 @@ func apply() -> void:
 	sun.visible = day > 0.01
 	moon.light_energy = 0.22 * (1.0 - day)
 	moon.visible = day < 0.99
-	env.ambient_light_color = Color(0.62, 0.66, 0.62).lerp(C_NIGHT, 1.0 - day)
+	env.ambient_light_color = Color(0.58, 0.64, 0.72).lerp(C_NIGHT, 1.0 - day)
 	env.ambient_light_energy = lerpf(0.3, 0.5, day) * (1.0 + 0.25 * cloud)
 
 func label() -> String:
