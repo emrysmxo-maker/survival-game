@@ -21,11 +21,13 @@ float ssf(float e0, float e1, float x) { float t = clamp((x - e0) / (e1 - e0), 0
 varying vec4 w1;
 varying vec2 w2;
 varying vec2 tile;
+varying float forest;                     // лесистость (world.gd CUSTOM0): опавшая листва и хвоя
 
 void vertex() {
 	w1 = COLOR;
 	w2 = UV2;
 	tile = UV;
+	forest = CUSTOM0.r;
 	// касательные для карт рельефа: земля почти горизонтальная — оси мира
 	TANGENT = normalize(vec3(1.0, 0.0, 0.0) - NORMAL * NORMAL.x);
 	BINORMAL = normalize(cross(NORMAL, TANGENT));
@@ -79,6 +81,13 @@ void fragment() {
 	c *= bright;
 	c = mix(c, c * vec3(1.10, 1.03, 0.80), ssf(0.55, 0.8, m11) * (w[1] * 0.6 + clearing * 0.3));   // выгоревшая трава
 	c = mix(c, c * vec3(0.86, 1.04, 0.84), ssf(0.45, 0.2, m40) * 0.5);                             // сочная зелень в низинах
+	// под лесом — опавшая листва (жёлтая, рыжая, бурая) пятнами, гуще в глубине леса; на дороге и в воде нет
+	float lit = ssf(0.25, 0.85, forest) * (1.0 - clearing * 0.7) * (1.0 - path) * ssf(0.3, 0.6, m11 * 0.6 + m4 * 0.4 + forest * 0.3);
+	if (lit > 0.01) {
+		vec3 leaf = mix(vec3(0.42, 0.26, 0.09), vec3(0.58, 0.42, 0.12), ssf(0.3, 0.7, m4));
+		leaf = mix(leaf, vec3(0.3, 0.2, 0.11), ssf(0.6, 0.8, m11));            // бурые, прелые
+		c = mix(c, leaf * mix(0.8, 1.1, m4), lit * 0.75);
+	}
 	// асфальт: тёмный, с заплатками, трещинами и выбоинами (заброшено ~2 года)
 	if (asph > 0.0) {
 		vec3 ac = vec3(0.105, 0.105, 0.11) * mix(0.82, 1.18, m4) * mix(0.9, 1.1, m40);

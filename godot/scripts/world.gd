@@ -422,6 +422,7 @@ func _build_chunk(k: Vector2i) -> void:
 	var cols := PackedColorArray(); cols.resize(n * n)
 	var uv := PackedVector2Array(); uv.resize(n * n)
 	var uv2 := PackedVector2Array(); uv2.resize(n * n)
+	var fo := PackedFloat32Array(); fo.resize(n * n)       # лесистость — опавшая листва на земле (ground.gdshader CUSTOM0)
 	var st := step * WorldGen.T
 	for j in n:
 		for i in n:
@@ -439,6 +440,7 @@ func _build_chunk(k: Vector2i) -> void:
 			cols[id] = Color(L[0], L[1], L[2], L[3])
 			uv[id] = Vector2(x, y)
 			uv2[id] = Vector2(L[4], L[5])
+			fo[id] = WorldGen.tree_density(x, y)
 	var idx := PackedInt32Array()
 	for j in GRID:
 		for i in GRID:
@@ -490,7 +492,7 @@ func _build_chunk(k: Vector2i) -> void:
 		var bs: Basis = tr.basis
 		bufs[o.key].append_array([bs.x.x, bs.y.x, bs.z.x, tr.origin.x, bs.x.y, bs.y.y, bs.z.y, tr.origin.y, bs.x.z, bs.y.z, bs.z.z, tr.origin.z])
 	content["bufs"] = bufs
-	var data := {"wv": wv, "wc": wc, "wi": widx, "v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "i": idx, "content": content}
+	var data := {"wv": wv, "wc": wc, "wi": widx, "v": verts, "n": norms, "c": cols, "uv": uv, "uv2": uv2, "fo": fo, "i": idx, "content": content}
 	_mutex.lock()
 	results[k] = data
 	_mutex.unlock()
@@ -503,9 +505,10 @@ func _finish_chunk(k: Vector2i, data: Dictionary) -> void:
 	a[Mesh.ARRAY_COLOR] = data.c
 	a[Mesh.ARRAY_TEX_UV] = data.uv
 	a[Mesh.ARRAY_TEX_UV2] = data.uv2
+	a[Mesh.ARRAY_CUSTOM0] = data.fo
 	a[Mesh.ARRAY_INDEX] = data.i
 	var m := ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a, [], {}, Mesh.ARRAY_CUSTOM_R_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
 	var mi := MeshInstance3D.new()
 	mi.mesh = m
 	mi.material_override = null if OS.get_cmdline_user_args().has("--noground") else ground_mat
